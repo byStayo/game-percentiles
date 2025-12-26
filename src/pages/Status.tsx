@@ -1,32 +1,19 @@
 import { Helmet } from "react-helmet-async";
 import { format, formatDistanceToNow } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3 } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Database, Activity } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
-import { useJobStatus, useRecentJobs } from "@/hooks/useJobStatus";
-import { Badge } from "@/components/ui/badge";
+import { useSystemStatus } from "@/hooks/useApi";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { JobRun } from "@/types";
-
-const ET_TIMEZONE = 'America/New_York';
-
-function getTodayET(): string {
-  const now = new Date();
-  const etDate = toZonedTime(now, ET_TIMEZONE);
-  return format(etDate, 'yyyy-MM-dd');
-}
 
 const jobLabels: Record<string, { name: string; description: string }> = {
   backfill: { name: "Backfill", description: "Historical data import" },
   ingest: { name: "Daily Ingest", description: "Today's games sync" },
   compute: { name: "Compute", description: "Percentile calculations" },
-  odds_refresh: { name: "Odds Refresh", description: "DraftKings lines (strict match)" },
+  odds_refresh: { name: "Odds Refresh", description: "DraftKings lines" },
 };
 
-function JobStatusCard({ jobName, job }: { jobName: string; job: JobRun | null }) {
+function JobCard({ jobName, job }: { jobName: string; job: any }) {
   const label = jobLabels[jobName] || { name: jobName, description: "" };
 
   return (
@@ -50,26 +37,23 @@ function JobStatusCard({ jobName, job }: { jobName: string; job: JobRun | null }
       </div>
 
       {job ? (
-        <div className="space-y-2">
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className={cn(
-                "text-xs",
-                job.status === 'success' && "bg-status-live/10 text-status-live border-status-live/30",
-                job.status === 'fail' && "bg-destructive/10 text-destructive border-destructive/30",
-                job.status === 'running' && "bg-secondary"
-              )}
-            >
+            <span className={cn(
+              "px-2 py-0.5 rounded-full text-xs font-medium",
+              job.status === 'success' && "bg-status-live/10 text-status-live",
+              job.status === 'fail' && "bg-destructive/10 text-destructive",
+              job.status === 'running' && "bg-muted text-muted-foreground"
+            )}>
               {job.status.toUpperCase()}
-            </Badge>
+            </span>
           </div>
           <p className="text-xs text-muted-foreground">
             {formatDistanceToNow(new Date(job.started_at), { addSuffix: true })}
           </p>
-          {job.finished_at && (
+          {job.duration_ms !== null && (
             <p className="text-xs text-muted-foreground">
-              Duration: {Math.round((new Date(job.finished_at).getTime() - new Date(job.started_at).getTime()) / 1000)}s
+              Duration: {(job.duration_ms / 1000).toFixed(1)}s
             </p>
           )}
         </div>
@@ -80,51 +64,20 @@ function JobStatusCard({ jobName, job }: { jobName: string; job: JobRun | null }
   );
 }
 
+function StatCard({ label, value, icon: Icon }: { label: string; value: string | number; icon: any }) {
+  return (
+    <div className="bg-card rounded-xl border border-border p-5 shadow-card">
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm text-muted-foreground">{label}</span>
+      </div>
+      <p className="text-2xl font-bold">{value}</p>
+    </div>
+  );
+}
+
 export default function Status() {
-  const { data: jobStatus, isLoading: statusLoading } = useJobStatus();
-  const { data: recentJobs, isLoading: jobsLoading } = useRecentJobs();
-
-  // Get today's odds stats (strict matching mode)
-  const { data: oddsStats } = useQuery({
-    queryKey: ['odds-stats-strict'],
-    queryFn: async () => {
-      const today = getTodayET();
-      
-      const { data: edges } = await supabase
-        .from('daily_edges')
-        .select('dk_offered')
-        .eq('date_local', today);
-
-      const total = edges?.length || 0;
-      const withOdds = edges?.filter(e => e.dk_offered).length || 0;
-
-      // Get recent unmatched reasons from job runs
-      const { data: recentOddsJobs } = await supabase
-        .from('job_runs')
-        .select('details')
-        .eq('job_name', 'odds_refresh')
-        .eq('status', 'success')
-        .order('finished_at', { ascending: false })
-        .limit(5);
-
-      const allUnmatchedReasons: string[] = [];
-      for (const job of recentOddsJobs || []) {
-        const reasons = (job.details as any)?.unmatched_reasons || [];
-        allUnmatchedReasons.push(...reasons);
-      }
-
-      // Dedupe
-      const uniqueReasons = [...new Set(allUnmatchedReasons)].slice(0, 10);
-
-      return {
-        total,
-        withOdds,
-        unmatched: total - withOdds,
-        coverage: total > 0 ? (withOdds / total) * 100 : 0,
-        unmatchedReasons: uniqueReasons,
-      };
-    },
-  });
+  const { data, isLoading, error } = useSystemStatus();
 
   return (
     <>
@@ -138,43 +91,85 @@ export default function Status() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">System Status</h1>
             <p className="text-muted-foreground mt-1">
-              Pipeline health & strict odds matching results
+              Pipeline health & strict odds matching
             </p>
           </div>
 
-          {/* Today's Odds Coverage */}
-          <div className="bg-card rounded-xl border border-border p-5 shadow-card">
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart3 className="h-5 w-5 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">Today's DraftKings Coverage</h2>
-              <Badge variant="secondary" className="text-xs">Strict Match</Badge>
+          {isLoading ? (
+            <div className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[...Array(4)].map((_, i) => (
+                  <Skeleton key={i} className="h-28 rounded-xl" />
+                ))}
+              </div>
+              <Skeleton className="h-48 rounded-xl" />
             </div>
-            
-            {oddsStats ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
+          ) : error ? (
+            <div className="bg-card rounded-xl border border-border p-8 text-center">
+              <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+              <h2 className="text-lg font-semibold mb-2">Unable to load status</h2>
+              <p className="text-sm text-muted-foreground">
+                {error instanceof Error ? error.message : 'An error occurred'}
+              </p>
+            </div>
+          ) : data ? (
+            <>
+              {/* Today's Coverage */}
+              <div className="bg-card rounded-xl border border-border p-6 shadow-card">
+                <div className="flex items-center gap-2 mb-4">
+                  <BarChart3 className="h-5 w-5 text-muted-foreground" />
+                  <h2 className="text-lg font-semibold">Today's DraftKings Coverage</h2>
+                  <span className="ml-auto text-xs text-muted-foreground">{data.date_et}</span>
+                </div>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                   <div>
-                    <p className="text-2xl font-bold text-status-live">{oddsStats.withOdds}</p>
-                    <p className="text-xs text-muted-foreground">Games with DK Lines</p>
+                    <p className="text-3xl font-bold">{data.today_coverage.visible_games}</p>
+                    <p className="text-xs text-muted-foreground">Total Games</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-muted-foreground">{oddsStats.unmatched}</p>
-                    <p className="text-xs text-muted-foreground">Unmatched (strict)</p>
+                    <p className="text-3xl font-bold text-status-live">{data.today_coverage.with_dk_odds}</p>
+                    <p className="text-xs text-muted-foreground">With DK Lines</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{oddsStats.coverage.toFixed(0)}%</p>
+                    <p className="text-3xl font-bold text-muted-foreground">{data.today_coverage.unmatched}</p>
+                    <p className="text-xs text-muted-foreground">Unmatched</p>
+                  </div>
+                  <div>
+                    <p className="text-3xl font-bold">
+                      {data.today_coverage.visible_games > 0 
+                        ? Math.round((data.today_coverage.with_dk_odds / data.today_coverage.visible_games) * 100)
+                        : 0}%
+                    </p>
                     <p className="text-xs text-muted-foreground">Match Rate</p>
                   </div>
                 </div>
 
-                {/* Unmatched reasons */}
-                {oddsStats.unmatchedReasons.length > 0 && (
-                  <div className="pt-4 border-t border-border">
+                {/* Sport breakdown */}
+                {Object.keys(data.today_coverage.by_sport).length > 0 && (
+                  <div className="border-t border-border pt-4">
+                    <p className="text-sm text-muted-foreground mb-3">By Sport</p>
+                    <div className="flex flex-wrap gap-3">
+                      {Object.entries(data.today_coverage.by_sport).map(([sport, stats]) => (
+                        <div key={sport} className="px-3 py-2 bg-secondary/30 rounded-lg">
+                          <span className="text-xs font-medium uppercase">{sport}</span>
+                          <span className="text-sm ml-2">
+                            {stats.with_odds}/{stats.total}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Unmatched samples */}
+                {data.sample_unmatched.length > 0 && (
+                  <div className="border-t border-border pt-4 mt-4">
                     <p className="text-sm text-muted-foreground mb-2">
-                      Unmatched due to strict matching (no action required):
+                      Sample unmatched (strict mode):
                     </p>
-                    <div className="space-y-1 max-h-40 overflow-y-auto">
-                      {oddsStats.unmatchedReasons.map((reason: string, i: number) => (
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {data.sample_unmatched.map((reason, i) => (
                         <p key={i} className="text-xs text-muted-foreground font-mono">
                           {reason}
                         </p>
@@ -182,97 +177,50 @@ export default function Status() {
                     </div>
                   </div>
                 )}
-
-                <p className="text-xs text-muted-foreground pt-2">
-                  Using hardcoded normalization + alias dictionary. Games without exact name+time match show "DraftKings totals: unavailable".
-                </p>
               </div>
-            ) : (
-              <Skeleton className="h-24" />
-            )}
-          </div>
 
-          {/* Job status cards */}
-          <div>
-            <h2 className="text-lg font-semibold mb-4">Pipeline Status</h2>
-            {statusLoading ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {[...Array(4)].map((_, i) => (
-                  <Skeleton key={i} className="h-32" />
-                ))}
+              {/* Job Status */}
+              <div>
+                <h2 className="text-lg font-semibold mb-4">Pipeline Jobs</h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {Object.keys(jobLabels).map((jobName) => (
+                    <JobCard
+                      key={jobName}
+                      jobName={jobName}
+                      job={data.jobs[jobName] || null}
+                    />
+                  ))}
+                </div>
               </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {Object.keys(jobLabels).map((jobName) => (
-                  <JobStatusCard
-                    key={jobName}
-                    jobName={jobName}
-                    job={jobStatus?.[jobName] || null}
+
+              {/* Database Stats */}
+              <div>
+                <h2 className="text-lg font-semibold mb-4">Database</h2>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <StatCard
+                    label="Teams"
+                    value={data.database.teams.toLocaleString()}
+                    icon={Database}
                   />
-                ))}
+                  <StatCard
+                    label="Games"
+                    value={data.database.games.toLocaleString()}
+                    icon={Activity}
+                  />
+                  <StatCard
+                    label="H2H Records"
+                    value={data.database.matchup_games.toLocaleString()}
+                    icon={BarChart3}
+                  />
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* Recent jobs table */}
-          <div>
-            <h2 className="text-lg font-semibold mb-4">Recent Job Runs</h2>
-            {jobsLoading ? (
-              <Skeleton className="h-64" />
-            ) : recentJobs && recentJobs.length > 0 ? (
-              <div className="bg-card rounded-xl border border-border overflow-hidden shadow-card">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-secondary/30">
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Job</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Status</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Started</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Duration</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentJobs.map((job) => (
-                      <tr key={job.id} className="border-b border-border last:border-0">
-                        <td className="px-4 py-3">
-                          <span className="font-medium">
-                            {jobLabels[job.job_name]?.name || job.job_name}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "text-xs",
-                              job.status === 'success' && "bg-status-live/10 text-status-live border-status-live/30",
-                              job.status === 'fail' && "bg-destructive/10 text-destructive border-destructive/30",
-                              job.status === 'running' && "bg-secondary"
-                            )}
-                          >
-                            {job.status}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">
-                          {format(new Date(job.started_at), 'MMM d, h:mm a')}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">
-                          {job.finished_at
-                            ? `${Math.round((new Date(job.finished_at).getTime() - new Date(job.started_at).getTime()) / 1000)}s`
-                            : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center py-12 bg-card rounded-xl border border-border">
-                <p className="text-muted-foreground">No job runs yet</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Jobs are triggered automatically on schedule
-                </p>
-              </div>
-            )}
-          </div>
+              {/* Footer */}
+              <p className="text-xs text-muted-foreground text-center">
+                Mode: {data.mode} • Updated {format(new Date(data.timestamp), 'h:mm a')}
+              </p>
+            </>
+          ) : null}
         </div>
       </Layout>
     </>
