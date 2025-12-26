@@ -1,11 +1,15 @@
+import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { format, formatDistanceToNow } from "date-fns";
-import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Database, Activity } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Database, Activity, Play, Loader2 } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
 import { useSystemStatus } from "@/hooks/useApi";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+
+const API_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
 const jobLabels: Record<string, { name: string; description: string }> = {
   backfill: { name: "Backfill", description: "Historical data import" },
@@ -73,6 +77,127 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: string |
         <span className="text-sm text-muted-foreground">{label}</span>
       </div>
       <p className="text-2xl font-bold">{value}</p>
+    </div>
+  );
+}
+
+// Backfill controls component
+function BackfillControls({ onComplete }: { onComplete: () => void }) {
+  const [loading, setLoading] = useState<string | null>(null);
+
+  const triggerBackfill = async (sportId: string) => {
+    setLoading(sportId);
+    try {
+      const response = await fetch(`${API_BASE}/backfill`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sport_id: sportId, seasons_override: 5 }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success(`Backfill started for ${sportId.toUpperCase()}`, {
+          description: `Job #${data.job_id} processing 5 seasons in background`,
+        });
+        onComplete();
+      } else {
+        toast.error(`Backfill failed: ${data.error}`);
+      }
+    } catch (error) {
+      toast.error(`Backfill error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const triggerPipeline = async (endpoint: string, name: string) => {
+    setLoading(endpoint);
+    try {
+      const response = await fetch(`${API_BASE}/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success(`${name} completed`, {
+          description: JSON.stringify(data.counters || {}),
+        });
+        onComplete();
+      } else {
+        toast.error(`${name} failed: ${data.error}`);
+      }
+    } catch (error) {
+      toast.error(`${name} error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const sports = ['nba', 'nfl', 'nhl', 'mlb'];
+
+  return (
+    <div className="bg-card rounded-xl border border-border p-6 shadow-card">
+      <div className="flex items-center gap-2 mb-4">
+        <Play className="h-5 w-5 text-muted-foreground" />
+        <h2 className="text-lg font-semibold">Manual Controls</h2>
+      </div>
+      
+      <div className="space-y-4">
+        <div>
+          <p className="text-sm text-muted-foreground mb-2">Trigger Backfill (5 seasons)</p>
+          <div className="flex flex-wrap gap-2">
+            {sports.map((sport) => (
+              <Button
+                key={sport}
+                variant="outline"
+                size="sm"
+                onClick={() => triggerBackfill(sport)}
+                disabled={loading !== null}
+                className="gap-2"
+              >
+                {loading === sport ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                {sport.toUpperCase()}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-4">
+          <p className="text-sm text-muted-foreground mb-2">Pipeline Actions</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => triggerPipeline('ingest-games', 'Ingest Games')}
+              disabled={loading !== null}
+              className="gap-2"
+            >
+              {loading === 'ingest-games' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              Ingest Today
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => triggerPipeline('compute-percentiles', 'Compute Percentiles')}
+              disabled={loading !== null}
+              className="gap-2"
+            >
+              {loading === 'compute-percentiles' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              Compute P05/P95
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => triggerPipeline('refresh-odds', 'Refresh Odds')}
+              disabled={loading !== null}
+              className="gap-2"
+            >
+              {loading === 'refresh-odds' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              Refresh DK Odds
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -226,6 +351,9 @@ export default function Status() {
                   </div>
                 )}
               </div>
+
+              {/* Manual Controls */}
+              <BackfillControls onComplete={() => refetch()} />
 
               {/* Job Status */}
               <div>
