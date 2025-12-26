@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
         let p95: number | null = null
         let isVisible = false
 
-        if (n >= 2) { // Lowered from 3 to 2 to show more games while backfills complete
+        if (n >= 1) { // Show all games with any H2H data
           // Sort totals and compute nearest-rank quantiles
           const totals = matchupGames!.map(mg => Number(mg.total)).sort((a, b) => a - b)
           

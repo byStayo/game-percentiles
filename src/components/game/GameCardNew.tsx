@@ -61,22 +61,29 @@ export function GameCard({ game }: GameCardProps) {
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="flex items-center gap-1.5 cursor-help">
+                {game.n_h2h === 1 && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-status-over/10 text-status-over border border-status-over/20">
+                    ⚠️ Low Data
+                  </span>
+                )}
                 <span className={cn(
                   "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium",
                   game.n_h2h >= 10 ? "bg-status-under/10 text-status-under" :
                   game.n_h2h >= 5 ? "bg-status-edge/10 text-status-edge" :
-                  "bg-muted text-muted-foreground"
+                  game.n_h2h >= 2 ? "bg-muted text-muted-foreground" :
+                  "bg-status-over/10 text-status-over"
                 )}>
                   <span className="font-normal opacity-70">n=</span>{game.n_h2h}
                 </span>
               </div>
             </TooltipTrigger>
-            <TooltipContent side="left" className="max-w-[200px]">
+            <TooltipContent side="left" className="max-w-[220px]">
               <p className="text-xs">
-                <strong>H2H Sample Size:</strong> {game.n_h2h} historical games between these teams.
+                <strong>H2H Sample Size:</strong> {game.n_h2h} historical game{game.n_h2h !== 1 ? 's' : ''} between these teams.
                 {game.n_h2h >= 10 && " High confidence data."}
                 {game.n_h2h >= 5 && game.n_h2h < 10 && " Moderate confidence."}
-                {game.n_h2h < 5 && " Limited data - predictions less reliable."}
+                {game.n_h2h >= 2 && game.n_h2h < 5 && " Limited data - use caution."}
+                {game.n_h2h === 1 && " Very limited data - predictions highly unreliable."}
               </p>
             </TooltipContent>
           </Tooltip>

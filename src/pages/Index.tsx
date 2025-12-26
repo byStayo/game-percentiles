@@ -94,6 +94,12 @@ export default function Index() {
                 </span>
                 <span>Limited</span>
               </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-status-over/10 text-status-over border border-status-over/20">
+                  ⚠️ n=1
+                </span>
+                <span>Very limited</span>
+              </div>
             </div>
           </div>
 
