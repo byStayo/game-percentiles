@@ -18,12 +18,14 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
-  try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  )
 
+  let jobRunId: number | null = null
+
+  try {
     const oddsApiKey = Deno.env.get('ODDS_API_KEY')
     if (!oddsApiKey) {
       throw new Error('ODDS_API_KEY not configured')
@@ -39,6 +41,8 @@ Deno.serve(async (req) => {
       .insert({ job_name: 'odds_refresh', details: { sport_id } })
       .select()
       .single()
+
+    jobRunId = jobRun?.id || null
 
     const sportKey = SPORT_KEYS[sport_id]
     if (!sportKey) {
@@ -105,6 +109,8 @@ Deno.serve(async (req) => {
           .from('games')
           .select(`
             id,
+            home_team_id,
+            away_team_id,
             home_team:teams!games_home_team_id_fkey(name),
             away_team:teams!games_away_team_id_fkey(name)
           `)
@@ -123,18 +129,18 @@ Deno.serve(async (req) => {
             if (homeMatch && awayMatch) {
               gameId = game.id
               
-              // Auto-create provider mappings
-              if (!homeMapping) {
+              // Auto-create provider mappings using the correct team IDs from the query
+              if (!homeMapping && game.home_team_id) {
                 await supabase.from('provider_mappings').upsert({
                   sport_id,
-                  team_id: (game as any).home_team_id,
+                  team_id: game.home_team_id,
                   odds_api_team_name: event.home_team,
                 }, { onConflict: 'sport_id,league_id,team_id' })
               }
-              if (!awayMapping) {
+              if (!awayMapping && game.away_team_id) {
                 await supabase.from('provider_mappings').upsert({
                   sport_id,
-                  team_id: (game as any).away_team_id,
+                  team_id: game.away_team_id,
                   odds_api_team_name: event.away_team,
                 }, { onConflict: 'sport_id,league_id,team_id' })
               }
@@ -207,8 +213,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update job run
-    if (jobRun) {
+    // Update job run as success
+    if (jobRunId) {
       await supabase
         .from('job_runs')
         .update({
@@ -216,7 +222,7 @@ Deno.serve(async (req) => {
           status: 'success',
           details: { sport_id, events_found: oddsData.length, matched: matchedCount, unmatched: unmatchedCount }
         })
-        .eq('id', jobRun.id)
+        .eq('id', jobRunId)
     }
 
     return new Response(
@@ -231,6 +237,19 @@ Deno.serve(async (req) => {
     )
   } catch (error) {
     console.error('Odds refresh error:', error)
+    
+    // Mark job as failed
+    if (jobRunId) {
+      await supabase
+        .from('job_runs')
+        .update({
+          finished_at: new Date().toISOString(),
+          status: 'fail',
+          details: { error: error instanceof Error ? error.message : 'Unknown error' }
+        })
+        .eq('id', jobRunId)
+    }
+    
     const message = error instanceof Error ? error.message : 'Unknown error'
     return new Response(
       JSON.stringify({ error: message }),

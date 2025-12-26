@@ -17,24 +17,39 @@ interface GameData {
   status: 'scheduled' | 'live' | 'final'
 }
 
+// Get today's date in America/New_York timezone
+function getTodayET(): string {
+  const now = new Date()
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  return formatter.format(now)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
-  try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  )
 
+  let jobRunId: number | null = null
+
+  try {
     const sportsDataKey = Deno.env.get('SPORTSDATAIO_KEY')
     if (!sportsDataKey) {
       throw new Error('SPORTSDATAIO_KEY not configured')
     }
 
     const { sport_id, date } = await req.json()
-    const targetDate = date || new Date().toISOString().split('T')[0]
+    // Use provided date or default to today in ET
+    const targetDate = date || getTodayET()
 
     console.log(`Ingesting games for ${sport_id} on ${targetDate}`)
 
@@ -48,6 +63,8 @@ Deno.serve(async (req) => {
     if (jobError) {
       console.error('Failed to create job run:', jobError)
     }
+    
+    jobRunId = jobRun?.id || null
 
     let games: GameData[] = []
 
@@ -134,8 +151,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update job run
-    if (jobRun) {
+    // Update job run as success
+    if (jobRunId) {
       await supabase
         .from('job_runs')
         .update({
@@ -143,7 +160,7 @@ Deno.serve(async (req) => {
           status: 'success',
           details: { sport_id, date: targetDate, games_found: games.length, inserted: insertedCount, updated: updatedCount }
         })
-        .eq('id', jobRun.id)
+        .eq('id', jobRunId)
     }
 
     return new Response(
@@ -159,6 +176,19 @@ Deno.serve(async (req) => {
     )
   } catch (error) {
     console.error('Ingest error:', error)
+    
+    // Mark job as failed
+    if (jobRunId) {
+      await supabase
+        .from('job_runs')
+        .update({
+          finished_at: new Date().toISOString(),
+          status: 'fail',
+          details: { error: error instanceof Error ? error.message : 'Unknown error' }
+        })
+        .eq('id', jobRunId)
+    }
+    
     const message = error instanceof Error ? error.message : 'Unknown error'
     return new Response(
       JSON.stringify({ error: message }),

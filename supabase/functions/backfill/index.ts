@@ -30,12 +30,14 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
-  try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  )
 
+  let jobRunId: number | null = null
+
+  try {
     const sportsDataKey = Deno.env.get('SPORTSDATAIO_KEY')
     if (!sportsDataKey) {
       throw new Error('SPORTSDATAIO_KEY not configured')
@@ -66,6 +68,8 @@ Deno.serve(async (req) => {
     if (jobError) {
       console.error('Failed to create job run:', jobError)
     }
+    
+    jobRunId = jobRun?.id || null
 
     let totalGames = 0
     let totalMatchups = 0
@@ -213,8 +217,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update job run
-    if (jobRun) {
+    // Update job run as success
+    if (jobRunId) {
       await supabase
         .from('job_runs')
         .update({
@@ -228,7 +232,7 @@ Deno.serve(async (req) => {
             unique_matchups: uniqueMatchups.size
           }
         })
-        .eq('id', jobRun.id)
+        .eq('id', jobRunId)
     }
 
     return new Response(
@@ -244,6 +248,19 @@ Deno.serve(async (req) => {
     )
   } catch (error) {
     console.error('Backfill error:', error)
+    
+    // Mark job as failed
+    if (jobRunId) {
+      await supabase
+        .from('job_runs')
+        .update({
+          finished_at: new Date().toISOString(),
+          status: 'fail',
+          details: { error: error instanceof Error ? error.message : 'Unknown error' }
+        })
+        .eq('id', jobRunId)
+    }
+    
     const message = error instanceof Error ? error.message : 'Unknown error'
     return new Response(
       JSON.stringify({ error: message }),
