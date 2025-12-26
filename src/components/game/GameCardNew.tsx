@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { getTeamDisplayName } from "@/lib/teamNames";
 import { PercentileBar } from "@/components/ui/percentile-bar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TodayGame } from "@/hooks/useApi";
 import type { SportId } from "@/types";
 
@@ -56,16 +57,30 @@ export function GameCard({ game }: GameCardProps) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className={cn(
-            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium",
-            game.n_h2h >= 10 ? "bg-status-under/10 text-status-under" :
-            game.n_h2h >= 5 ? "bg-status-edge/10 text-status-edge" :
-            "bg-muted text-muted-foreground"
-          )}>
-            <span className="font-normal opacity-70">n=</span>{game.n_h2h}
-          </span>
-        </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1.5 cursor-help">
+                <span className={cn(
+                  "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium",
+                  game.n_h2h >= 10 ? "bg-status-under/10 text-status-under" :
+                  game.n_h2h >= 5 ? "bg-status-edge/10 text-status-edge" :
+                  "bg-muted text-muted-foreground"
+                )}>
+                  <span className="font-normal opacity-70">n=</span>{game.n_h2h}
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="max-w-[200px]">
+              <p className="text-xs">
+                <strong>H2H Sample Size:</strong> {game.n_h2h} historical games between these teams.
+                {game.n_h2h >= 10 && " High confidence data."}
+                {game.n_h2h >= 5 && game.n_h2h < 10 && " Moderate confidence."}
+                {game.n_h2h < 5 && " Limited data - predictions less reliable."}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {/* Teams */}
