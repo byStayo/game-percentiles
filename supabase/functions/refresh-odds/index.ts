@@ -342,8 +342,8 @@ interface GameRow {
   start_time_utc: string
   home_team_id: string
   away_team_id: string
-  home_team: Array<{ name: string; city: string | null }> | null
-  away_team: Array<{ name: string; city: string | null }> | null
+  home_team?: { name: string; city: string | null } | null
+  away_team?: { name: string; city: string | null } | null
 }
 
 interface OddsEvent {
@@ -429,31 +429,51 @@ Deno.serve(async (req) => {
         const startOfDayET = new Date(`${targetDate}T00:00:00-05:00`)
         const endOfDayET = new Date(`${targetDate}T23:59:59-05:00`)
 
-        const { data: games } = await supabase
+        // Fetch games for target date
+        const { data: gamesRaw } = await supabase
           .from('games')
-          .select(`
-            id,
-            sport_id,
-            start_time_utc,
-            home_team_id,
-            away_team_id,
-            home_team:teams!games_home_team_id_fkey(name, city),
-            away_team:teams!games_away_team_id_fkey(name, city)
-          `)
+          .select('id, sport_id, start_time_utc, home_team_id, away_team_id')
           .eq('sport_id', sportId)
           .gte('start_time_utc', startOfDayET.toISOString())
           .lte('start_time_utc', endOfDayET.toISOString())
 
-        console.log(`[ODDS-REFRESH] Found ${games?.length || 0} games for ${sportId} on ${targetDate}`)
+        console.log(`[ODDS-REFRESH] Found ${gamesRaw?.length || 0} games for ${sportId} on ${targetDate}`)
+        
+        if (!gamesRaw || gamesRaw.length === 0) continue
+
+        // Fetch all team data for these games
+        const teamIds = new Set<string>()
+        for (const g of gamesRaw) {
+          teamIds.add(g.home_team_id)
+          teamIds.add(g.away_team_id)
+        }
+        
+        const { data: teamsData } = await supabase
+          .from('teams')
+          .select('id, name, city')
+          .in('id', Array.from(teamIds))
+        
+        const teamsMap = new Map((teamsData || []).map(t => [t.id, t]))
+        console.log(`[ODDS-REFRESH] Loaded ${teamsMap.size} teams`)
+        
+        // Build games array with team data
+        const games = gamesRaw.map(g => ({
+          ...g,
+          home_team: teamsMap.get(g.home_team_id),
+          away_team: teamsMap.get(g.away_team_id)
+        }))
 
         for (const game of (games || []) as GameRow[]) {
           const gameTime = new Date(game.start_time_utc).getTime()
-          const windowMs = 3 * 60 * 60 * 1000 // 3 hours
+          const windowMs = 8 * 60 * 60 * 1000 // 8 hours to accommodate timezone/schedule differences
 
-          const homeTeamData = game.home_team?.[0]
-          const awayTeamData = game.away_team?.[0]
+          const homeTeamData = game.home_team
+          const awayTeamData = game.away_team
+          
+          console.log(`[ODDS-DEBUG] Game ${game.id}: home_team_raw=${JSON.stringify(homeTeamData)}, away_team_raw=${JSON.stringify(awayTeamData)}`)
           
           if (!homeTeamData?.name || !awayTeamData?.name) {
+            console.log(`[ODDS-DEBUG] Skipping game - missing team data`)
             counters.unmatched++
             continue
           }
@@ -470,9 +490,15 @@ Deno.serve(async (req) => {
           const homeNorm = getCanonicalName(normalizeTeamName(homeDisplay, sportId))
           const awayNorm = getCanonicalName(normalizeTeamName(awayDisplay, sportId))
 
-          // Debug log for first few games
-          if (counters.matched + counters.unmatched < 3) {
-            console.log(`[ODDS-DEBUG] Internal: ${homeDisplay} (${homeNorm}) vs ${awayDisplay} (${awayNorm})`)
+          console.log(`[ODDS-DEBUG] Internal: "${homeDisplay}" -> "${homeNorm}" vs "${awayDisplay}" -> "${awayNorm}"`)
+          
+          // Log sample odds events for comparison (only for first game)
+          if (counters.matched + counters.unmatched === 0) {
+            const sampleOdds = oddsData.slice(0, 3).map(e => ({
+              raw: `${e.home_team} vs ${e.away_team}`,
+              norm: `${getCanonicalName(normalizeTeamName(e.home_team))} vs ${getCanonicalName(normalizeTeamName(e.away_team))}`
+            }))
+            console.log(`[ODDS-DEBUG] Sample odds: ${JSON.stringify(sampleOdds)}`)
           }
 
           // Find EXACT matches within time window
