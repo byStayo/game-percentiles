@@ -29,6 +29,7 @@ interface ParlayPick {
   pick: 'over' | 'under';
   confidence: number; // 0-100 based on percentile position
   edge: number; // distance from 50th percentile
+  ev: number; // expected value percentage
 }
 
 interface ParlayCombo {
@@ -118,6 +119,26 @@ export default function ParlayMachine() {
     return games;
   }, [selectedSports, nflQuery.data, nbaQuery.data, nhlQuery.data, mlbQuery.data]);
   
+  // Calculate EV based on percentile and -110 odds
+  const calculateEV = (percentile: number): number => {
+    // At -110 odds, you need to bet $110 to win $100
+    // Break-even probability is 110/210 = 52.38%
+    const winProfit = 100 * (100 / 110); // ~$90.91
+    
+    let impliedWinProb: number;
+    if (percentile <= 30) {
+      impliedWinProb = (100 - percentile) / 100;
+    } else if (percentile >= 70) {
+      impliedWinProb = percentile / 100;
+    } else {
+      impliedWinProb = 0.5;
+    }
+    
+    // EV = (win prob × profit) - (lose prob × stake)
+    const ev = (impliedWinProb * winProfit) - ((1 - impliedWinProb) * 100);
+    return ev;
+  };
+  
   // Find high-confidence picks (games where DK line is at extremes of percentile range)
   const highConfidencePicks = useMemo((): ParlayPick[] => {
     return allGames
@@ -133,12 +154,14 @@ export default function ParlayMachine() {
         const isUnder = percentile >= 50; // DK line above median = lean under
         const confidence = isUnder ? percentile : (100 - percentile);
         const edge = Math.abs(50 - percentile);
+        const ev = calculateEV(percentile);
         
         return {
           game,
           pick: (isUnder ? 'under' : 'over') as 'over' | 'under',
           confidence,
           edge,
+          ev,
         };
       })
       .filter(pick => pick.confidence >= minConfidence)
@@ -419,6 +442,11 @@ export default function ParlayMachine() {
                           {pick.pick.toUpperCase()}
                         </span>
                         <div className="text-xl font-bold mt-1">{pick.confidence.toFixed(0)}%</div>
+                        <div className="text-xs text-muted-foreground">
+                          EV: <span className={cn("font-semibold", pick.ev > 0 ? "text-status-under" : "text-status-over")}>
+                            {pick.ev > 0 ? '+' : ''}{pick.ev.toFixed(1)}%
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
