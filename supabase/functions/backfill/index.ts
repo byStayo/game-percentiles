@@ -134,12 +134,39 @@ async function runBackfill(
 ) {
   const counters = { fetched: 0, upserted: 0, matchups: 0, errors: 0 }
   const errorDetails: string[] = []
+  const completedSeasons: number[] = []
   const currentYear = new Date().getFullYear()
+
+  // Helper to update job progress
+  async function updateJobProgress(status: string, extraDetails: Record<string, any> = {}) {
+    if (!jobRunId) return
+    try {
+      await supabase
+        .from('job_runs')
+        .update({
+          details: { 
+            sport_id, 
+            seasons: numSeasons, 
+            status,
+            completed_seasons: completedSeasons,
+            progress: `${completedSeasons.length}/${numSeasons}`,
+            counters,
+            ...extraDetails
+          }
+        })
+        .eq('id', jobRunId)
+    } catch (e) {
+      console.error('[BACKFILL] Failed to update progress:', e)
+    }
+  }
 
   try {
     for (let i = 0; i < numSeasons; i++) {
       const year = currentYear - i
-      console.log(`[BACKFILL] Processing ${sport_id} season ${year}`)
+      console.log(`[BACKFILL] Processing ${sport_id} season ${year} (${i + 1}/${numSeasons})`)
+      
+      // Update progress at start of each season
+      await updateJobProgress('running', { current_season: year })
 
       try {
         let games: GameData[] = []
@@ -251,6 +278,12 @@ async function runBackfill(
             counters.errors++
           }
         }
+        
+        // Mark season as completed
+        completedSeasons.push(year)
+        console.log(`[BACKFILL] Completed season ${year} - Progress: ${completedSeasons.length}/${numSeasons}`)
+        await updateJobProgress('running')
+        
       } catch (seasonError) {
         const msg = `Season ${year}: ${seasonError instanceof Error ? seasonError.message : 'Unknown error'}`
         console.error(`[BACKFILL] Error: ${msg}`)
