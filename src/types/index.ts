@@ -1,4 +1,4 @@
-export type SportId = 'nfl' | 'nba' | 'mlb' | 'nhl' | 'soccer';
+export type SportId = 'nfl' | 'nba' | 'mlb' | 'nhl';
 
 export interface Sport {
   id: SportId;
