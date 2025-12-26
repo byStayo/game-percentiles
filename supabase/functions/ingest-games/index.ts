@@ -5,6 +5,40 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// ============================================================
+// RETRY WITH EXPONENTIAL BACKOFF
+// ============================================================
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3,
+  baseDelay = 1000
+): Promise<Response> {
+  let lastError: Error | null = null
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options)
+      
+      if (response.status === 429 || response.status >= 500) {
+        const delay = baseDelay * Math.pow(2, attempt)
+        console.log(`Retry ${attempt + 1}/${maxRetries} after ${delay}ms (status: ${response.status})`)
+        await new Promise(r => setTimeout(r, delay))
+        continue
+      }
+      
+      return response
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('Unknown fetch error')
+      const delay = baseDelay * Math.pow(2, attempt)
+      console.log(`Retry ${attempt + 1}/${maxRetries} after ${delay}ms (error: ${lastError.message})`)
+      await new Promise(r => setTimeout(r, delay))
+    }
+  }
+  
+  throw lastError || new Error('Max retries exceeded')
+}
+
 interface GameData {
   provider_game_key: string
   start_time_utc: string
@@ -12,9 +46,11 @@ interface GameData {
   away_team_key: string
   home_team_name: string
   away_team_name: string
+  home_team_city?: string
+  away_team_city?: string
   home_score: number | null
   away_score: number | null
-  status: 'scheduled' | 'live' | 'final'
+  status: 'scheduled' | 'live' | 'final' | 'postponed' | 'canceled'
 }
 
 // Get today's date in America/New_York timezone
@@ -29,6 +65,9 @@ function getTodayET(): string {
   return formatter.format(now)
 }
 
+// All supported sports
+const SPORTS = ['nba', 'mlb', 'nfl', 'nhl']
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -40,6 +79,7 @@ Deno.serve(async (req) => {
   )
 
   let jobRunId: number | null = null
+  const counters = { fetched: 0, upserted: 0, finals: 0, errors: 0 }
 
   try {
     const sportsDataKey = Deno.env.get('SPORTSDATAIO_KEY')
@@ -47,107 +87,132 @@ Deno.serve(async (req) => {
       throw new Error('SPORTSDATAIO_KEY not configured')
     }
 
-    const { sport_id, date } = await req.json()
-    // Use provided date or default to today in ET
+    let requestBody: { sport_id?: string; date?: string } = {}
+    try {
+      requestBody = await req.json()
+    } catch {
+      // Empty body is OK
+    }
+    
+    const { sport_id, date } = requestBody
     const targetDate = date || getTodayET()
+    const sportsToIngest = sport_id ? [sport_id] : SPORTS
 
-    console.log(`Ingesting games for ${sport_id} on ${targetDate}`)
+    console.log(`[INGEST] Starting for ${sportsToIngest.join(', ')} on ${targetDate}`)
 
     // Create job run
-    const { data: jobRun, error: jobError } = await supabase
+    const { data: jobRun } = await supabase
       .from('job_runs')
-      .insert({ job_name: 'ingest', details: { sport_id, date: targetDate } })
+      .insert({ 
+        job_name: 'ingest', 
+        details: { sports: sportsToIngest, date: targetDate } 
+      })
       .select()
       .single()
 
-    if (jobError) {
-      console.error('Failed to create job run:', jobError)
-    }
-    
     jobRunId = jobRun?.id || null
 
-    let games: GameData[] = []
+    const sportResults: Record<string, { found: number; upserted: number; finals: number }> = {}
 
-    // Fetch games based on sport
-    try {
-      if (sport_id === 'nba') {
-        games = await fetchNBAGames(sportsDataKey, targetDate)
-      } else if (sport_id === 'mlb') {
-        games = await fetchMLBGames(sportsDataKey, targetDate)
-      } else if (sport_id === 'nfl') {
-        games = await fetchNFLGames(sportsDataKey)
-      } else if (sport_id === 'nhl') {
-        games = await fetchNHLGames(sportsDataKey, targetDate)
-      }
-    } catch (fetchError) {
-      console.error(`Error fetching ${sport_id} games:`, fetchError)
-      games = []
-    }
+    for (const sportId of sportsToIngest) {
+      try {
+        let games: GameData[] = []
 
-    console.log(`Found ${games.length} games for ${sport_id}`)
+        if (sportId === 'nba') {
+          games = await fetchNBAGames(sportsDataKey, targetDate)
+        } else if (sportId === 'mlb') {
+          games = await fetchMLBGames(sportsDataKey, targetDate)
+        } else if (sportId === 'nfl') {
+          games = await fetchNFLGames(sportsDataKey)
+        } else if (sportId === 'nhl') {
+          games = await fetchNHLGames(sportsDataKey, targetDate)
+        }
 
-    let insertedCount = 0
-    let updatedCount = 0
+        counters.fetched += games.length
+        sportResults[sportId] = { found: games.length, upserted: 0, finals: 0 }
 
-    for (const game of games) {
-      // Upsert home team
-      const { data: homeTeam } = await supabase
-        .from('teams')
-        .upsert({
-          sport_id,
-          provider_team_key: game.home_team_key,
-          name: game.home_team_name,
-        }, { onConflict: 'sport_id,league_id,provider_team_key' })
-        .select()
-        .single()
+        console.log(`[INGEST] Found ${games.length} games for ${sportId}`)
 
-      // Upsert away team
-      const { data: awayTeam } = await supabase
-        .from('teams')
-        .upsert({
-          sport_id,
-          provider_team_key: game.away_team_key,
-          name: game.away_team_name,
-        }, { onConflict: 'sport_id,league_id,provider_team_key' })
-        .select()
-        .single()
+        for (const game of games) {
+          try {
+            // Upsert home team
+            const { data: homeTeam } = await supabase
+              .from('teams')
+              .upsert({
+                sport_id: sportId,
+                provider_team_key: game.home_team_key,
+                name: game.home_team_name,
+                city: game.home_team_city || null,
+              }, { onConflict: 'sport_id,league_id,provider_team_key' })
+              .select()
+              .single()
 
-      if (!homeTeam || !awayTeam) {
-        console.error('Failed to upsert teams for game:', game.provider_game_key)
-        continue
-      }
+            // Upsert away team
+            const { data: awayTeam } = await supabase
+              .from('teams')
+              .upsert({
+                sport_id: sportId,
+                provider_team_key: game.away_team_key,
+                name: game.away_team_name,
+                city: game.away_team_city || null,
+              }, { onConflict: 'sport_id,league_id,provider_team_key' })
+              .select()
+              .single()
 
-      // Upsert game
-      const { data: existingGame } = await supabase
-        .from('games')
-        .select('id')
-        .eq('sport_id', sport_id)
-        .eq('provider_game_key', game.provider_game_key)
-        .maybeSingle()
+            if (!homeTeam || !awayTeam) continue
 
-      const { error: gameError } = await supabase
-        .from('games')
-        .upsert({
-          sport_id,
-          provider_game_key: game.provider_game_key,
-          start_time_utc: game.start_time_utc,
-          home_team_id: homeTeam.id,
-          away_team_id: awayTeam.id,
-          home_score: game.home_score,
-          away_score: game.away_score,
-          status: game.status,
-          last_seen_at: new Date().toISOString(),
-        }, { onConflict: 'sport_id,league_id,provider_game_key' })
+            // Calculate final total if game is final
+            const isFinal = game.status === 'final' && game.home_score !== null && game.away_score !== null
+            const finalTotal = isFinal ? (game.home_score! + game.away_score!) : null
 
-      if (gameError) {
-        console.error('Failed to upsert game:', gameError)
-        continue
-      }
+            // Upsert game
+            const { data: dbGame, error: gameError } = await supabase
+              .from('games')
+              .upsert({
+                sport_id: sportId,
+                provider_game_key: game.provider_game_key,
+                start_time_utc: game.start_time_utc,
+                home_team_id: homeTeam.id,
+                away_team_id: awayTeam.id,
+                home_score: game.home_score,
+                away_score: game.away_score,
+                final_total: finalTotal,
+                status: game.status,
+                last_seen_at: new Date().toISOString(),
+              }, { onConflict: 'sport_id,league_id,provider_game_key' })
+              .select()
+              .single()
 
-      if (existingGame) {
-        updatedCount++
-      } else {
-        insertedCount++
+            if (gameError || !dbGame) continue
+
+            counters.upserted++
+            sportResults[sportId].upserted++
+
+            // If game just became final, insert matchup_games row
+            if (isFinal && finalTotal !== null) {
+              const [teamLowId, teamHighId] = [homeTeam.id, awayTeam.id].sort()
+
+              await supabase
+                .from('matchup_games')
+                .upsert({
+                  sport_id: sportId,
+                  team_low_id: teamLowId,
+                  team_high_id: teamHighId,
+                  game_id: dbGame.id,
+                  played_at_utc: game.start_time_utc,
+                  total: finalTotal,
+                }, { onConflict: 'sport_id,league_id,team_low_id,team_high_id,game_id' })
+
+              counters.finals++
+              sportResults[sportId].finals++
+            }
+          } catch (gameErr) {
+            counters.errors++
+          }
+        }
+      } catch (sportError) {
+        console.error(`[INGEST] Error for ${sportId}:`, sportError)
+        counters.errors++
       }
     }
 
@@ -158,33 +223,36 @@ Deno.serve(async (req) => {
         .update({
           finished_at: new Date().toISOString(),
           status: 'success',
-          details: { sport_id, date: targetDate, games_found: games.length, inserted: insertedCount, updated: updatedCount }
+          details: { 
+            date: targetDate, 
+            counters,
+            by_sport: sportResults
+          }
         })
         .eq('id', jobRunId)
     }
 
+    console.log(`[INGEST] Complete: ${JSON.stringify(counters)}`)
+
     return new Response(
       JSON.stringify({ 
         success: true, 
-        sport_id,
         date: targetDate,
-        games_found: games.length,
-        inserted: insertedCount,
-        updated: updatedCount
+        counters,
+        by_sport: sportResults
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    console.error('Ingest error:', error)
+    console.error('[INGEST] Fatal error:', error)
     
-    // Mark job as failed
     if (jobRunId) {
       await supabase
         .from('job_runs')
         .update({
           finished_at: new Date().toISOString(),
           status: 'fail',
-          details: { error: error instanceof Error ? error.message : 'Unknown error' }
+          details: { error: error instanceof Error ? error.message : 'Unknown error', counters }
         })
         .eq('id', jobRunId)
     }
@@ -197,16 +265,20 @@ Deno.serve(async (req) => {
   }
 })
 
+// ============================================================
+// SPORT-SPECIFIC FETCH FUNCTIONS
+// ============================================================
+
 async function fetchNBAGames(apiKey: string, date: string): Promise<GameData[]> {
   const formattedDate = date.replace(/-/g, '')
   const url = `https://api.sportsdata.io/v3/nba/scores/json/GamesByDate/${formattedDate}`
   
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: { 'Ocp-Apim-Subscription-Key': apiKey }
   })
 
   if (!response.ok) {
-    console.error('NBA API error:', response.status, await response.text())
+    console.error('NBA API error:', response.status)
     return []
   }
 
@@ -221,7 +293,7 @@ async function fetchNBAGames(apiKey: string, date: string): Promise<GameData[]> 
     away_team_name: game.AwayTeam,
     home_score: game.HomeTeamScore,
     away_score: game.AwayTeamScore,
-    status: game.Status === 'Final' ? 'final' : game.Status === 'InProgress' ? 'live' : 'scheduled',
+    status: mapStatus(game.Status),
   }))
 }
 
@@ -229,12 +301,12 @@ async function fetchMLBGames(apiKey: string, date: string): Promise<GameData[]> 
   const formattedDate = date.replace(/-/g, '')
   const url = `https://api.sportsdata.io/v3/mlb/scores/json/GamesByDate/${formattedDate}`
   
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: { 'Ocp-Apim-Subscription-Key': apiKey }
   })
 
   if (!response.ok) {
-    console.error('MLB API error:', response.status, await response.text())
+    console.error('MLB API error:', response.status)
     return []
   }
 
@@ -249,14 +321,14 @@ async function fetchMLBGames(apiKey: string, date: string): Promise<GameData[]> 
     away_team_name: game.AwayTeam,
     home_score: game.HomeTeamRuns,
     away_score: game.AwayTeamRuns,
-    status: game.Status === 'Final' ? 'final' : game.Status === 'InProgress' ? 'live' : 'scheduled',
+    status: mapStatus(game.Status),
   }))
 }
 
 async function fetchNFLGames(apiKey: string): Promise<GameData[]> {
   // Get current week
   const weekUrl = `https://api.sportsdata.io/v3/nfl/scores/json/CurrentWeek`
-  const weekResponse = await fetch(weekUrl, {
+  const weekResponse = await fetchWithRetry(weekUrl, {
     headers: { 'Ocp-Apim-Subscription-Key': apiKey }
   })
 
@@ -267,19 +339,19 @@ async function fetchNFLGames(apiKey: string): Promise<GameData[]> {
 
   const currentWeek = await weekResponse.json()
   
-  // Get current season (estimate based on current date)
+  // Estimate current season
   const now = new Date()
   const year = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1
   const season = `${year}REG`
 
   const url = `https://api.sportsdata.io/v3/nfl/scores/json/ScoresByWeek/${season}/${currentWeek}`
   
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: { 'Ocp-Apim-Subscription-Key': apiKey }
   })
 
   if (!response.ok) {
-    console.error('NFL API error:', response.status, await response.text())
+    console.error('NFL API error:', response.status)
     return []
   }
 
@@ -294,7 +366,7 @@ async function fetchNFLGames(apiKey: string): Promise<GameData[]> {
     away_team_name: game.AwayTeam,
     home_score: game.HomeScore,
     away_score: game.AwayScore,
-    status: game.Status === 'Final' ? 'final' : game.Status === 'InProgress' ? 'live' : 'scheduled',
+    status: mapStatus(game.Status),
   }))
 }
 
@@ -302,12 +374,12 @@ async function fetchNHLGames(apiKey: string, date: string): Promise<GameData[]> 
   const formattedDate = date.replace(/-/g, '')
   const url = `https://api.sportsdata.io/v3/nhl/scores/json/GamesByDate/${formattedDate}`
   
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: { 'Ocp-Apim-Subscription-Key': apiKey }
   })
 
   if (!response.ok) {
-    console.error('NHL API error:', response.status, await response.text())
+    console.error('NHL API error:', response.status)
     return []
   }
 
@@ -322,6 +394,15 @@ async function fetchNHLGames(apiKey: string, date: string): Promise<GameData[]> 
     away_team_name: game.AwayTeam,
     home_score: game.HomeTeamScore,
     away_score: game.AwayTeamScore,
-    status: game.Status === 'Final' ? 'final' : game.Status === 'InProgress' ? 'live' : 'scheduled',
+    status: mapStatus(game.Status),
   }))
+}
+
+function mapStatus(status: string): 'scheduled' | 'live' | 'final' | 'postponed' | 'canceled' {
+  const normalized = (status || '').toLowerCase()
+  if (normalized === 'final' || normalized.includes('final')) return 'final'
+  if (normalized === 'inprogress' || normalized.includes('progress')) return 'live'
+  if (normalized === 'postponed') return 'postponed'
+  if (normalized === 'canceled' || normalized === 'cancelled') return 'canceled'
+  return 'scheduled'
 }
