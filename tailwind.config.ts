@@ -7,9 +7,9 @@ export default {
   theme: {
     container: {
       center: true,
-      padding: "2rem",
+      padding: "1.5rem",
       screens: {
-        "2xl": "1400px",
+        "2xl": "1200px",
       },
     },
     extend: {
@@ -57,28 +57,49 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        sport: {
+          nfl: "hsl(var(--sport-nfl))",
+          nba: "hsl(var(--sport-nba))",
+          mlb: "hsl(var(--sport-mlb))",
+          nhl: "hsl(var(--sport-nhl))",
+          soccer: "hsl(var(--sport-soccer))",
+        },
+        percentile: {
+          low: "hsl(var(--percentile-low))",
+          mid: "hsl(var(--percentile-mid))",
+          high: "hsl(var(--percentile-high))",
+        },
+        status: {
+          live: "hsl(var(--status-live))",
+          scheduled: "hsl(var(--status-scheduled))",
+          final: "hsl(var(--status-final))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      boxShadow: {
+        sm: "var(--shadow-sm)",
+        md: "var(--shadow-md)",
+        lg: "var(--shadow-lg)",
+        card: "var(--shadow-card)",
+      },
+      fontFamily: {
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+      },
+      fontSize: {
+        "2xs": ["0.625rem", { lineHeight: "0.875rem" }],
+      },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
         },
       },
       animation: {
