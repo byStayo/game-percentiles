@@ -273,148 +273,153 @@ export default function ParlayMachine() {
       </Helmet>
 
       <Layout>
-        <div className="space-y-8 animate-fade-in">
-          {/* Header */}
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight">Parlay Machine</h1>
-            <p className="text-muted-foreground">
-              Build optimized parlays using 95th percentile confidence picks
+        <div className="space-y-10 animate-fade-in">
+          {/* Hero */}
+          <div className="text-center space-y-4 py-4">
+            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
+              Parlay Machine
+            </h1>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Build optimized parlays using extreme percentile picks
             </p>
           </div>
 
-          {/* Controls */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Configuration</CardTitle>
-              <CardDescription>Select your preferences for parlay generation</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Date picker */}
-              <div>
-                <label className="text-sm font-medium mb-2 block">Date</label>
-                <DatePickerInline date={selectedDate} onDateChange={setSelectedDate} />
-              </div>
-              
-              {/* Sport selection */}
-              <div>
-                <label className="text-sm font-medium mb-3 block">Sports</label>
-                <div className="flex flex-wrap gap-3">
-                  {(['nfl', 'nba', 'nhl', 'mlb'] as SportId[]).map(sport => (
-                    <label key={sport} className="flex items-center gap-2 cursor-pointer">
-                      <Checkbox
-                        checked={selectedSports.has(sport)}
-                        onCheckedChange={() => toggleSport(sport)}
-                      />
-                      <span className="text-sm font-medium">{sport.toUpperCase()}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              
-              {/* Min confidence */}
-              <div>
-                <label className="text-sm font-medium mb-3 block">
-                  Minimum Confidence: {minConfidence}%
-                </label>
-                <div className="flex gap-2">
-                  {[60, 70, 80, 90, 95].map(val => (
-                    <Button
-                      key={val}
-                      variant={minConfidence === val ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setMinConfidence(val)}
-                    >
-                      {val}%
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              
-              {/* Parlay size */}
-              <div>
-                <label className="text-sm font-medium mb-3 block">Parlay Legs</label>
-                <div className="flex gap-2">
-                  {([2, 3, 4, 5] as const).map(size => (
-                    <Button
-                      key={size}
-                      variant={parlaySize === size ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setParlaySize(size)}
-                    >
-                      {size}-Leg
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Configuration */}
+          <div className="max-w-3xl mx-auto space-y-8">
+            {/* Date */}
+            <div className="flex justify-center">
+              <DatePickerInline date={selectedDate} onDateChange={setSelectedDate} />
+            </div>
+            
+            {/* Sport toggles */}
+            <div className="flex flex-wrap justify-center gap-2">
+              {(['nfl', 'nba', 'nhl', 'mlb'] as SportId[]).map(sport => (
+                <button
+                  key={sport}
+                  onClick={() => toggleSport(sport)}
+                  className={cn(
+                    "px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200",
+                    selectedSports.has(sport)
+                      ? "bg-foreground text-background shadow-md"
+                      : "bg-card border border-border/60 text-muted-foreground hover:text-foreground hover:border-border"
+                  )}
+                >
+                  {sport.toUpperCase()}
+                </button>
+              ))}
+            </div>
 
-          {/* High Confidence Picks */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                High Confidence Picks
-                <Badge variant="secondary">{highConfidencePicks.length}</Badge>
-              </CardTitle>
-              <CardDescription>
-                Games where the DK line falls at the extreme of H2H distribution
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="space-y-3">
-                  {[...Array(4)].map((_, i) => (
-                    <Skeleton key={i} className="h-16 w-full" />
-                  ))}
-                </div>
-              ) : highConfidencePicks.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  No picks meet the {minConfidence}% confidence threshold for the selected date and sports.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {highConfidencePicks.map((pick, i) => (
-                    <div
-                      key={pick.game.id}
+            {/* Confidence & Legs */}
+            <div className="grid sm:grid-cols-2 gap-6">
+              <div className="p-6 rounded-2xl bg-card border border-border/60">
+                <label className="text-sm font-medium text-muted-foreground mb-4 block">
+                  Minimum Confidence
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[60, 70, 80, 90, 95].map(val => (
+                    <button
+                      key={val}
+                      onClick={() => setMinConfidence(val)}
                       className={cn(
-                        "flex items-center justify-between p-3 rounded-lg border",
-                        pick.confidence >= 90 ? "bg-status-under/5 border-status-under/20" :
-                        pick.confidence >= 80 ? "bg-status-edge/5 border-status-edge/20" :
-                        "bg-muted/30 border-border"
+                        "px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200",
+                        minConfidence === val
+                          ? "bg-foreground text-background shadow-sm"
+                          : "bg-secondary text-muted-foreground hover:text-foreground"
                       )}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-medium text-muted-foreground w-6">#{i + 1}</span>
-                        <Badge variant="outline" className="text-2xs">
-                          {pick.game.sport_id.toUpperCase()}
-                        </Badge>
-                        <div>
-                          <div className="font-medium text-sm">
-                            {getTeamDisplayName(pick.game.away_team, pick.game.sport_id)} @ {getTeamDisplayName(pick.game.home_team, pick.game.sport_id)}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            DK Line: {pick.game.dk_total_line?.toFixed(1)} | H2H: n={pick.game.n_h2h}
-                          </div>
+                      {val}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-card border border-border/60">
+                <label className="text-sm font-medium text-muted-foreground mb-4 block">
+                  Parlay Legs
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {([2, 3, 4, 5] as const).map(size => (
+                    <button
+                      key={size}
+                      onClick={() => setParlaySize(size)}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200",
+                        parlaySize === size
+                          ? "bg-foreground text-background shadow-sm"
+                          : "bg-secondary text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {size}-Leg
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* High Confidence Picks */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">
+                High Confidence Picks
+                <span className="ml-2 px-2 py-0.5 rounded-full bg-secondary text-sm font-medium">
+                  {highConfidencePicks.length}
+                </span>
+              </h2>
+            </div>
+            
+            {isLoading ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[...Array(4)].map((_, i) => (
+                  <Skeleton key={i} className="h-24 rounded-2xl" />
+                ))}
+              </div>
+            ) : highConfidencePicks.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                No picks meet the {minConfidence}% threshold
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {highConfidencePicks.map((pick, i) => (
+                  <div
+                    key={pick.game.id}
+                    className={cn(
+                      "p-4 rounded-2xl border transition-all duration-200",
+                      pick.confidence >= 90 ? "bg-status-under/5 border-status-under/20" :
+                      pick.confidence >= 80 ? "bg-status-edge/5 border-status-edge/20" :
+                      "bg-card border-border/60"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-2xs font-semibold text-muted-foreground">#{i + 1}</span>
+                          <span className="px-1.5 py-0.5 rounded-md text-2xs font-semibold bg-secondary">
+                            {pick.game.sport_id.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="font-medium text-sm truncate">
+                          {getTeamDisplayName(pick.game.away_team, pick.game.sport_id)} @ {getTeamDisplayName(pick.game.home_team, pick.game.sport_id)}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          Line: {pick.game.dk_total_line?.toFixed(1)} · n={pick.game.n_h2h}
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <Badge className={cn(
-                          "text-xs",
+                      <div className="text-right flex-shrink-0">
+                        <span className={cn(
+                          "inline-block px-2.5 py-1 rounded-lg text-xs font-bold",
                           pick.pick === 'under' ? "bg-status-under text-white" : "bg-status-over text-white"
                         )}>
                           {pick.pick.toUpperCase()}
-                        </Badge>
-                        <div className="text-right">
-                          <div className="font-bold text-lg">{pick.confidence.toFixed(0)}%</div>
-                          <div className="text-2xs text-muted-foreground">confidence</div>
-                        </div>
+                        </span>
+                        <div className="text-xl font-bold mt-1">{pick.confidence.toFixed(0)}%</div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Parlay Combinations */}
           <Card>

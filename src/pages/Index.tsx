@@ -3,208 +3,273 @@ import { Helmet } from "react-helmet-async";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { Layout } from "@/components/layout/Layout";
-import { SportTabs } from "@/components/ui/sport-tabs";
 import { DatePickerInline } from "@/components/ui/date-picker-inline";
 import { GameCard } from "@/components/game/GameCardNew";
 import { GameCardSkeleton } from "@/components/game/GameCardSkeleton";
 import { EmptyState } from "@/components/game/EmptyState";
 import { ErrorState } from "@/components/game/ErrorState";
-import { useTodayGames } from "@/hooks/useApi";
+import { useTodayGames, TodayGame } from "@/hooks/useApi";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Clock, TrendingUp, Filter, ChevronDown } from "lucide-react";
 import type { SportId } from "@/types";
 
 const ET_TIMEZONE = 'America/New_York';
 
-// Get today in ET timezone
 function getTodayInET(): Date {
   const now = new Date();
   const etDate = toZonedTime(now, ET_TIMEZONE);
-  // Return a date object set to today (start of day)
   return new Date(etDate.getFullYear(), etDate.getMonth(), etDate.getDate());
 }
 
-const sports = [
-  { id: 'nfl' as SportId, display_name: 'NFL' },
-  { id: 'nba' as SportId, display_name: 'NBA' },
-  { id: 'mlb' as SportId, display_name: 'MLB' },
-  { id: 'nhl' as SportId, display_name: 'NHL' },
+const sports: { id: SportId; name: string }[] = [
+  { id: 'nfl', name: 'NFL' },
+  { id: 'nba', name: 'NBA' },
+  { id: 'nhl', name: 'NHL' },
+  { id: 'mlb', name: 'MLB' },
 ];
 
+type ViewMode = 'all' | 'sport';
 type SortOption = 'time' | 'confidence' | 'edge';
-type FilterOption = 'all' | 'high' | 'moderate' | 'limited';
 
 export default function Index() {
   const [selectedDate, setSelectedDate] = useState(getTodayInET);
-  const [selectedSport, setSelectedSport] = useState<SportId>('nfl');
+  const [selectedSport, setSelectedSport] = useState<SportId>('nba');
+  const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [sortBy, setSortBy] = useState<SortOption>('time');
-  const [filterBy, setFilterBy] = useState<FilterOption>('all');
   
-  const { data, isLoading, error, refetch } = useTodayGames(selectedDate, selectedSport);
+  // Fetch all sports data
+  const nflQuery = useTodayGames(selectedDate, 'nfl');
+  const nbaQuery = useTodayGames(selectedDate, 'nba');
+  const nhlQuery = useTodayGames(selectedDate, 'nhl');
+  const mlbQuery = useTodayGames(selectedDate, 'mlb');
+  
+  const isLoading = nflQuery.isLoading || nbaQuery.isLoading || nhlQuery.isLoading || mlbQuery.isLoading;
+  const hasError = nflQuery.error || nbaQuery.error || nhlQuery.error || mlbQuery.error;
 
-  const games = data?.games || [];
+  // Combine all games
+  const allGames = useMemo(() => {
+    const games: TodayGame[] = [
+      ...(nflQuery.data?.games || []),
+      ...(nbaQuery.data?.games || []),
+      ...(nhlQuery.data?.games || []),
+      ...(mlbQuery.data?.games || []),
+    ];
+    return games;
+  }, [nflQuery.data, nbaQuery.data, nhlQuery.data, mlbQuery.data]);
 
-  // Filter and sort games
-  const filteredAndSortedGames = useMemo(() => {
-    let result = [...games];
+  // Get games for selected sport
+  const sportGames = useMemo(() => {
+    const queryMap: Record<SportId, typeof nflQuery> = {
+      nfl: nflQuery,
+      nba: nbaQuery,
+      nhl: nhlQuery,
+      mlb: mlbQuery,
+    };
+    return queryMap[selectedSport].data?.games || [];
+  }, [selectedSport, nflQuery, nbaQuery, nhlQuery, mlbQuery]);
+
+  // Games to display based on view mode
+  const displayGames = viewMode === 'all' ? allGames : sportGames;
+
+  // Sort games
+  const sortedGames = useMemo(() => {
+    const games = [...displayGames];
     
-    // Apply filter
-    if (filterBy === 'high') {
-      result = result.filter(g => g.n_h2h >= 10);
-    } else if (filterBy === 'moderate') {
-      result = result.filter(g => g.n_h2h >= 5);
-    } else if (filterBy === 'limited') {
-      result = result.filter(g => g.n_h2h >= 2);
-    }
-    
-    // Apply sort
     if (sortBy === 'time') {
-      result.sort((a, b) => new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime());
+      games.sort((a, b) => new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime());
     } else if (sortBy === 'confidence') {
-      result.sort((a, b) => b.n_h2h - a.n_h2h);
+      games.sort((a, b) => b.n_h2h - a.n_h2h);
     } else if (sortBy === 'edge') {
-      // Sort by how extreme the DK line is relative to percentiles (potential edge)
-      result.sort((a, b) => {
+      games.sort((a, b) => {
         const aEdge = a.dk_line_percentile !== null ? Math.abs(50 - a.dk_line_percentile) : 0;
         const bEdge = b.dk_line_percentile !== null ? Math.abs(50 - b.dk_line_percentile) : 0;
         return bEdge - aEdge;
       });
     }
     
-    return result;
-  }, [games, filterBy, sortBy]);
+    return games;
+  }, [displayGames, sortBy]);
+
+  // Sport counts
+  const sportCounts = useMemo(() => ({
+    nfl: nflQuery.data?.games?.length || 0,
+    nba: nbaQuery.data?.games?.length || 0,
+    nhl: nhlQuery.data?.games?.length || 0,
+    mlb: mlbQuery.data?.games?.length || 0,
+  }), [nflQuery.data, nbaQuery.data, nhlQuery.data, mlbQuery.data]);
 
   return (
     <>
       <Helmet>
-        <title>Percentile Totals | H2H Historical Analysis</title>
-        <meta name="description" content="Analyze head-to-head historical totals distribution for NFL, NBA, MLB, and NHL games. View P05/P95 percentile bounds and DraftKings line analysis." />
+        <title>Percentile Totals | Historical H2H Analysis</title>
+        <meta name="description" content="Analyze head-to-head historical totals for NFL, NBA, MLB, and NHL. View P05/P95 percentile bounds and line analysis." />
       </Helmet>
 
       <Layout>
-        <div className="space-y-8 animate-fade-in">
-          {/* Page header */}
-          <div className="space-y-6">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Percentile Totals</h1>
-              <p className="text-muted-foreground mt-1">
-                H2H historical analysis with percentile bounds
-              </p>
-            </div>
+        <div className="space-y-10 animate-fade-in">
+          {/* Hero section */}
+          <div className="text-center space-y-4 py-4">
+            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
+              Percentile Totals
+            </h1>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Historical head-to-head analysis with statistical bounds
+            </p>
+          </div>
 
-            {/* Date picker */}
+          {/* Date picker - centered */}
+          <div className="flex justify-center">
             <DatePickerInline
               date={selectedDate}
               onDateChange={setSelectedDate}
             />
+          </div>
 
-            {/* Sport tabs */}
-            <SportTabs
-              sports={sports}
-              activeSport={selectedSport}
-              onSportChange={setSelectedSport}
-            />
-
-            {/* H2H Legend */}
-            <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground bg-muted/30 rounded-lg px-4 py-2.5">
-              <span className="font-medium text-foreground">H2H Sample Size:</span>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-status-under/10 text-status-under">
-                  n=10+
-                </span>
-                <span>High confidence</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-status-edge/10 text-status-edge">
-                  n=5-9
-                </span>
-                <span>Moderate</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-muted text-muted-foreground">
-                  n=2-4
-                </span>
-                <span>Limited</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-status-over/10 text-status-over border border-status-over/20">
-                  ⚠️ n=1
-                </span>
-                <span>Very limited</span>
-              </div>
+          {/* View mode toggle & controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            {/* View mode pills */}
+            <div className="flex items-center gap-1 p-1 rounded-full bg-secondary/50 w-fit">
+              <button
+                onClick={() => setViewMode('all')}
+                className={cn(
+                  "px-4 py-2 text-sm font-medium rounded-full transition-all duration-200",
+                  viewMode === 'all'
+                    ? "bg-foreground text-background shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                All Games
+              </button>
+              <button
+                onClick={() => setViewMode('sport')}
+                className={cn(
+                  "px-4 py-2 text-sm font-medium rounded-full transition-all duration-200",
+                  viewMode === 'sport'
+                    ? "bg-foreground text-background shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                By Sport
+              </button>
             </div>
 
-            {/* Sort & Filter Controls */}
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Sort:</span>
-                <div className="flex gap-1">
-                  {[
-                    { value: 'time', label: 'Time' },
-                    { value: 'confidence', label: 'Confidence' },
-                    { value: 'edge', label: 'Edge' },
-                  ].map((option) => (
-                    <Button
-                      key={option.value}
-                      variant={sortBy === option.value ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setSortBy(option.value as SortOption)}
-                      className="text-xs"
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Filter:</span>
-                <div className="flex gap-1">
-                  {[
-                    { value: 'all', label: 'All' },
-                    { value: 'limited', label: 'n≥2' },
-                    { value: 'moderate', label: 'n≥5' },
-                    { value: 'high', label: 'n≥10' },
-                  ].map((option) => (
-                    <Button
-                      key={option.value}
-                      variant={filterBy === option.value ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setFilterBy(option.value as FilterOption)}
-                      className="text-xs"
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
-                </div>
+            {/* Sort controls */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground hidden sm:inline">Sort by</span>
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-secondary/50">
+                {[
+                  { value: 'time', label: 'Time', icon: Clock },
+                  { value: 'confidence', label: 'Data', icon: TrendingUp },
+                  { value: 'edge', label: 'Edge', icon: Filter },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setSortBy(option.value as SortOption)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200",
+                      sortBy === option.value
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <option.icon className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">{option.label}</span>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
 
+          {/* Sport tabs (only shown in sport view mode) */}
+          {viewMode === 'sport' && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-2">
+              {sports.map((sport) => (
+                <button
+                  key={sport.id}
+                  onClick={() => setSelectedSport(sport.id)}
+                  className={cn(
+                    "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap",
+                    selectedSport === sport.id
+                      ? "bg-foreground text-background shadow-md"
+                      : "bg-card border border-border/60 text-muted-foreground hover:text-foreground hover:border-border"
+                  )}
+                >
+                  {sport.name}
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded-md text-2xs font-semibold tabular-nums",
+                    selectedSport === sport.id
+                      ? "bg-background/20 text-background"
+                      : "bg-muted text-muted-foreground"
+                  )}>
+                    {sportCounts[sport.id]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Stats summary for all games view */}
+          {viewMode === 'all' && !isLoading && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {sports.map((sport) => (
+                <div
+                  key={sport.id}
+                  className="p-4 rounded-2xl bg-card border border-border/60 text-center"
+                >
+                  <div className="text-2xl font-bold tabular-nums">{sportCounts[sport.id]}</div>
+                  <div className="text-sm text-muted-foreground">{sport.name} games</div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Games grid */}
           {isLoading ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {[...Array(6)].map((_, i) => (
                 <GameCardSkeleton key={i} />
               ))}
             </div>
-          ) : error ? (
+          ) : hasError ? (
             <ErrorState
               title="Unable to load games"
-              description={error instanceof Error ? error.message : 'An error occurred while fetching games.'}
-              onRetry={() => refetch()}
+              description="There was an error loading game data. Please try again."
+              onRetry={() => {
+                nflQuery.refetch();
+                nbaQuery.refetch();
+                nhlQuery.refetch();
+                mlbQuery.refetch();
+              }}
             />
-          ) : filteredAndSortedGames.length > 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredAndSortedGames.map((game) => (
+          ) : sortedGames.length > 0 ? (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {sortedGames.map((game) => (
                 <GameCard key={game.id} game={game} />
               ))}
             </div>
           ) : (
             <EmptyState
               title="No games available"
-              description={`No ${selectedSport.toUpperCase()} games with sufficient H2H history found for ${format(selectedDate, 'MMMM d, yyyy')}.`}
+              description={`No games found for ${format(selectedDate, 'MMMM d, yyyy')}.`}
             />
           )}
+
+          {/* Legend */}
+          <div className="flex flex-wrap items-center justify-center gap-6 pt-6 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-status-under" />
+              <span>Under signal (P≤20)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-status-edge" />
+              <span>Neutral range</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-status-over" />
+              <span>Over signal (P≥80)</span>
+            </div>
+          </div>
         </div>
       </Layout>
     </>

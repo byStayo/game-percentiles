@@ -17,59 +17,48 @@ export function PercentileBar({ p05, p95, dkLine, dkPercentile, className }: Per
 
   const p05Position = ((p05 - min) / totalRange) * 100;
   const p95Position = ((p95 - min) / totalRange) * 100;
-  const dkPosition = dkLine ? Math.min(Math.max(((dkLine - min) / totalRange) * 100, 3), 97) : null;
+  const dkPosition = dkLine ? Math.min(Math.max(((dkLine - min) / totalRange) * 100, 4), 96) : null;
 
-  const getPercentileColor = (percentile: number | null | undefined) => {
-    if (percentile == null) return "bg-muted-foreground";
-    if (percentile <= 20) return "bg-percentile-low";
-    if (percentile >= 80) return "bg-percentile-high";
-    return "bg-percentile-mid";
+  const getIndicatorStyle = (percentile: number | null | undefined) => {
+    if (percentile == null) return { bg: "bg-muted-foreground", ring: "ring-muted-foreground/20" };
+    if (percentile <= 20) return { bg: "bg-status-under", ring: "ring-status-under/20" };
+    if (percentile >= 80) return { bg: "bg-status-over", ring: "ring-status-over/20" };
+    return { bg: "bg-status-edge", ring: "ring-status-edge/20" };
   };
 
-  const getPercentileTextColor = (percentile: number | null | undefined) => {
-    if (percentile == null) return "text-muted-foreground";
-    if (percentile <= 20) return "text-percentile-low";
-    if (percentile >= 80) return "text-percentile-high";
-    return "text-percentile-mid";
-  };
+  const indicatorStyle = getIndicatorStyle(dkPercentile);
 
   return (
-    <div className={cn("relative", className)}>
-      {/* Labels */}
-      <div className="flex justify-between text-2xs text-muted-foreground mb-2">
-        <span className="font-medium">P05: {p05.toFixed(1)}</span>
-        <span className="font-medium">P95: {p95.toFixed(1)}</span>
+    <div className={cn("", className)}>
+      {/* Range labels */}
+      <div className="flex justify-between items-center mb-2.5">
+        <div className="text-xs">
+          <span className="text-muted-foreground">Low </span>
+          <span className="font-semibold tabular-nums">{p05.toFixed(1)}</span>
+        </div>
+        <div className="text-xs text-right">
+          <span className="text-muted-foreground">High </span>
+          <span className="font-semibold tabular-nums">{p95.toFixed(1)}</span>
+        </div>
       </div>
 
-      {/* Bar container */}
-      <div className="relative h-3 bg-secondary rounded-full">
-        {/* P05-P95 range fill */}
+      {/* Bar */}
+      <div className="relative h-2.5 bg-secondary rounded-full overflow-hidden">
+        {/* Range fill */}
         <div
-          className="absolute h-full bg-muted-foreground/20 rounded-full"
+          className="absolute h-full bg-gradient-to-r from-status-under/30 via-muted-foreground/20 to-status-over/30 rounded-full"
           style={{
             left: `${p05Position}%`,
             width: `${p95Position - p05Position}%`,
           }}
         />
 
-        {/* P05 marker */}
-        <div
-          className="absolute top-0 h-full w-0.5 bg-muted-foreground/60 rounded-full"
-          style={{ left: `${p05Position}%` }}
-        />
-
-        {/* P95 marker */}
-        <div
-          className="absolute top-0 h-full w-0.5 bg-muted-foreground/60 rounded-full"
-          style={{ left: `${p95Position}%` }}
-        />
-
-        {/* DK line marker */}
+        {/* Marker indicator */}
         {dkPosition !== null && (
           <div
             className={cn(
-              "absolute top-1/2 w-4 h-4 rounded-full border-2 border-background shadow-md",
-              getPercentileColor(dkPercentile)
+              "absolute top-1/2 w-4 h-4 rounded-full shadow-md ring-2 ring-background",
+              indicatorStyle.bg
             )}
             style={{ 
               left: `${dkPosition}%`, 
@@ -79,22 +68,18 @@ export function PercentileBar({ p05, p95, dkLine, dkPercentile, className }: Per
         )}
       </div>
 
-      {/* DK line label */}
-      {dkLine !== null && dkLine !== undefined && (
-        <div className="flex items-center gap-2 mt-2">
-          <span className="text-xs text-muted-foreground">DK Line:</span>
-          <span className="text-sm font-semibold">{dkLine.toFixed(1)}</span>
-          {dkPercentile !== null && dkPercentile !== undefined && (
-            <span className={cn(
-              "text-xs px-2 py-0.5 rounded-full font-medium",
-              dkPercentile <= 20 ? "bg-percentile-low/10" :
-              dkPercentile >= 80 ? "bg-percentile-high/10" :
-              "bg-percentile-mid/10",
-              getPercentileTextColor(dkPercentile)
-            )}>
-              P{Math.round(dkPercentile)}
-            </span>
-          )}
+      {/* DK line detail */}
+      {dkLine !== null && dkLine !== undefined && dkPercentile !== null && dkPercentile !== undefined && (
+        <div className="flex items-center justify-center gap-2 mt-3">
+          <span className={cn(
+            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold",
+            dkPercentile <= 20 ? "bg-status-under/10 text-status-under" :
+            dkPercentile >= 80 ? "bg-status-over/10 text-status-over" :
+            "bg-status-edge/10 text-status-edge"
+          )}>
+            <span className={cn("w-1.5 h-1.5 rounded-full", indicatorStyle.bg)} />
+            P{Math.round(dkPercentile)}
+          </span>
         </div>
       )}
     </div>
