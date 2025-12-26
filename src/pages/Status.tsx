@@ -168,12 +168,27 @@ export default function Status() {
                     <p className="text-sm text-muted-foreground mb-2">
                       Sample unmatched (strict mode):
                     </p>
-                    <div className="space-y-1 max-h-32 overflow-y-auto">
-                      {data.sample_unmatched.map((reason, i) => (
-                        <p key={i} className="text-xs text-muted-foreground font-mono">
-                          {reason}
-                        </p>
-                      ))}
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {data.sample_unmatched.map((item, i) => {
+                        // Handle both string and object formats
+                        if (typeof item === 'string') {
+                          return (
+                            <p key={i} className="text-xs text-muted-foreground font-mono">
+                              {item}
+                            </p>
+                          );
+                        }
+                        // Object format with internal, internal_normalized, odds
+                        const obj = item as { internal: string; internal_normalized?: string; odds?: Array<{ raw: string; normalized: string; time_diff_hrs: string }> };
+                        return (
+                          <div key={i} className="text-xs font-mono bg-secondary/20 p-2 rounded">
+                            <p className="text-foreground">{obj.internal}</p>
+                            {obj.internal_normalized && (
+                              <p className="text-muted-foreground">→ {obj.internal_normalized}</p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

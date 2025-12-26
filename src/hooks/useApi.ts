@@ -105,7 +105,7 @@ export interface StatusResponse {
     unmatched: number;
     by_sport: Record<string, { total: number; with_odds: number }>;
   };
-  sample_unmatched: string[];
+  sample_unmatched: Array<string | { internal: string; internal_normalized?: string; odds?: Array<{ raw: string; normalized: string; time_diff_hrs: string }> }>;
   database: {
     teams: number;
     games: number;
