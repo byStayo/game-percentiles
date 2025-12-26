@@ -436,67 +436,6 @@ export type Database = {
           },
         ]
       }
-      provider_mappings: {
-        Row: {
-          confidence: number | null
-          id: number
-          last_verified_at: string | null
-          league_id: string | null
-          method: string | null
-          odds_api_team_name: string
-          odds_sport_key: string | null
-          sport_id: string
-          team_id: string
-          updated_at: string | null
-        }
-        Insert: {
-          confidence?: number | null
-          id?: number
-          last_verified_at?: string | null
-          league_id?: string | null
-          method?: string | null
-          odds_api_team_name: string
-          odds_sport_key?: string | null
-          sport_id: string
-          team_id: string
-          updated_at?: string | null
-        }
-        Update: {
-          confidence?: number | null
-          id?: number
-          last_verified_at?: string | null
-          league_id?: string | null
-          method?: string | null
-          odds_api_team_name?: string
-          odds_sport_key?: string | null
-          sport_id?: string
-          team_id?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "provider_mappings_league_id_fkey"
-            columns: ["league_id"]
-            isOneToOne: false
-            referencedRelation: "leagues"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "provider_mappings_sport_id_fkey"
-            columns: ["sport_id"]
-            isOneToOne: false
-            referencedRelation: "sports"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "provider_mappings_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       sports: {
         Row: {
           display_name: string
