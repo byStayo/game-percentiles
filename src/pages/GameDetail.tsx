@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HistoricalDistributionChart } from "@/components/game/HistoricalDistributionChart";
 import { cn } from "@/lib/utils";
+import { getTeamDisplayName, formatDateTimeET } from "@/lib/teamNames";
 import type { SportId } from "@/types";
 
 const sportColors: Record<SportId, string> = {
@@ -58,16 +59,15 @@ export default function GameDetail() {
   const { game, edge, stats, history } = data;
   const hasEnoughData = (stats?.n_games || 0) >= 5;
 
-  const homeTeamName = game.home_team?.city 
-    ? `${game.home_team.city} ${game.home_team.name}` 
-    : game.home_team?.name || 'TBD';
-  
-  const awayTeamName = game.away_team?.city 
-    ? `${game.away_team.city} ${game.away_team.name}` 
-    : game.away_team?.name || 'TBD';
+  // Use DraftKings-style team names
+  const homeTeamName = getTeamDisplayName(game.home_team, game.sport_id);
+  const awayTeamName = getTeamDisplayName(game.away_team, game.sport_id);
 
   const isLive = game.status === 'live';
   const isFinal = game.status === 'final';
+  
+  // Format time in Eastern Time
+  const { time: gameTime, date: gameDate } = formatDateTimeET(game.start_time_utc);
 
   return (
     <>
@@ -112,11 +112,11 @@ export default function GameDetail() {
                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <Calendar className="h-4 w-4" />
-                    {format(new Date(game.start_time_utc), 'EEE, MMM d')}
+                    {gameDate}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Clock className="h-4 w-4" />
-                    {format(new Date(game.start_time_utc), 'h:mm a')}
+                    {gameTime}
                   </span>
                 </div>
               </div>

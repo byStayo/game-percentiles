@@ -1,149 +1,149 @@
-// Team abbreviation to full name mappings for display
+// DraftKings-style team name mappings (short city + team name format)
 export const NFL_TEAMS: Record<string, string> = {
-  'ARI': 'Arizona Cardinals',
-  'ATL': 'Atlanta Falcons',
-  'BAL': 'Baltimore Ravens',
-  'BUF': 'Buffalo Bills',
-  'CAR': 'Carolina Panthers',
-  'CHI': 'Chicago Bears',
-  'CIN': 'Cincinnati Bengals',
-  'CLE': 'Cleveland Browns',
-  'DAL': 'Dallas Cowboys',
-  'DEN': 'Denver Broncos',
-  'DET': 'Detroit Lions',
-  'GB': 'Green Bay Packers',
-  'HOU': 'Houston Texans',
-  'IND': 'Indianapolis Colts',
-  'JAX': 'Jacksonville Jaguars',
-  'KC': 'Kansas City Chiefs',
-  'LV': 'Las Vegas Raiders',
-  'LAC': 'Los Angeles Chargers',
-  'LAR': 'Los Angeles Rams',
-  'MIA': 'Miami Dolphins',
-  'MIN': 'Minnesota Vikings',
-  'NE': 'New England Patriots',
-  'NO': 'New Orleans Saints',
-  'NYG': 'New York Giants',
-  'NYJ': 'New York Jets',
-  'PHI': 'Philadelphia Eagles',
-  'PIT': 'Pittsburgh Steelers',
-  'SF': 'San Francisco 49ers',
-  'SEA': 'Seattle Seahawks',
-  'TB': 'Tampa Bay Buccaneers',
-  'TEN': 'Tennessee Titans',
-  'WAS': 'Washington Commanders',
+  'ARI': 'ARI Cardinals',
+  'ATL': 'ATL Falcons',
+  'BAL': 'BAL Ravens',
+  'BUF': 'BUF Bills',
+  'CAR': 'CAR Panthers',
+  'CHI': 'CHI Bears',
+  'CIN': 'CIN Bengals',
+  'CLE': 'CLE Browns',
+  'DAL': 'DAL Cowboys',
+  'DEN': 'DEN Broncos',
+  'DET': 'DET Lions',
+  'GB': 'GB Packers',
+  'HOU': 'HOU Texans',
+  'IND': 'IND Colts',
+  'JAX': 'JAX Jaguars',
+  'KC': 'KC Chiefs',
+  'LV': 'LV Raiders',
+  'LAC': 'LA Chargers',
+  'LAR': 'LA Rams',
+  'MIA': 'MIA Dolphins',
+  'MIN': 'MIN Vikings',
+  'NE': 'NE Patriots',
+  'NO': 'NO Saints',
+  'NYG': 'NY Giants',
+  'NYJ': 'NY Jets',
+  'PHI': 'PHI Eagles',
+  'PIT': 'PIT Steelers',
+  'SF': 'SF 49ers',
+  'SEA': 'SEA Seahawks',
+  'TB': 'TB Buccaneers',
+  'TEN': 'TEN Titans',
+  'WAS': 'WAS Commanders',
 };
 
 export const NBA_TEAMS: Record<string, string> = {
-  'ATL': 'Atlanta Hawks',
-  'BOS': 'Boston Celtics',
-  'BKN': 'Brooklyn Nets',
-  'CHA': 'Charlotte Hornets',
-  'CHI': 'Chicago Bulls',
-  'CLE': 'Cleveland Cavaliers',
-  'DAL': 'Dallas Mavericks',
-  'DEN': 'Denver Nuggets',
-  'DET': 'Detroit Pistons',
-  'GS': 'Golden State Warriors',
-  'GSW': 'Golden State Warriors',
-  'HOU': 'Houston Rockets',
-  'IND': 'Indiana Pacers',
-  'LAC': 'Los Angeles Clippers',
-  'LAL': 'Los Angeles Lakers',
-  'MEM': 'Memphis Grizzlies',
-  'MIA': 'Miami Heat',
-  'MIL': 'Milwaukee Bucks',
-  'MIN': 'Minnesota Timberwolves',
-  'NO': 'New Orleans Pelicans',
-  'NOP': 'New Orleans Pelicans',
-  'NY': 'New York Knicks',
-  'NYK': 'New York Knicks',
-  'OKC': 'Oklahoma City Thunder',
-  'ORL': 'Orlando Magic',
-  'PHI': 'Philadelphia 76ers',
-  'PHO': 'Phoenix Suns',
-  'PHX': 'Phoenix Suns',
-  'POR': 'Portland Trail Blazers',
-  'SAC': 'Sacramento Kings',
-  'SA': 'San Antonio Spurs',
-  'SAS': 'San Antonio Spurs',
-  'TOR': 'Toronto Raptors',
-  'UTA': 'Utah Jazz',
-  'WAS': 'Washington Wizards',
+  'ATL': 'ATL Hawks',
+  'BOS': 'BOS Celtics',
+  'BKN': 'BKN Nets',
+  'CHA': 'CHA Hornets',
+  'CHI': 'CHI Bulls',
+  'CLE': 'CLE Cavaliers',
+  'DAL': 'DAL Mavericks',
+  'DEN': 'DEN Nuggets',
+  'DET': 'DET Pistons',
+  'GS': 'GS Warriors',
+  'GSW': 'GS Warriors',
+  'HOU': 'HOU Rockets',
+  'IND': 'IND Pacers',
+  'LAC': 'LA Clippers',
+  'LAL': 'LA Lakers',
+  'MEM': 'MEM Grizzlies',
+  'MIA': 'MIA Heat',
+  'MIL': 'MIL Bucks',
+  'MIN': 'MIN Timberwolves',
+  'NO': 'NO Pelicans',
+  'NOP': 'NO Pelicans',
+  'NY': 'NY Knicks',
+  'NYK': 'NY Knicks',
+  'OKC': 'OKC Thunder',
+  'ORL': 'ORL Magic',
+  'PHI': 'PHI 76ers',
+  'PHO': 'PHX Suns',
+  'PHX': 'PHX Suns',
+  'POR': 'POR Trail Blazers',
+  'SAC': 'SAC Kings',
+  'SA': 'SA Spurs',
+  'SAS': 'SA Spurs',
+  'TOR': 'TOR Raptors',
+  'UTA': 'UTA Jazz',
+  'WAS': 'WAS Wizards',
 };
 
 export const NHL_TEAMS: Record<string, string> = {
-  'ANA': 'Anaheim Ducks',
-  'ARI': 'Arizona Coyotes',
-  'BOS': 'Boston Bruins',
-  'BUF': 'Buffalo Sabres',
-  'CGY': 'Calgary Flames',
-  'CAR': 'Carolina Hurricanes',
-  'CHI': 'Chicago Blackhawks',
-  'COL': 'Colorado Avalanche',
-  'CBJ': 'Columbus Blue Jackets',
-  'DAL': 'Dallas Stars',
-  'DET': 'Detroit Red Wings',
-  'EDM': 'Edmonton Oilers',
-  'FLA': 'Florida Panthers',
-  'LA': 'Los Angeles Kings',
-  'LAK': 'Los Angeles Kings',
-  'MIN': 'Minnesota Wild',
-  'MTL': 'Montreal Canadiens',
-  'NSH': 'Nashville Predators',
-  'NJ': 'New Jersey Devils',
-  'NJD': 'New Jersey Devils',
-  'NYI': 'New York Islanders',
-  'NYR': 'New York Rangers',
-  'OTT': 'Ottawa Senators',
-  'PHI': 'Philadelphia Flyers',
-  'PIT': 'Pittsburgh Penguins',
-  'SJ': 'San Jose Sharks',
-  'SJS': 'San Jose Sharks',
-  'SEA': 'Seattle Kraken',
-  'STL': 'St. Louis Blues',
-  'TB': 'Tampa Bay Lightning',
-  'TBL': 'Tampa Bay Lightning',
-  'TOR': 'Toronto Maple Leafs',
-  'UTA': 'Utah Hockey Club',
-  'VAN': 'Vancouver Canucks',
-  'VGK': 'Vegas Golden Knights',
-  'WSH': 'Washington Capitals',
-  'WPG': 'Winnipeg Jets',
+  'ANA': 'ANA Ducks',
+  'ARI': 'ARI Coyotes',
+  'BOS': 'BOS Bruins',
+  'BUF': 'BUF Sabres',
+  'CGY': 'CGY Flames',
+  'CAR': 'CAR Hurricanes',
+  'CHI': 'CHI Blackhawks',
+  'COL': 'COL Avalanche',
+  'CBJ': 'CBJ Blue Jackets',
+  'DAL': 'DAL Stars',
+  'DET': 'DET Red Wings',
+  'EDM': 'EDM Oilers',
+  'FLA': 'FLA Panthers',
+  'LA': 'LA Kings',
+  'LAK': 'LA Kings',
+  'MIN': 'MIN Wild',
+  'MTL': 'MTL Canadiens',
+  'NSH': 'NSH Predators',
+  'NJ': 'NJ Devils',
+  'NJD': 'NJ Devils',
+  'NYI': 'NY Islanders',
+  'NYR': 'NY Rangers',
+  'OTT': 'OTT Senators',
+  'PHI': 'PHI Flyers',
+  'PIT': 'PIT Penguins',
+  'SJ': 'SJ Sharks',
+  'SJS': 'SJ Sharks',
+  'SEA': 'SEA Kraken',
+  'STL': 'STL Blues',
+  'TB': 'TB Lightning',
+  'TBL': 'TB Lightning',
+  'TOR': 'TOR Maple Leafs',
+  'UTA': 'UTA Hockey Club',
+  'VAN': 'VAN Canucks',
+  'VGK': 'VGS Golden Knights',
+  'WSH': 'WAS Capitals',
+  'WPG': 'WPG Jets',
 };
 
 export const MLB_TEAMS: Record<string, string> = {
-  'ARI': 'Arizona Diamondbacks',
-  'ATL': 'Atlanta Braves',
-  'BAL': 'Baltimore Orioles',
-  'BOS': 'Boston Red Sox',
-  'CHC': 'Chicago Cubs',
-  'CWS': 'Chicago White Sox',
-  'CIN': 'Cincinnati Reds',
-  'CLE': 'Cleveland Guardians',
-  'COL': 'Colorado Rockies',
-  'DET': 'Detroit Tigers',
-  'HOU': 'Houston Astros',
-  'KC': 'Kansas City Royals',
-  'LA': 'Los Angeles Angels',
-  'LAA': 'Los Angeles Angels',
-  'LAD': 'Los Angeles Dodgers',
-  'MIA': 'Miami Marlins',
-  'MIL': 'Milwaukee Brewers',
-  'MIN': 'Minnesota Twins',
-  'NYM': 'New York Mets',
-  'NYY': 'New York Yankees',
-  'OAK': 'Oakland Athletics',
-  'PHI': 'Philadelphia Phillies',
-  'PIT': 'Pittsburgh Pirates',
-  'SD': 'San Diego Padres',
-  'SF': 'San Francisco Giants',
-  'SEA': 'Seattle Mariners',
-  'STL': 'St. Louis Cardinals',
-  'TB': 'Tampa Bay Rays',
-  'TEX': 'Texas Rangers',
-  'TOR': 'Toronto Blue Jays',
-  'WSH': 'Washington Nationals',
+  'ARI': 'ARI Diamondbacks',
+  'ATL': 'ATL Braves',
+  'BAL': 'BAL Orioles',
+  'BOS': 'BOS Red Sox',
+  'CHC': 'CHC Cubs',
+  'CWS': 'CHW White Sox',
+  'CIN': 'CIN Reds',
+  'CLE': 'CLE Guardians',
+  'COL': 'COL Rockies',
+  'DET': 'DET Tigers',
+  'HOU': 'HOU Astros',
+  'KC': 'KC Royals',
+  'LA': 'LAA Angels',
+  'LAA': 'LAA Angels',
+  'LAD': 'LAD Dodgers',
+  'MIA': 'MIA Marlins',
+  'MIL': 'MIL Brewers',
+  'MIN': 'MIN Twins',
+  'NYM': 'NYM Mets',
+  'NYY': 'NYY Yankees',
+  'OAK': 'OAK Athletics',
+  'PHI': 'PHI Phillies',
+  'PIT': 'PIT Pirates',
+  'SD': 'SD Padres',
+  'SF': 'SF Giants',
+  'SEA': 'SEA Mariners',
+  'STL': 'STL Cardinals',
+  'TB': 'TB Rays',
+  'TEX': 'TEX Rangers',
+  'TOR': 'TOR Blue Jays',
+  'WSH': 'WAS Nationals',
 };
 
 const SPORT_TEAM_MAPS: Record<string, Record<string, string>> = {
@@ -154,7 +154,7 @@ const SPORT_TEAM_MAPS: Record<string, Record<string, string>> = {
 };
 
 /**
- * Expands a team abbreviation to full name based on sport
+ * Expands a team abbreviation to DraftKings-style short name based on sport
  * If no match found, returns the original name
  */
 export function expandTeamName(abbrev: string, sportId: string): string {
@@ -172,8 +172,8 @@ export function expandTeamName(abbrev: string, sportId: string): string {
 }
 
 /**
- * Gets the display name for a team
- * Prioritizes: city + name > expanded abbrev > raw name
+ * Gets the DraftKings-style display name for a team
+ * Uses short city abbreviation + team name format
  */
 export function getTeamDisplayName(
   team: { name: string; city?: string | null; abbrev?: string | null } | null | undefined,
@@ -181,12 +181,56 @@ export function getTeamDisplayName(
 ): string {
   if (!team) return 'TBD';
   
-  // If we have city, show city + name
+  // First try to expand the abbreviation to DK-style name
+  if (team.abbrev) {
+    const expanded = expandTeamName(team.abbrev, sportId);
+    if (expanded !== team.abbrev) return expanded;
+  }
+  
+  // Try to expand the team name as an abbreviation
+  const expanded = expandTeamName(team.name, sportId);
+  if (expanded !== team.name) return expanded;
+  
+  // Fallback to city + name or just name
   if (team.city) {
     return `${team.city} ${team.name}`;
   }
   
-  // Try to expand the name as an abbreviation
-  const expanded = expandTeamName(team.name, sportId);
-  return expanded;
+  return team.name;
+}
+
+/**
+ * Format a date to Eastern Time display string
+ */
+export function formatTimeET(date: Date | string, formatStr: string = 'h:mm a'): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+/**
+ * Format a date to Eastern Time with explicit ET suffix
+ */
+export function formatDateTimeET(date: Date | string): { time: string; date: string } {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  
+  const timeStr = d.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+  
+  const dateStr = d.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+  
+  return { time: `${timeStr} ET`, date: dateStr };
 }
