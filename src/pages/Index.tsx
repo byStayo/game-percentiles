@@ -32,7 +32,7 @@ const sports = [
 
 export default function Index() {
   const [selectedDate, setSelectedDate] = useState(getTodayInET);
-  const [selectedSport, setSelectedSport] = useState<SportId>('nba');
+  const [selectedSport, setSelectedSport] = useState<SportId>('nfl'); // Default to NFL where we have data
   
   const { data, isLoading, error, refetch } = useTodayGames(selectedDate, selectedSport);
 

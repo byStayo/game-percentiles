@@ -22,6 +22,7 @@ export function GameCard({ game }: GameCardProps) {
   const isLive = game.status === 'live';
   const isFinal = game.status === 'final';
 
+  // If city exists, show "City Name", otherwise just show name (likely abbreviation)
   const homeTeamName = game.home_team?.city 
     ? `${game.home_team.city} ${game.home_team.name}` 
     : game.home_team?.name || 'TBD';
@@ -29,6 +30,10 @@ export function GameCard({ game }: GameCardProps) {
   const awayTeamName = game.away_team?.city 
     ? `${game.away_team.city} ${game.away_team.name}` 
     : game.away_team?.name || 'TBD';
+
+  // For display, use abbrev if available, otherwise name
+  const homeAbbrev = game.home_team?.abbrev || game.home_team?.name || '?';
+  const awayAbbrev = game.away_team?.abbrev || game.away_team?.name || '?';
 
   return (
     <Link
