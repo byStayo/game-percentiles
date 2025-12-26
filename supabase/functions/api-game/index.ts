@@ -116,6 +116,12 @@ Deno.serve(async (req) => {
       }
     })
 
+    // Handle joined team data - could be array or object depending on Supabase version
+    const homeTeamData = game.home_team;
+    const awayTeamData = game.away_team;
+    const homeTeam = Array.isArray(homeTeamData) ? homeTeamData[0] : homeTeamData;
+    const awayTeam = Array.isArray(awayTeamData) ? awayTeamData[0] : awayTeamData;
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -124,8 +130,8 @@ Deno.serve(async (req) => {
           sport_id: game.sport_id,
           start_time_utc: game.start_time_utc,
           status: game.status,
-          home_team: (game.home_team as any)?.[0] || null,
-          away_team: (game.away_team as any)?.[0] || null,
+          home_team: homeTeam || null,
+          away_team: awayTeam || null,
           home_score: game.home_score,
           away_score: game.away_score,
           final_total: game.final_total,

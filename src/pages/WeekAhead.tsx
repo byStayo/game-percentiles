@@ -11,6 +11,7 @@ import { useTodayGames, TodayGame } from "@/hooks/useApi";
 import { cn } from "@/lib/utils";
 import { Calendar, Clock, TrendingUp, Filter, ChevronDown, ChevronUp, Zap, Star, Target, CheckCircle2, XCircle, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { getTeamDisplayName, formatTimeET } from "@/lib/teamNames";
 import type { SportId } from "@/types";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -287,7 +288,7 @@ function BestPickCard({ game, historicalStats }: { game: TodayGame; historicalSt
               {game.sport_id}
             </span>
             <span className="text-xs text-muted-foreground">
-              {isToday ? format(gameDate, 'h:mm a') : format(gameDate, 'EEE, MMM d')}
+              {isToday ? `${formatTimeET(gameDate)} ET` : format(gameDate, 'EEE, MMM d')}
             </span>
             <TooltipProvider>
               <Tooltip>
@@ -306,10 +307,10 @@ function BestPickCard({ game, historicalStats }: { game: TodayGame; historicalSt
           {/* Teams */}
           <div className="space-y-0.5">
             <div className="font-medium text-sm truncate">
-              {game.away_team?.name || 'Away'}
+              {getTeamDisplayName(game.away_team, game.sport_id)}
             </div>
             <div className="font-medium text-sm truncate">
-              @ {game.home_team?.name || 'Home'}
+              @ {getTeamDisplayName(game.home_team, game.sport_id)}
             </div>
           </div>
           

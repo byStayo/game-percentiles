@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
-import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { getTeamDisplayName } from "@/lib/teamNames";
+import { getTeamDisplayName, formatTimeET } from "@/lib/teamNames";
 import { PercentileBar } from "@/components/ui/percentile-bar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ChevronRight, AlertTriangle, Check, X, TrendingUp, TrendingDown } from "lucide-react";
@@ -131,7 +130,7 @@ export function GameCard({ game }: GameCardProps) {
             </div>
           ) : (
             <span className="text-sm font-medium text-muted-foreground">
-              {format(startTime, 'h:mm a')}
+              {formatTimeET(startTime)} ET
             </span>
           )}
         </div>
