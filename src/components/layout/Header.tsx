@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/", label: "Today" },
   { href: "/status", label: "Status" },
+  { href: "/admin/mappings", label: "Mappings" },
 ];
 
 export function Header() {
