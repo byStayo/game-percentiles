@@ -56,9 +56,15 @@ export function GameCard({ game }: GameCardProps) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5 text-muted-foreground">
-          <span className="text-2xs">H2H</span>
-          <span className="text-sm font-semibold text-foreground">{game.n_h2h}</span>
+        <div className="flex items-center gap-1.5">
+          <span className={cn(
+            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium",
+            game.n_h2h >= 10 ? "bg-status-under/10 text-status-under" :
+            game.n_h2h >= 5 ? "bg-status-edge/10 text-status-edge" :
+            "bg-muted text-muted-foreground"
+          )}>
+            <span className="font-normal opacity-70">n=</span>{game.n_h2h}
+          </span>
         </div>
       </div>
 
