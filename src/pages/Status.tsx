@@ -3,7 +3,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Zap } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3 } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
 import { useJobStatus, useRecentJobs } from "@/hooks/useJobStatus";
 import { Badge } from "@/components/ui/badge";
@@ -23,8 +23,7 @@ const jobLabels: Record<string, { name: string; description: string }> = {
   backfill: { name: "Backfill", description: "Historical data import" },
   ingest: { name: "Daily Ingest", description: "Today's games sync" },
   compute: { name: "Compute", description: "Percentile calculations" },
-  odds_refresh: { name: "Odds Refresh", description: "DraftKings lines sync" },
-  participants_mapping: { name: "Auto Mapping", description: "Team name matching" },
+  odds_refresh: { name: "Odds Refresh", description: "DraftKings lines (strict match)" },
 };
 
 function JobStatusCard({ jobName, job }: { jobName: string; job: JobRun | null }) {
@@ -85,55 +84,9 @@ export default function Status() {
   const { data: jobStatus, isLoading: statusLoading } = useJobStatus();
   const { data: recentJobs, isLoading: jobsLoading } = useRecentJobs();
 
-  // Get mapping coverage stats
-  const { data: mappingStats } = useQuery({
-    queryKey: ['mapping-coverage'],
-    queryFn: async () => {
-      const { data: teams } = await supabase.from('teams').select('id, sport_id');
-      const { data: mappings } = await supabase.from('provider_mappings').select('team_id, sport_id, confidence, method');
-
-      const mappedTeamIds = new Set((mappings || []).map(m => m.team_id));
-      const totalTeams = teams?.length || 0;
-      const mappedTeams = mappings?.length || 0;
-      
-      // Coverage by sport
-      const bySport: Record<string, { total: number; mapped: number }> = {};
-      
-      (teams || []).forEach(team => {
-        if (!bySport[team.sport_id]) {
-          bySport[team.sport_id] = { total: 0, mapped: 0 };
-        }
-        bySport[team.sport_id].total++;
-        if (mappedTeamIds.has(team.id)) {
-          bySport[team.sport_id].mapped++;
-        }
-      });
-
-      // Method distribution
-      const methodCounts: Record<string, number> = {};
-      (mappings || []).forEach(m => {
-        const method = (m as any).method || 'manual';
-        methodCounts[method] = (methodCounts[method] || 0) + 1;
-      });
-
-      // Average confidence
-      const confidenceSum = (mappings || []).reduce((sum, m) => sum + ((m as any).confidence || 1), 0);
-      const avgConfidence = mappedTeams > 0 ? confidenceSum / mappedTeams : 0;
-
-      return {
-        totalTeams,
-        mappedTeams,
-        coverage: totalTeams > 0 ? (mappedTeams / totalTeams) * 100 : 0,
-        bySport,
-        methodCounts,
-        avgConfidence,
-      };
-    },
-  });
-
-  // Get today's odds stats
+  // Get today's odds stats (strict matching mode)
   const { data: oddsStats } = useQuery({
-    queryKey: ['odds-stats'],
+    queryKey: ['odds-stats-strict'],
     queryFn: async () => {
       const today = getTodayET();
       
@@ -146,22 +99,29 @@ export default function Status() {
       const withOdds = edges?.filter(e => e.dk_offered).length || 0;
 
       // Get recent unmatched reasons from job runs
-      const { data: recentOddsJob } = await supabase
+      const { data: recentOddsJobs } = await supabase
         .from('job_runs')
         .select('details')
         .eq('job_name', 'odds_refresh')
         .eq('status', 'success')
         .order('finished_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(5);
 
-      const unmatchedReasons = (recentOddsJob?.details as any)?.unmatched_reasons || [];
+      const allUnmatchedReasons: string[] = [];
+      for (const job of recentOddsJobs || []) {
+        const reasons = (job.details as any)?.unmatched_reasons || [];
+        allUnmatchedReasons.push(...reasons);
+      }
+
+      // Dedupe
+      const uniqueReasons = [...new Set(allUnmatchedReasons)].slice(0, 10);
 
       return {
         total,
         withOdds,
+        unmatched: total - withOdds,
         coverage: total > 0 ? (withOdds / total) * 100 : 0,
-        unmatchedReasons,
+        unmatchedReasons: uniqueReasons,
       };
     },
   });
@@ -170,7 +130,7 @@ export default function Status() {
     <>
       <Helmet>
         <title>System Status | Percentile Totals</title>
-        <meta name="description" content="View data pipeline status and automatic mapping health." />
+        <meta name="description" content="View data pipeline status and odds matching results." />
       </Helmet>
 
       <Layout>
@@ -178,110 +138,43 @@ export default function Status() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">System Status</h1>
             <p className="text-muted-foreground mt-1">
-              Data pipeline health and automatic mapping coverage
+              Pipeline health & strict odds matching results
             </p>
-          </div>
-
-          {/* Mapping Coverage */}
-          <div className="bg-card rounded-xl border border-border p-5 shadow-card">
-            <div className="flex items-center gap-2 mb-4">
-              <Zap className="h-5 w-5 text-status-live" />
-              <h2 className="text-lg font-semibold">Automatic Mapping Coverage</h2>
-            </div>
-            
-            {mappingStats ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-2xl font-bold">{mappingStats.coverage.toFixed(1)}%</p>
-                    <p className="text-xs text-muted-foreground">Overall Coverage</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-status-live">{mappingStats.mappedTeams}</p>
-                    <p className="text-xs text-muted-foreground">Teams Mapped</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{mappingStats.totalTeams}</p>
-                    <p className="text-xs text-muted-foreground">Total Teams</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{(mappingStats.avgConfidence * 100).toFixed(0)}%</p>
-                    <p className="text-xs text-muted-foreground">Avg Confidence</p>
-                  </div>
-                </div>
-
-                {/* Coverage by sport */}
-                <div className="pt-4 border-t border-border">
-                  <p className="text-sm text-muted-foreground mb-2">Coverage by sport:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(mappingStats.bySport).map(([sport, stats]) => {
-                      const pct = stats.total > 0 ? (stats.mapped / stats.total) * 100 : 0;
-                      return (
-                        <Badge 
-                          key={sport} 
-                          variant="outline" 
-                          className={cn(
-                            pct >= 90 && "bg-status-live/10 text-status-live border-status-live/30",
-                            pct >= 70 && pct < 90 && "bg-percentile-mid/10 text-percentile-mid border-percentile-mid/30",
-                            pct < 70 && "bg-destructive/10 text-destructive border-destructive/30"
-                          )}
-                        >
-                          {sport.toUpperCase()}: {pct.toFixed(0)}%
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Method distribution */}
-                {Object.keys(mappingStats.methodCounts).length > 0 && (
-                  <div className="pt-4 border-t border-border">
-                    <p className="text-sm text-muted-foreground mb-2">Mapping methods:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {Object.entries(mappingStats.methodCounts).map(([method, count]) => (
-                        <Badge key={method} variant="secondary">
-                          {method}: {count}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <Skeleton className="h-32" />
-            )}
           </div>
 
           {/* Today's Odds Coverage */}
           <div className="bg-card rounded-xl border border-border p-5 shadow-card">
             <div className="flex items-center gap-2 mb-4">
               <BarChart3 className="h-5 w-5 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">Today's Odds Coverage</h2>
+              <h2 className="text-lg font-semibold">Today's DraftKings Coverage</h2>
+              <Badge variant="secondary" className="text-xs">Strict Match</Badge>
             </div>
             
             {oddsStats ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <p className="text-2xl font-bold">{oddsStats.coverage.toFixed(0)}%</p>
+                    <p className="text-2xl font-bold text-status-live">{oddsStats.withOdds}</p>
                     <p className="text-xs text-muted-foreground">Games with DK Lines</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-status-live">{oddsStats.withOdds}</p>
-                    <p className="text-xs text-muted-foreground">Matched</p>
+                    <p className="text-2xl font-bold text-muted-foreground">{oddsStats.unmatched}</p>
+                    <p className="text-xs text-muted-foreground">Unmatched (strict)</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-muted-foreground">{oddsStats.total - oddsStats.withOdds}</p>
-                    <p className="text-xs text-muted-foreground">Unmatched</p>
+                    <p className="text-2xl font-bold">{oddsStats.coverage.toFixed(0)}%</p>
+                    <p className="text-xs text-muted-foreground">Match Rate</p>
                   </div>
                 </div>
 
                 {/* Unmatched reasons */}
                 {oddsStats.unmatchedReasons.length > 0 && (
                   <div className="pt-4 border-t border-border">
-                    <p className="text-sm text-muted-foreground mb-2">Recent unmatched events:</p>
-                    <div className="space-y-1 max-h-32 overflow-y-auto">
-                      {oddsStats.unmatchedReasons.slice(0, 5).map((reason: string, i: number) => (
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Unmatched due to strict matching (no action required):
+                    </p>
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {oddsStats.unmatchedReasons.map((reason: string, i: number) => (
                         <p key={i} className="text-xs text-muted-foreground font-mono">
                           {reason}
                         </p>
@@ -289,6 +182,10 @@ export default function Status() {
                     </div>
                   </div>
                 )}
+
+                <p className="text-xs text-muted-foreground pt-2">
+                  Using hardcoded normalization + alias dictionary. Games without exact name+time match show "DraftKings totals: unavailable".
+                </p>
               </div>
             ) : (
               <Skeleton className="h-24" />
@@ -299,13 +196,13 @@ export default function Status() {
           <div>
             <h2 className="text-lg font-semibold mb-4">Pipeline Status</h2>
             {statusLoading ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {[...Array(5)].map((_, i) => (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {[...Array(4)].map((_, i) => (
                   <Skeleton key={i} className="h-32" />
                 ))}
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {Object.keys(jobLabels).map((jobName) => (
                   <JobStatusCard
                     key={jobName}

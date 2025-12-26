@@ -5,55 +5,146 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Sport key mappings with confidence thresholds
-const SPORT_CONFIGS: Record<string, { oddsKey: string; isSoccer: boolean; confidenceThreshold: number }> = {
-  nfl: { oddsKey: 'americanfootball_nfl', isSoccer: false, confidenceThreshold: 0.92 },
-  nba: { oddsKey: 'basketball_nba', isSoccer: false, confidenceThreshold: 0.92 },
-  mlb: { oddsKey: 'baseball_mlb', isSoccer: false, confidenceThreshold: 0.92 },
-  nhl: { oddsKey: 'icehockey_nhl', isSoccer: false, confidenceThreshold: 0.92 },
-  soccer: { oddsKey: 'soccer_usa_mls', isSoccer: true, confidenceThreshold: 0.88 },
+// Sport key mappings
+const SPORT_CONFIGS: Record<string, { oddsKey: string; isSoccer: boolean }> = {
+  nfl: { oddsKey: 'americanfootball_nfl', isSoccer: false },
+  nba: { oddsKey: 'basketball_nba', isSoccer: false },
+  mlb: { oddsKey: 'baseball_mlb', isSoccer: false },
+  nhl: { oddsKey: 'icehockey_nhl', isSoccer: false },
+  soccer: { oddsKey: 'soccer_usa_mls', isSoccer: true },
 }
 
-// Soccer tokens to strip
-const SOCCER_STRIP_TOKENS = ['fc', 'cf', 'sc', 'afc', 'c.f.', 'f.c.', 's.c.', 'a.f.c.', 'united', 'utd', 'city']
+// ============================================================
+// HARD-CODED TEAM NAME NORMALIZER
+// Deterministic rules only - no fuzzy matching
+// ============================================================
 
-// Normalize team name for comparison
-function normalizeTeamName(name: string, isSoccer: boolean = false): string {
+// Stop tokens to remove
+const STOP_TOKENS = ['fc', 'cf', 'sc', 'afc', 'c.f', 'f.c', 'the', 's.c', 'a.f.c']
+
+// Common abbreviation expansions
+const ABBREVIATION_MAP: Record<string, string> = {
+  'la': 'los angeles',
+  'ny': 'new york',
+  'nj': 'new jersey',
+  'utd': 'united',
+  'st': 'saint',
+  'n.j.': 'new jersey',
+  'n.y.': 'new york',
+  'l.a.': 'los angeles',
+}
+
+// Hardcoded alias dictionary for known vendor variants
+// Maps normalized form -> canonical form
+const ALIAS_DICTIONARY: Record<string, string> = {
+  // NBA
+  'la clippers': 'los angeles clippers',
+  'la lakers': 'los angeles lakers',
+  'ny knicks': 'new york knicks',
+  'brooklyn': 'brooklyn nets',
+  'golden state': 'golden state warriors',
+  'okc thunder': 'oklahoma city thunder',
+  'okc': 'oklahoma city thunder',
+  
+  // NFL
+  'ny giants': 'new york giants',
+  'ny jets': 'new york jets',
+  'la rams': 'los angeles rams',
+  'la chargers': 'los angeles chargers',
+  'washington': 'washington commanders',
+  'washington football team': 'washington commanders',
+  'las vegas': 'las vegas raiders',
+  
+  // MLB
+  'la dodgers': 'los angeles dodgers',
+  'la angels': 'los angeles angels',
+  'ny yankees': 'new york yankees',
+  'ny mets': 'new york mets',
+  'chi cubs': 'chicago cubs',
+  'chi white sox': 'chicago white sox',
+  
+  // NHL
+  'la kings': 'los angeles kings',
+  'ny rangers': 'new york rangers',
+  'ny islanders': 'new york islanders',
+  'nj devils': 'new jersey devils',
+  'tb lightning': 'tampa bay lightning',
+  
+  // Soccer
+  'paris sg': 'paris saint germain',
+  'psg': 'paris saint germain',
+  'man united': 'manchester united',
+  'man utd': 'manchester united',
+  'man city': 'manchester city',
+  'inter miami': 'inter miami cf',
+  'lafc': 'los angeles football club',
+  'la galaxy': 'los angeles galaxy',
+  'nycfc': 'new york city fc',
+  'ny city': 'new york city fc',
+  'nyc fc': 'new york city fc',
+  'new york city': 'new york city fc',
+  'rbny': 'new york red bulls',
+  'ny red bulls': 'new york red bulls',
+  'new york rb': 'new york red bulls',
+  'atlanta': 'atlanta united',
+  'seattle': 'seattle sounders',
+  'portland': 'portland timbers',
+  'orlando': 'orlando city',
+  'dc united': 'dc united',
+  'd.c. united': 'dc united',
+}
+
+// Remove diacritics from text
+function removeDiacritics(str: string): string {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
+// Normalize team name using hardcoded deterministic rules
+function normalizeTeamName(name: string): string {
   let normalized = name.toLowerCase().trim()
+  
+  // Remove diacritics
+  normalized = removeDiacritics(normalized)
+  
+  // Remove punctuation (but keep spaces)
   normalized = normalized.replace(/[^\w\s]/g, ' ')
+  
+  // Collapse whitespace
   normalized = normalized.replace(/\s+/g, ' ').trim()
   
-  if (isSoccer) {
-    for (const token of SOCCER_STRIP_TOKENS) {
-      normalized = normalized.replace(new RegExp(`\\b${token}\\b`, 'gi'), '')
-    }
-    normalized = normalized.replace(/\s+/g, ' ').trim()
+  // Expand abbreviations
+  const words = normalized.split(' ')
+  const expandedWords = words.map(word => ABBREVIATION_MAP[word] || word)
+  normalized = expandedWords.join(' ')
+  
+  // Re-collapse after expansion
+  normalized = normalized.replace(/\s+/g, ' ').trim()
+  
+  // Remove stop tokens
+  for (const token of STOP_TOKENS) {
+    normalized = normalized.replace(new RegExp(`\\b${token}\\b`, 'gi'), '')
   }
+  
+  // Final cleanup
+  normalized = normalized.replace(/\s+/g, ' ').trim()
   
   return normalized
 }
 
-// Calculate similarity between two strings
-function calculateSimilarity(str1: string, str2: string): number {
-  if (str1 === str2) return 1.0
-  if (!str1 || !str2) return 0
-  
-  const getTrigrams = (s: string): Set<string> => {
-    const trigrams = new Set<string>()
-    const padded = `  ${s}  `
-    for (let i = 0; i < padded.length - 2; i++) {
-      trigrams.add(padded.slice(i, i + 3))
-    }
-    return trigrams
+// Apply alias dictionary to get canonical form
+function getCanonicalName(normalizedName: string): string {
+  // Check direct alias
+  if (ALIAS_DICTIONARY[normalizedName]) {
+    return ALIAS_DICTIONARY[normalizedName]
   }
   
-  const trigrams1 = getTrigrams(str1)
-  const trigrams2 = getTrigrams(str2)
+  // Check if it matches any alias value (already canonical)
+  const aliasValues = new Set(Object.values(ALIAS_DICTIONARY))
+  if (aliasValues.has(normalizedName)) {
+    return normalizedName
+  }
   
-  const intersection = new Set([...trigrams1].filter(t => trigrams2.has(t)))
-  const union = new Set([...trigrams1, ...trigrams2])
-  
-  return intersection.size / union.size
+  return normalizedName
 }
 
 // Get today's date in America/New_York timezone
@@ -66,12 +157,6 @@ function getTodayET(): string {
     day: '2-digit',
   })
   return formatter.format(now)
-}
-
-interface MappingEntry {
-  team_id: string
-  odds_api_team_name: string
-  confidence: number
 }
 
 interface GameRow {
@@ -119,7 +204,7 @@ Deno.serve(async (req) => {
     const { sport_id, date } = await req.json()
     const targetDate = date || getTodayET()
 
-    console.log(`Refreshing odds for ${sport_id} on ${targetDate}`)
+    console.log(`[STRICT MATCHING] Refreshing odds for ${sport_id} on ${targetDate}`)
 
     const config = SPORT_CONFIGS[sport_id]
     if (!config) {
@@ -129,22 +214,11 @@ Deno.serve(async (req) => {
     // Create job run
     const { data: jobRun } = await supabase
       .from('job_runs')
-      .insert({ job_name: 'odds_refresh', details: { sport_id, date: targetDate } })
+      .insert({ job_name: 'odds_refresh', details: { sport_id, date: targetDate, mode: 'strict_hardcoded' } })
       .select()
       .single()
 
     jobRunId = jobRun?.id || null
-
-    // Get all provider mappings for this sport
-    const { data: mappings } = await supabase
-      .from('provider_mappings')
-      .select('team_id, odds_api_team_name, confidence')
-      .eq('sport_id', sport_id)
-
-    const mappingsByOddsName = new Map<string, MappingEntry>()
-    for (const m of mappings || []) {
-      mappingsByOddsName.set(m.odds_api_team_name.toLowerCase(), m as MappingEntry)
-    }
 
     // Fetch odds from The Odds API
     const url = `https://api.the-odds-api.com/v4/sports/${config.oddsKey}/odds/?apiKey=${oddsApiKey}&regions=us&markets=totals&bookmakers=draftkings`
@@ -157,7 +231,7 @@ Deno.serve(async (req) => {
     }
 
     const oddsData: OddsEvent[] = await response.json()
-    console.log(`Found ${oddsData.length} events with odds`)
+    console.log(`Found ${oddsData.length} odds events from API`)
 
     // Get games for the target date
     const startOfDay = `${targetDate}T00:00:00Z`
@@ -184,88 +258,69 @@ Deno.serve(async (req) => {
     let unmatchedCount = 0
     const unmatchedReasons: string[] = []
 
-    // For each game, find the best matching odds event
+    // For each game, find strict match
     for (const game of (games || []) as GameRow[]) {
       const gameTime = new Date(game.start_time_utc).getTime()
       const windowMs = 3 * 60 * 60 * 1000 // 3 hours
 
-      // Find candidate events within time window
-      const candidates: Array<{ event: OddsEvent; homeScore: number; awayScore: number; combinedScore: number }> = []
-
-      for (const event of oddsData) {
-        const eventTime = new Date(event.commence_time).getTime()
-        if (Math.abs(eventTime - gameTime) > windowMs) continue
-
-        // Try to match teams using mappings first
-        const homeMapping = mappingsByOddsName.get(event.home_team.toLowerCase())
-        const awayMapping = mappingsByOddsName.get(event.away_team.toLowerCase())
-
-        let homeScore = 0
-        let awayScore = 0
-
-        if (homeMapping && homeMapping.team_id === game.home_team_id) {
-          homeScore = homeMapping.confidence
-        } else if (homeMapping && homeMapping.team_id === game.away_team_id) {
-          // Teams might be swapped
-          awayScore = homeMapping.confidence
-        } else {
-          // Fallback to fuzzy matching
-          const homeTeamName = game.home_team?.[0]?.name || ''
-          const awayTeamName = game.away_team?.[0]?.name || ''
-          
-          const homeNorm = normalizeTeamName(homeTeamName, config.isSoccer)
-          const awayNorm = normalizeTeamName(awayTeamName, config.isSoccer)
-          const eventHomeNorm = normalizeTeamName(event.home_team, config.isSoccer)
-          const eventAwayNorm = normalizeTeamName(event.away_team, config.isSoccer)
-
-          homeScore = Math.max(
-            calculateSimilarity(homeNorm, eventHomeNorm),
-            calculateSimilarity(homeNorm, eventAwayNorm)
-          )
-          awayScore = Math.max(
-            calculateSimilarity(awayNorm, eventHomeNorm),
-            calculateSimilarity(awayNorm, eventAwayNorm)
-          )
-        }
-
-        if (awayMapping && awayMapping.team_id === game.away_team_id) {
-          awayScore = Math.max(awayScore, awayMapping.confidence)
-        } else if (awayMapping && awayMapping.team_id === game.home_team_id) {
-          homeScore = Math.max(homeScore, awayMapping.confidence)
-        }
-
-        const combinedScore = (homeScore + awayScore) / 2
-
-        if (homeScore >= config.confidenceThreshold && awayScore >= config.confidenceThreshold) {
-          candidates.push({ event, homeScore, awayScore, combinedScore })
-        }
-      }
-
-      // Check for unique best match
-      if (candidates.length === 0) {
+      const homeTeamName = game.home_team?.[0]?.name || ''
+      const awayTeamName = game.away_team?.[0]?.name || ''
+      
+      if (!homeTeamName || !awayTeamName) {
         unmatchedCount++
-        const homeName = game.home_team?.[0]?.name || game.home_team_id
-        const awayName = game.away_team?.[0]?.name || game.away_team_id
-        unmatchedReasons.push(`No confident match: ${awayName} @ ${homeName}`)
+        unmatchedReasons.push(`Missing team name: game ${game.id}`)
         continue
       }
 
-      // Sort by combined score
-      candidates.sort((a, b) => b.combinedScore - a.combinedScore)
+      // Normalize internal team names
+      const homeNorm = getCanonicalName(normalizeTeamName(homeTeamName))
+      const awayNorm = getCanonicalName(normalizeTeamName(awayTeamName))
 
-      // Check uniqueness gap
-      if (candidates.length > 1) {
-        const gap = candidates[0].combinedScore - candidates[1].combinedScore
-        if (gap < 0.04) {
-          unmatchedCount++
-          const homeName = game.home_team?.[0]?.name || game.home_team_id
-          const awayName = game.away_team?.[0]?.name || game.away_team_id
-          unmatchedReasons.push(`Ambiguous match (gap=${gap.toFixed(3)}): ${awayName} @ ${homeName}`)
-          continue
+      console.log(`Game: "${awayTeamName}" @ "${homeTeamName}" -> normalized: "${awayNorm}" @ "${homeNorm}"`)
+
+      // Find candidates within time window with EXACT name match
+      const exactMatches: Array<{ event: OddsEvent; timeDiff: number }> = []
+
+      for (const event of oddsData) {
+        const eventTime = new Date(event.commence_time).getTime()
+        const timeDiff = Math.abs(eventTime - gameTime)
+        
+        if (timeDiff > windowMs) continue
+
+        // Normalize odds event team names
+        const eventHomeNorm = getCanonicalName(normalizeTeamName(event.home_team))
+        const eventAwayNorm = getCanonicalName(normalizeTeamName(event.away_team))
+
+        // Check for exact match (allow swapped home/away)
+        const normalMatch = (homeNorm === eventHomeNorm && awayNorm === eventAwayNorm)
+        const swappedMatch = (homeNorm === eventAwayNorm && awayNorm === eventHomeNorm)
+
+        if (normalMatch || swappedMatch) {
+          exactMatches.push({ event, timeDiff })
+          console.log(`  EXACT MATCH: "${event.away_team}" @ "${event.home_team}" (timeDiff: ${Math.round(timeDiff / 60000)}min)`)
         }
       }
 
-      const bestMatch = candidates[0]
+      // Handle matching results
+      if (exactMatches.length === 0) {
+        unmatchedCount++
+        unmatchedReasons.push(`No exact match: ${awayTeamName} @ ${homeTeamName}`)
+        console.log(`  NO MATCH for ${awayTeamName} @ ${homeTeamName}`)
+        continue
+      }
+
+      // If multiple exact matches, pick closest by time
+      exactMatches.sort((a, b) => a.timeDiff - b.timeDiff)
+      
+      // If tied on time, DO NOT MATCH
+      if (exactMatches.length > 1 && exactMatches[0].timeDiff === exactMatches[1].timeDiff) {
+        unmatchedCount++
+        unmatchedReasons.push(`Tied time match: ${awayTeamName} @ ${homeTeamName}`)
+        console.log(`  TIED MATCH (ambiguous) for ${awayTeamName} @ ${homeTeamName}`)
+        continue
+      }
+
+      const bestMatch = exactMatches[0]
       const event = bestMatch.event
 
       // Extract DraftKings totals line
@@ -279,14 +334,14 @@ Deno.serve(async (req) => {
         continue
       }
 
-      // Store event mapping
+      // Store event mapping (deterministic cache)
       await supabase
         .from('odds_event_map')
         .upsert({
           odds_sport_key: config.oddsKey,
           odds_event_id: event.id,
           game_id: game.id,
-          confidence: bestMatch.combinedScore,
+          confidence: 1.0, // Always 1.0 for strict match
           matched_at: new Date().toISOString(),
         }, { onConflict: 'game_id' })
 
@@ -330,6 +385,7 @@ Deno.serve(async (req) => {
         .eq('game_id', game.id)
 
       matchedCount++
+      console.log(`  ATTACHED DK line ${totalLine} (percentile: ${dkLinePercentile?.toFixed(1) || 'N/A'})`)
     }
 
     // Update job run
@@ -342,19 +398,23 @@ Deno.serve(async (req) => {
           details: { 
             sport_id, 
             date: targetDate,
+            mode: 'strict_hardcoded',
             events_found: oddsData.length,
             games_in_db: games?.length || 0,
             matched: matchedCount, 
             unmatched: unmatchedCount,
-            unmatched_reasons: unmatchedReasons.slice(0, 20) // Limit to 20 for logging
+            unmatched_reasons: unmatchedReasons.slice(0, 20)
           }
         })
         .eq('id', jobRunId)
     }
 
+    console.log(`[STRICT MATCHING] Complete: ${matchedCount} matched, ${unmatchedCount} unmatched`)
+
     return new Response(
       JSON.stringify({ 
         success: true, 
+        mode: 'strict_hardcoded',
         sport_id,
         date: targetDate,
         events_found: oddsData.length,
