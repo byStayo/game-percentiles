@@ -1,0 +1,13 @@
+project_id = "rxumflkgwevrayewnjif"
+
+[functions.ingest-games]
+verify_jwt = false
+
+[functions.compute-percentiles]
+verify_jwt = false
+
+[functions.refresh-odds]
+verify_jwt = false
+
+[functions.backfill]
+verify_jwt = false
