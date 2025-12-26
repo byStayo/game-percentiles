@@ -72,6 +72,29 @@ export default function Index() {
               activeSport={selectedSport}
               onSportChange={setSelectedSport}
             />
+
+            {/* H2H Legend */}
+            <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground bg-muted/30 rounded-lg px-4 py-2.5">
+              <span className="font-medium text-foreground">H2H Sample Size:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-status-under/10 text-status-under">
+                  n=10+
+                </span>
+                <span>High confidence</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-status-edge/10 text-status-edge">
+                  n=5-9
+                </span>
+                <span>Moderate</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-muted text-muted-foreground">
+                  n=2-4
+                </span>
+                <span>Limited</span>
+              </div>
+            </div>
           </div>
 
           {/* Games grid */}
