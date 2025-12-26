@@ -52,8 +52,14 @@ export function GameCard({ edge, game, homeTeam, awayTeam }: GameCardProps) {
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-2xs text-muted-foreground">H2H</span>
-          <span className="text-sm font-medium">{edge.n_h2h}</span>
+          <span className={cn(
+            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium",
+            edge.n_h2h >= 10 ? "bg-status-under/10 text-status-under" :
+            edge.n_h2h >= 5 ? "bg-status-edge/10 text-status-edge" :
+            "bg-muted text-muted-foreground"
+          )}>
+            <span className="font-normal opacity-70">n=</span>{edge.n_h2h}
+          </span>
         </div>
       </div>
 
