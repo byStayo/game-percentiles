@@ -1,12 +1,13 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, subDays } from "date-fns";
+import { format, subDays, eachDayOfInterval, startOfDay, parseISO } from "date-fns";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Target, BarChart3, Calendar, Filter } from "lucide-react";
+import { TrendingUp, TrendingDown, Target, BarChart3, Calendar, Filter, LineChart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import type { SportId } from "@/types";
 
 interface CompletedGame {
@@ -165,6 +166,38 @@ export default function Stats() {
     const overHits = overPicks.filter(r => r.result.type === 'hit');
     const underHits = underPicks.filter(r => r.result.type === 'hit');
 
+    // Time series data for chart
+    const days = dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : dateRange === '90d' ? 90 : 90;
+    const startDate = subDays(new Date(), days);
+    const dateInterval = eachDayOfInterval({ start: startDate, end: new Date() });
+    
+    const timeSeriesData = dateInterval.map(date => {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const dayGames = edgeGames.filter(g => g.date_local === dateStr);
+      const dayHits = dayGames.filter(g => g.result.type === 'hit').length;
+      const dayTotal = dayGames.length;
+      
+      return {
+        date: dateStr,
+        displayDate: format(date, 'MMM d'),
+        hitRate: dayTotal > 0 ? (dayHits / dayTotal) * 100 : null,
+        picks: dayTotal,
+        hits: dayHits,
+      };
+    }).filter(d => d.picks > 0);
+
+    // Calculate cumulative/rolling hit rate
+    let cumulativeHits = 0;
+    let cumulativeTotal = 0;
+    const cumulativeData = timeSeriesData.map(d => {
+      cumulativeHits += d.hits;
+      cumulativeTotal += d.picks;
+      return {
+        ...d,
+        cumulativeRate: cumulativeTotal > 0 ? (cumulativeHits / cumulativeTotal) * 100 : null,
+      };
+    });
+
     return {
       totalGames: filteredGames.length,
       edgeGames: edgeGames.length,
@@ -179,8 +212,9 @@ export default function Stats() {
       underPicks: underPicks.length,
       underHits: underHits.length,
       underRate: underPicks.length > 0 ? (underHits.length / underPicks.length) * 100 : 0,
+      timeSeriesData: cumulativeData,
     };
-  }, [games, sportFilter]);
+  }, [games, sportFilter, dateRange]);
 
   return (
     <Layout>
@@ -306,6 +340,92 @@ export default function Stats() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Accuracy Trend Chart */}
+            {stats.timeSeriesData.length > 1 && (
+              <Card className="bg-card border-border/60 shadow-card mb-10">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <LineChart className="h-5 w-5" />
+                    Accuracy Trend
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsLineChart data={stats.timeSeriesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                        <XAxis 
+                          dataKey="displayDate" 
+                          stroke="hsl(var(--muted-foreground))"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis 
+                          stroke="hsl(var(--muted-foreground))"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                          domain={[0, 100]}
+                          tickFormatter={(value) => `${value}%`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '12px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                          }}
+                          labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}
+                          formatter={(value: number, name: string) => [
+                            `${value?.toFixed(1)}%`,
+                            name === 'hitRate' ? 'Daily Rate' : 'Cumulative Rate'
+                          ]}
+                        />
+                        <ReferenceLine 
+                          y={50} 
+                          stroke="hsl(var(--muted-foreground))" 
+                          strokeDasharray="5 5" 
+                          opacity={0.5}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="hitRate"
+                          stroke="hsl(var(--status-edge))"
+                          strokeWidth={2}
+                          dot={{ fill: 'hsl(var(--status-edge))', strokeWidth: 0, r: 4 }}
+                          activeDot={{ r: 6, fill: 'hsl(var(--status-edge))' }}
+                          connectNulls
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="cumulativeRate"
+                          stroke="hsl(var(--primary))"
+                          strokeWidth={2.5}
+                          dot={false}
+                          strokeDasharray="0"
+                        />
+                      </RechartsLineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex items-center justify-center gap-6 mt-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-status-edge" />
+                      <span className="text-muted-foreground">Daily Rate</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-primary" />
+                      <span className="text-muted-foreground">Cumulative Rate</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-px bg-muted-foreground" style={{ borderTop: '2px dashed' }} />
+                      <span className="text-muted-foreground">50% Baseline</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* By Sport */}
             {stats.bySport.length > 0 && (
