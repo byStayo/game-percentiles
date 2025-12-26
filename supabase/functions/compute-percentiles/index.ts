@@ -102,41 +102,78 @@ Deno.serve(async (req) => {
           isVisible = true
 
           // Also update/create matchup_stats cache
-          await supabase
+          // Find existing matchup_stats
+          const { data: existingStats } = await supabase
             .from('matchup_stats')
-            .upsert({
-              sport_id: game.sport_id,
-              league_id: game.league_id,
-              team_low_id: teamLowId,
-              team_high_id: teamHighId,
-              n_games: n,
-              p05: totals[p05Index],
-              p95: totals[p95Index],
-              median: n % 2 === 0 ? (totals[medianIndex - 1] + totals[medianIndex]) / 2 : totals[medianIndex],
-              min_total: totals[0],
-              max_total: totals[n - 1],
-              updated_at: new Date().toISOString(),
-            }, { onConflict: 'sport_id,league_id,team_low_id,team_high_id' })
+            .select('id')
+            .eq('sport_id', game.sport_id)
+            .eq('team_low_id', teamLowId)
+            .eq('team_high_id', teamHighId)
+            .is('league_id', null)
+            .maybeSingle()
+
+          const statsData = {
+            n_games: n,
+            p05: totals[p05Index],
+            p95: totals[p95Index],
+            median: n % 2 === 0 ? (totals[medianIndex - 1] + totals[medianIndex]) / 2 : totals[medianIndex],
+            min_total: totals[0],
+            max_total: totals[n - 1],
+            updated_at: new Date().toISOString(),
+          }
+
+          if (existingStats) {
+            await supabase
+              .from('matchup_stats')
+              .update(statsData)
+              .eq('id', existingStats.id)
+          } else {
+            await supabase
+              .from('matchup_stats')
+              .insert({
+                sport_id: game.sport_id,
+                team_low_id: teamLowId,
+                team_high_id: teamHighId,
+                ...statsData,
+              })
+          }
 
           counters.visible++
         } else {
           counters.hidden++
         }
 
-        // Upsert daily_edge
-        await supabase
+        // Find or update daily_edge
+        const { data: existingEdge } = await supabase
           .from('daily_edges')
-          .upsert({
-            date_local: targetDate,
-            sport_id: game.sport_id,
-            league_id: game.league_id,
-            game_id: game.id,
-            n_h2h: n,
-            p05,
-            p95,
-            is_visible: isVisible,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'date_local,game_id' })
+          .select('id')
+          .eq('date_local', targetDate)
+          .eq('game_id', game.id)
+          .maybeSingle()
+
+        const edgeData = {
+          sport_id: game.sport_id,
+          n_h2h: n,
+          p05,
+          p95,
+          is_visible: isVisible,
+          updated_at: new Date().toISOString(),
+        }
+
+        if (existingEdge) {
+          await supabase
+            .from('daily_edges')
+            .update(edgeData)
+            .eq('id', existingEdge.id)
+        } else {
+          await supabase
+            .from('daily_edges')
+            .insert({
+              date_local: targetDate,
+              game_id: game.id,
+              ...edgeData,
+            })
+        }
 
         counters.computed++
       } catch (gameErr) {

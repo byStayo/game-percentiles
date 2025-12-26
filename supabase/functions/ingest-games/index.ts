@@ -68,6 +68,109 @@ function getTodayET(): string {
 // All supported sports
 const SPORTS = ['nba', 'mlb', 'nfl', 'nhl']
 
+// Find or create team helper
+async function findOrCreateTeam(
+  supabase: any,
+  sportId: string,
+  providerKey: string,
+  name: string,
+  city?: string
+): Promise<{ id: string } | null> {
+  // First try to find existing team
+  const { data: existing } = await supabase
+    .from('teams')
+    .select('id')
+    .eq('sport_id', sportId)
+    .eq('provider_team_key', providerKey)
+    .is('league_id', null)
+    .maybeSingle()
+
+  if (existing) return existing
+
+  // Create new team
+  const { data: created, error } = await supabase
+    .from('teams')
+    .insert({
+      sport_id: sportId,
+      provider_team_key: providerKey,
+      name: name,
+      city: city || null,
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    console.error('Team insert error:', error.message)
+    // Try to find again in case of race condition
+    const { data: retry } = await supabase
+      .from('teams')
+      .select('id')
+      .eq('sport_id', sportId)
+      .eq('provider_team_key', providerKey)
+      .is('league_id', null)
+      .maybeSingle()
+    return retry
+  }
+
+  return created
+}
+
+// Find or create game helper
+async function findOrCreateGame(
+  supabase: any,
+  sportId: string,
+  providerKey: string,
+  gameData: {
+    start_time_utc: string
+    home_team_id: string
+    away_team_id: string
+    home_score: number | null
+    away_score: number | null
+    final_total: number | null
+    status: string
+  }
+): Promise<{ id: string } | null> {
+  // First try to find existing game
+  const { data: existing } = await supabase
+    .from('games')
+    .select('id')
+    .eq('sport_id', sportId)
+    .eq('provider_game_key', providerKey)
+    .is('league_id', null)
+    .maybeSingle()
+
+  if (existing) {
+    // Update existing game
+    await supabase
+      .from('games')
+      .update({
+        ...gameData,
+        last_seen_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id)
+    return existing
+  }
+
+  // Create new game
+  const { data: created, error } = await supabase
+    .from('games')
+    .insert({
+      sport_id: sportId,
+      provider_game_key: providerKey,
+      ...gameData,
+      last_seen_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    console.error('Game insert error:', error.message)
+    return null
+  }
+
+  return created
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -135,29 +238,13 @@ Deno.serve(async (req) => {
 
         for (const game of games) {
           try {
-            // Upsert home team
-            const { data: homeTeam } = await supabase
-              .from('teams')
-              .upsert({
-                sport_id: sportId,
-                provider_team_key: game.home_team_key,
-                name: game.home_team_name,
-                city: game.home_team_city || null,
-              }, { onConflict: 'sport_id,league_id,provider_team_key' })
-              .select()
-              .single()
-
-            // Upsert away team
-            const { data: awayTeam } = await supabase
-              .from('teams')
-              .upsert({
-                sport_id: sportId,
-                provider_team_key: game.away_team_key,
-                name: game.away_team_name,
-                city: game.away_team_city || null,
-              }, { onConflict: 'sport_id,league_id,provider_team_key' })
-              .select()
-              .single()
+            // Find or create teams
+            const homeTeam = await findOrCreateTeam(
+              supabase, sportId, game.home_team_key, game.home_team_name, game.home_team_city
+            )
+            const awayTeam = await findOrCreateTeam(
+              supabase, sportId, game.away_team_key, game.away_team_name, game.away_team_city
+            )
 
             if (!homeTeam || !awayTeam) continue
 
@@ -165,46 +252,52 @@ Deno.serve(async (req) => {
             const isFinal = game.status === 'final' && game.home_score !== null && game.away_score !== null
             const finalTotal = isFinal ? (game.home_score! + game.away_score!) : null
 
-            // Upsert game
-            const { data: dbGame, error: gameError } = await supabase
-              .from('games')
-              .upsert({
-                sport_id: sportId,
-                provider_game_key: game.provider_game_key,
-                start_time_utc: game.start_time_utc,
-                home_team_id: homeTeam.id,
-                away_team_id: awayTeam.id,
-                home_score: game.home_score,
-                away_score: game.away_score,
-                final_total: finalTotal,
-                status: game.status,
-                last_seen_at: new Date().toISOString(),
-              }, { onConflict: 'sport_id,league_id,provider_game_key' })
-              .select()
-              .single()
+            // Find or create game
+            const dbGame = await findOrCreateGame(supabase, sportId, game.provider_game_key, {
+              start_time_utc: game.start_time_utc,
+              home_team_id: homeTeam.id,
+              away_team_id: awayTeam.id,
+              home_score: game.home_score,
+              away_score: game.away_score,
+              final_total: finalTotal,
+              status: game.status,
+            })
 
-            if (gameError || !dbGame) continue
+            if (!dbGame) continue
 
             counters.upserted++
             sportResults[sportId].upserted++
 
-            // If game just became final, insert matchup_games row
+            // If game is final, insert matchup_games row
             if (isFinal && finalTotal !== null) {
               const [teamLowId, teamHighId] = [homeTeam.id, awayTeam.id].sort()
 
-              await supabase
+              // Check if matchup game already exists
+              const { data: existingMg } = await supabase
                 .from('matchup_games')
-                .upsert({
-                  sport_id: sportId,
-                  team_low_id: teamLowId,
-                  team_high_id: teamHighId,
-                  game_id: dbGame.id,
-                  played_at_utc: game.start_time_utc,
-                  total: finalTotal,
-                }, { onConflict: 'sport_id,league_id,team_low_id,team_high_id,game_id' })
+                .select('id')
+                .eq('sport_id', sportId)
+                .eq('team_low_id', teamLowId)
+                .eq('team_high_id', teamHighId)
+                .eq('game_id', dbGame.id)
+                .is('league_id', null)
+                .maybeSingle()
 
-              counters.finals++
-              sportResults[sportId].finals++
+              if (!existingMg) {
+                await supabase
+                  .from('matchup_games')
+                  .insert({
+                    sport_id: sportId,
+                    team_low_id: teamLowId,
+                    team_high_id: teamHighId,
+                    game_id: dbGame.id,
+                    played_at_utc: game.start_time_utc,
+                    total: finalTotal,
+                  })
+
+                counters.finals++
+                sportResults[sportId].finals++
+              }
             }
           } catch (gameErr) {
             counters.errors++

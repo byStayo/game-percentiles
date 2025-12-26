@@ -360,16 +360,34 @@ Deno.serve(async (req) => {
             continue
           }
 
-          // Store event mapping (deterministic cache)
-          await supabase
+          // Store event mapping (deterministic cache) - find or update
+          const { data: existingMap } = await supabase
             .from('odds_event_map')
-            .upsert({
-              odds_sport_key: config.oddsKey,
-              odds_event_id: event.id,
-              game_id: game.id,
-              confidence: 1.0,
-              matched_at: new Date().toISOString(),
-            }, { onConflict: 'game_id' })
+            .select('id')
+            .eq('game_id', game.id)
+            .maybeSingle()
+
+          if (existingMap) {
+            await supabase
+              .from('odds_event_map')
+              .update({
+                odds_sport_key: config.oddsKey,
+                odds_event_id: event.id,
+                confidence: 1.0,
+                matched_at: new Date().toISOString(),
+              })
+              .eq('id', existingMap.id)
+          } else {
+            await supabase
+              .from('odds_event_map')
+              .insert({
+                odds_sport_key: config.oddsKey,
+                odds_event_id: event.id,
+                game_id: game.id,
+                confidence: 1.0,
+                matched_at: new Date().toISOString(),
+              })
+          }
 
           // Insert odds snapshot
           await supabase.from('odds_snapshots').insert({
@@ -390,6 +408,7 @@ Deno.serve(async (req) => {
             .eq('sport_id', sportId)
             .eq('team_low_id', teamLowId)
             .eq('team_high_id', teamHighId)
+            .is('league_id', null)
 
           let dkLinePercentile: number | null = null
 
