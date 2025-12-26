@@ -5,10 +5,11 @@ interface PercentileBarProps {
   p95: number;
   dkLine?: number | null;
   dkPercentile?: number | null;
+  finalTotal?: number | null;
   className?: string;
 }
 
-export function PercentileBar({ p05, p95, dkLine, dkPercentile, className }: PercentileBarProps) {
+export function PercentileBar({ p05, p95, dkLine, dkPercentile, finalTotal, className }: PercentileBarProps) {
   const range = p95 - p05;
   const padding = range * 0.15;
   const min = Math.max(0, p05 - padding);
@@ -18,6 +19,7 @@ export function PercentileBar({ p05, p95, dkLine, dkPercentile, className }: Per
   const p05Position = ((p05 - min) / totalRange) * 100;
   const p95Position = ((p95 - min) / totalRange) * 100;
   const dkPosition = dkLine ? Math.min(Math.max(((dkLine - min) / totalRange) * 100, 4), 96) : null;
+  const finalPosition = finalTotal ? Math.min(Math.max(((finalTotal - min) / totalRange) * 100, 2), 98) : null;
 
   const getIndicatorStyle = (percentile: number | null | undefined) => {
     if (percentile == null) return { bg: "bg-muted-foreground", ring: "ring-muted-foreground/20" };
@@ -28,6 +30,10 @@ export function PercentileBar({ p05, p95, dkLine, dkPercentile, className }: Per
 
   const indicatorStyle = getIndicatorStyle(dkPercentile);
 
+  // Determine if final went over or under the DK line
+  const finalWentOver = finalTotal && dkLine && finalTotal > dkLine;
+  const finalWentUnder = finalTotal && dkLine && finalTotal < dkLine;
+
   return (
     <div className={cn("", className)}>
       {/* Range labels */}
@@ -36,6 +42,15 @@ export function PercentileBar({ p05, p95, dkLine, dkPercentile, className }: Per
           <span className="text-muted-foreground">Low </span>
           <span className="font-semibold tabular-nums">{p05.toFixed(1)}</span>
         </div>
+        {finalTotal && (
+          <div className="text-xs text-center">
+            <span className="text-muted-foreground">Final </span>
+            <span className={cn(
+              "font-bold tabular-nums",
+              finalWentOver ? "text-status-over" : finalWentUnder ? "text-status-under" : "text-foreground"
+            )}>{finalTotal.toFixed(1)}</span>
+          </div>
+        )}
         <div className="text-xs text-right">
           <span className="text-muted-foreground">High </span>
           <span className="font-semibold tabular-nums">{p95.toFixed(1)}</span>
@@ -53,12 +68,27 @@ export function PercentileBar({ p05, p95, dkLine, dkPercentile, className }: Per
           }}
         />
 
-        {/* Marker indicator */}
+        {/* Final total marker (diamond shape) */}
+        {finalPosition !== null && (
+          <div
+            className={cn(
+              "absolute top-1/2 w-3 h-3 rotate-45 shadow-md border-2 border-background",
+              finalWentOver ? "bg-status-over" : finalWentUnder ? "bg-status-under" : "bg-foreground"
+            )}
+            style={{ 
+              left: `${finalPosition}%`, 
+              transform: 'translate(-50%, -50%) rotate(45deg)' 
+            }}
+          />
+        )}
+
+        {/* DK Line marker (circle) */}
         {dkPosition !== null && (
           <div
             className={cn(
               "absolute top-1/2 w-4 h-4 rounded-full shadow-md ring-2 ring-background",
-              indicatorStyle.bg
+              indicatorStyle.bg,
+              finalTotal && "opacity-60"
             )}
             style={{ 
               left: `${dkPosition}%`, 

@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { getTeamDisplayName } from "@/lib/teamNames";
 import { PercentileBar } from "@/components/ui/percentile-bar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronRight, AlertTriangle } from "lucide-react";
+import { ChevronRight, AlertTriangle, Check, X, TrendingUp, TrendingDown } from "lucide-react";
 import type { TodayGame } from "@/hooks/useApi";
 import type { SportId } from "@/types";
 
@@ -19,11 +19,64 @@ const sportColors: Record<SportId, { bg: string; text: string; border: string }>
   nhl: { bg: "bg-muted", text: "text-muted-foreground", border: "border-border" },
 };
 
+interface PredictionResult {
+  type: 'hit' | 'miss' | 'push';
+  label: string;
+  description: string;
+  overUnder?: 'over' | 'under' | 'push';
+}
+
+function getPredictionResult(game: TodayGame): PredictionResult | null {
+  // Only show for final games with all required data
+  if (game.status !== 'final' || game.final_total === null) return null;
+  if (game.dk_total_line === null || game.dk_line_percentile === null) return null;
+  if (game.p05 === null || game.p95 === null) return null;
+
+  const finalTotal = game.final_total;
+  const dkLine = game.dk_total_line;
+  const percentile = game.dk_line_percentile;
+
+  // Determine if it went over or under
+  const wentOver = finalTotal > dkLine;
+  const wentUnder = finalTotal < dkLine;
+  const isPush = finalTotal === dkLine;
+
+  if (isPush) {
+    return { type: 'push', label: 'Push', description: `Final ${finalTotal} matched the line`, overUnder: 'push' };
+  }
+
+  // Our edge prediction logic:
+  // - If DK line is at low percentile (<30%), we expect OVER (line is too low)
+  // - If DK line is at high percentile (>70%), we expect UNDER (line is too high)
+  const predictedOver = percentile < 30;
+  const predictedUnder = percentile > 70;
+
+  if (predictedOver) {
+    // We predicted OVER
+    if (wentOver) {
+      return { type: 'hit', label: 'Over Hit', description: `Predicted over at ${percentile.toFixed(0)}%ile, final ${finalTotal} > ${dkLine}`, overUnder: 'over' };
+    } else {
+      return { type: 'miss', label: 'Over Miss', description: `Predicted over at ${percentile.toFixed(0)}%ile, but final ${finalTotal} < ${dkLine}`, overUnder: 'over' };
+    }
+  } else if (predictedUnder) {
+    // We predicted UNDER
+    if (wentUnder) {
+      return { type: 'hit', label: 'Under Hit', description: `Predicted under at ${percentile.toFixed(0)}%ile, final ${finalTotal} < ${dkLine}`, overUnder: 'under' };
+    } else {
+      return { type: 'miss', label: 'Under Miss', description: `Predicted under at ${percentile.toFixed(0)}%ile, but final ${finalTotal} > ${dkLine}`, overUnder: 'under' };
+    }
+  }
+
+  // No strong prediction (line was in the middle range)
+  return null;
+}
+
 export function GameCard({ game }: GameCardProps) {
   const startTime = new Date(game.start_time_utc);
   const isLive = game.status === 'live';
   const isFinal = game.status === 'final';
   const colors = sportColors[game.sport_id];
+  const predictionResult = getPredictionResult(game);
 
   const homeTeamName = getTeamDisplayName(game.home_team, game.sport_id);
   const awayTeamName = getTeamDisplayName(game.away_team, game.sport_id);
@@ -34,7 +87,9 @@ export function GameCard({ game }: GameCardProps) {
       className={cn(
         "group block p-6 bg-card rounded-2xl border border-border/60",
         "shadow-card transition-all duration-300 ease-out",
-        "hover:shadow-card-hover hover:-translate-y-1 hover:border-border"
+        "hover:shadow-card-hover hover:-translate-y-1 hover:border-border",
+        predictionResult?.type === 'hit' && "ring-2 ring-status-under/30 border-status-under/40",
+        predictionResult?.type === 'miss' && "ring-2 ring-status-over/30 border-status-over/40"
       )}
     >
       {/* Header */}
@@ -46,9 +101,34 @@ export function GameCard({ game }: GameCardProps) {
               LIVE
             </span>
           ) : isFinal ? (
-            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground">
-              Final
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+                Final
+              </span>
+              {predictionResult && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className={cn(
+                        "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold",
+                        predictionResult.type === 'hit' && "bg-status-under/15 text-status-under",
+                        predictionResult.type === 'miss' && "bg-status-over/15 text-status-over",
+                        predictionResult.type === 'push' && "bg-muted text-muted-foreground"
+                      )}>
+                        {predictionResult.type === 'hit' && <Check className="h-3 w-3" />}
+                        {predictionResult.type === 'miss' && <X className="h-3 w-3" />}
+                        {predictionResult.overUnder === 'over' && <TrendingUp className="h-3 w-3" />}
+                        {predictionResult.overUnder === 'under' && <TrendingDown className="h-3 w-3" />}
+                        {predictionResult.label}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[280px] text-xs">
+                      {predictionResult.description}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
           ) : (
             <span className="text-sm font-medium text-muted-foreground">
               {format(startTime, 'h:mm a')}
@@ -107,6 +187,7 @@ export function GameCard({ game }: GameCardProps) {
             p95={game.p95}
             dkLine={game.dk_total_line}
             dkPercentile={game.dk_line_percentile}
+            finalTotal={isFinal ? game.final_total : undefined}
           />
         </div>
       )}
@@ -123,6 +204,15 @@ export function GameCard({ game }: GameCardProps) {
           {game.dk_offered && game.dk_total_line && (
             <span className="text-sm text-muted-foreground">
               O/U <span className="font-semibold text-foreground">{game.dk_total_line.toFixed(1)}</span>
+              {isFinal && game.final_total !== null && (
+                <span className="ml-1.5 text-muted-foreground">
+                  → <span className={cn(
+                    "font-semibold",
+                    game.final_total > game.dk_total_line ? "text-status-over" : 
+                    game.final_total < game.dk_total_line ? "text-status-under" : "text-foreground"
+                  )}>{game.final_total}</span>
+                </span>
+              )}
             </span>
           )}
         </div>
