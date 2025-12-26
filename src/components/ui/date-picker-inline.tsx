@@ -1,5 +1,5 @@
 import { format, addDays, subDays } from "date-fns";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -19,22 +19,23 @@ export function DatePickerInline({ date, onDateChange, className }: DatePickerIn
   const isToday = selectedDate.getTime() === today.getTime();
 
   return (
-    <div className={cn("flex items-center gap-2", className)}>
+    <div className={cn("flex items-center gap-3", className)}>
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-9 w-9 rounded-full"
         onClick={() => onDateChange(subDays(date, 1))}
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
 
       <div className="flex items-center gap-2">
-        <span className="text-lg font-semibold min-w-[160px] text-center">
-          {format(date, 'EEEE, MMM d')}
+        <Calendar className="h-4 w-4 text-muted-foreground" />
+        <span className="text-base font-medium min-w-[140px] sm:min-w-[180px]">
+          {format(date, 'EEE, MMM d')}
         </span>
         {isToday && (
-          <span className="text-xs px-2 py-0.5 bg-primary text-primary-foreground rounded-full font-medium">
+          <span className="text-2xs px-2 py-0.5 bg-foreground text-background rounded-full font-medium">
             Today
           </span>
         )}
@@ -43,7 +44,7 @@ export function DatePickerInline({ date, onDateChange, className }: DatePickerIn
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-9 w-9 rounded-full"
         onClick={() => onDateChange(addDays(date, 1))}
       >
         <ChevronRight className="h-4 w-4" />
@@ -53,10 +54,10 @@ export function DatePickerInline({ date, onDateChange, className }: DatePickerIn
         <Button
           variant="outline"
           size="sm"
-          className="ml-2 text-xs"
+          className="ml-2 text-xs h-8 rounded-full"
           onClick={() => onDateChange(today)}
         >
-          Go to Today
+          Today
         </Button>
       )}
     </div>
