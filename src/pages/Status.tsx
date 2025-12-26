@@ -1,5 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { format, formatDistanceToNow } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, XCircle, Clock, RefreshCw, AlertTriangle, Play } from "lucide-react";
@@ -11,6 +12,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { JobRun, SportId } from "@/types";
+
+const ET_TIMEZONE = 'America/New_York';
+
+// Get today's date in ET timezone as YYYY-MM-DD
+function getTodayET(): string {
+  const now = new Date();
+  const etDate = toZonedTime(now, ET_TIMEZONE);
+  return format(etDate, 'yyyy-MM-dd');
+}
 
 const jobLabels: Record<string, { name: string; description: string }> = {
   backfill: { name: "Backfill", description: "Historical data import" },
@@ -85,7 +95,8 @@ function TriggerJobButton({ jobName, sportId }: { jobName: string; sportId?: Spo
 
       const body: Record<string, unknown> = {};
       if (sportId) body.sport_id = sportId;
-      if (jobName !== 'backfill') body.date = new Date().toISOString().split('T')[0];
+      // Use ET timezone for date
+      if (jobName !== 'backfill') body.date = getTodayET();
 
       const { error } = await supabase.functions.invoke(functionName, { body });
 
@@ -132,11 +143,11 @@ export default function Status() {
     },
   });
 
-  // Get unmatched odds events (games without DK line)
+  // Get unmatched odds events (games without DK line) - use ET timezone
   const { data: unmatchedCount } = useQuery({
     queryKey: ['unmatched-odds'],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayET();
       const { data } = await supabase
         .from('daily_edges')
         .select('id')

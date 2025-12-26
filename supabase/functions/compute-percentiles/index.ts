@@ -5,19 +5,35 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Get today's date in America/New_York timezone
+function getTodayET(): string {
+  const now = new Date()
+  // Format as YYYY-MM-DD in ET timezone
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  return formatter.format(now)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
-  try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  )
 
+  let jobRunId: number | null = null
+
+  try {
     const { date } = await req.json()
-    const targetDate = date || new Date().toISOString().split('T')[0]
+    // Use provided date or default to today in ET
+    const targetDate = date || getTodayET()
 
     console.log(`Computing percentiles for games on ${targetDate}`)
 
@@ -27,6 +43,8 @@ Deno.serve(async (req) => {
       .insert({ job_name: 'compute', details: { date: targetDate } })
       .select()
       .single()
+
+    jobRunId = jobRun?.id || null
 
     // Get all games for the target date
     const startOfDay = `${targetDate}T00:00:00Z`
@@ -120,8 +138,8 @@ Deno.serve(async (req) => {
       processedCount++
     }
 
-    // Update job run
-    if (jobRun) {
+    // Update job run as success
+    if (jobRunId) {
       await supabase
         .from('job_runs')
         .update({
@@ -129,7 +147,7 @@ Deno.serve(async (req) => {
           status: 'success',
           details: { date: targetDate, games_processed: processedCount }
         })
-        .eq('id', jobRun.id)
+        .eq('id', jobRunId)
     }
 
     return new Response(
@@ -142,6 +160,19 @@ Deno.serve(async (req) => {
     )
   } catch (error) {
     console.error('Compute error:', error)
+    
+    // Mark job as failed
+    if (jobRunId) {
+      await supabase
+        .from('job_runs')
+        .update({
+          finished_at: new Date().toISOString(),
+          status: 'fail',
+          details: { error: error instanceof Error ? error.message : 'Unknown error' }
+        })
+        .eq('id', jobRunId)
+    }
+    
     const message = error instanceof Error ? error.message : 'Unknown error'
     return new Response(
       JSON.stringify({ error: message }),
