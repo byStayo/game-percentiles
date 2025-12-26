@@ -124,58 +124,19 @@ async function findOrCreateTeam(
   return created.id
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
-  }
-
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  )
-
-  let jobRunId: number | null = null
+// Background processing function
+async function runBackfill(
+  supabase: any,
+  sportsDataKey: string,
+  sport_id: string,
+  numSeasons: number,
+  jobRunId: number | null
+) {
   const counters = { fetched: 0, upserted: 0, matchups: 0, errors: 0 }
+  const errorDetails: string[] = []
+  const currentYear = new Date().getFullYear()
 
   try {
-    const sportsDataKey = Deno.env.get('SPORTSDATAIO_KEY')
-    if (!sportsDataKey) {
-      throw new Error('SPORTSDATAIO_KEY not configured')
-    }
-
-    const { sport_id, seasons_override } = await req.json()
-    
-    if (!sport_id) {
-      throw new Error('sport_id is required')
-    }
-
-    const config = SEASON_CONFIG[sport_id]
-    if (!config) {
-      throw new Error(`Unknown sport: ${sport_id}. Supported: nfl, nba, mlb, nhl`)
-    }
-
-    const numSeasons = seasons_override || config.seasons
-
-    console.log(`[BACKFILL] Starting ${sport_id}, ${numSeasons} seasons`)
-
-    // Clear team cache
-    teamCache.clear()
-
-    // Create job run
-    const { data: jobRun } = await supabase
-      .from('job_runs')
-      .insert({ 
-        job_name: 'backfill', 
-        details: { sport_id, seasons: numSeasons, status: 'running' } 
-      })
-      .select()
-      .single()
-
-    jobRunId = jobRun?.id || null
-
-    const currentYear = new Date().getFullYear()
-    const errorDetails: string[] = []
-    
     for (let i = 0; i < numSeasons; i++) {
       const year = currentYear - i
       console.log(`[BACKFILL] Processing ${sport_id} season ${year}`)
@@ -197,13 +158,11 @@ Deno.serve(async (req) => {
         console.log(`[BACKFILL] Found ${games.length} games for ${year}`)
 
         for (const game of games) {
-          // Only process final games with scores
           if (game.status !== 'final' || game.home_score === null || game.away_score === null) {
             continue
           }
 
           try {
-            // Find or create teams
             const homeTeamId = await findOrCreateTeam(
               supabase, sport_id, game.home_team_key, game.home_team_name, game.home_team_city
             )
@@ -213,10 +172,8 @@ Deno.serve(async (req) => {
 
             if (!homeTeamId || !awayTeamId) continue
 
-            // Calculate final total
             const finalTotal = (game.home_score || 0) + (game.away_score || 0)
 
-            // Check if game already exists
             const { data: existingGame } = await supabase
               .from('games')
               .select('id')
@@ -229,7 +186,6 @@ Deno.serve(async (req) => {
 
             if (existingGame) {
               gameId = existingGame.id
-              // Update existing game (don't include final_total - it's a generated column)
               await supabase
                 .from('games')
                 .update({
@@ -243,7 +199,6 @@ Deno.serve(async (req) => {
                 })
                 .eq('id', gameId)
             } else {
-              // Create new game (don't include final_total - it's a generated column)
               const { data: newGame, error: gameError } = await supabase
                 .from('games')
                 .insert({
@@ -266,10 +221,8 @@ Deno.serve(async (req) => {
 
             counters.upserted++
 
-            // Insert matchup game with canonical team ordering
             const [teamLowId, teamHighId] = [homeTeamId, awayTeamId].sort()
 
-            // Check if matchup game already exists
             const { data: existingMg } = await supabase
               .from('matchup_games')
               .select('id')
@@ -306,7 +259,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Compute matchup stats for all affected matchups
+    // Compute matchup stats
     console.log('[BACKFILL] Computing matchup stats...')
     
     const { data: matchups } = await supabase
@@ -334,12 +287,10 @@ Deno.serve(async (req) => {
         const totals = matchupGames.map((mg: any) => Number(mg.total)).sort((a: number, b: number) => a - b)
         const n = totals.length
 
-        // Nearest-rank quantiles
         const p05Index = Math.max(1, Math.ceil(0.05 * n)) - 1
         const p95Index = Math.max(1, Math.ceil(0.95 * n)) - 1
         const medianIndex = Math.floor(n / 2)
 
-        // Check if matchup stats exists
         const { data: existingStats } = await supabase
           .from('matchup_stats')
           .select('id')
@@ -396,19 +347,8 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[BACKFILL] Complete: ${JSON.stringify(counters)}`)
-
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        sport_id,
-        seasons: numSeasons,
-        counters,
-        unique_matchups: uniqueMatchups.size
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
   } catch (error) {
-    console.error('[BACKFILL] Fatal error:', error)
+    console.error('[BACKFILL] Fatal error in background task:', error)
     
     if (jobRunId) {
       await supabase
@@ -420,6 +360,70 @@ Deno.serve(async (req) => {
         })
         .eq('id', jobRunId)
     }
+  }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  )
+
+  try {
+    const sportsDataKey = Deno.env.get('SPORTSDATAIO_KEY')
+    if (!sportsDataKey) {
+      throw new Error('SPORTSDATAIO_KEY not configured')
+    }
+
+    const { sport_id, seasons_override } = await req.json()
+    
+    if (!sport_id) {
+      throw new Error('sport_id is required')
+    }
+
+    const config = SEASON_CONFIG[sport_id]
+    if (!config) {
+      throw new Error(`Unknown sport: ${sport_id}. Supported: nfl, nba, mlb, nhl`)
+    }
+
+    const numSeasons = seasons_override || config.seasons
+
+    console.log(`[BACKFILL] Initiating ${sport_id}, ${numSeasons} seasons`)
+
+    // Clear team cache
+    teamCache.clear()
+
+    // Create job run
+    const { data: jobRun } = await supabase
+      .from('job_runs')
+      .insert({ 
+        job_name: 'backfill', 
+        details: { sport_id, seasons: numSeasons, status: 'running' } 
+      })
+      .select()
+      .single()
+
+    const jobRunId = jobRun?.id || null
+
+    // Run backfill in background using EdgeRuntime.waitUntil
+    // @ts-ignore - EdgeRuntime is available in Supabase edge functions
+    EdgeRuntime.waitUntil(runBackfill(supabase, sportsDataKey, sport_id, numSeasons, jobRunId))
+
+    // Return immediately
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        message: `Backfill started for ${sport_id} (${numSeasons} seasons)`,
+        job_id: jobRunId
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  } catch (error) {
+    console.error('[BACKFILL] Error:', error)
     
     const message = error instanceof Error ? error.message : 'Unknown error'
     return new Response(
@@ -428,6 +432,7 @@ Deno.serve(async (req) => {
     )
   }
 })
+// Sport-specific fetch functions follow below
 
 // ============================================================
 // SPORT-SPECIFIC FETCH FUNCTIONS

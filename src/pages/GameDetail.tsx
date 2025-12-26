@@ -1,12 +1,13 @@
 import { useParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { format } from "date-fns";
-import { ArrowLeft, Calendar, Clock, TrendingUp, History } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, TrendingUp, History, BarChart3 } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
 import { useGameDetail } from "@/hooks/useApi";
 import { PercentileBar } from "@/components/ui/percentile-bar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { HistoricalDistributionChart } from "@/components/game/HistoricalDistributionChart";
 import { cn } from "@/lib/utils";
 import type { SportId } from "@/types";
 
@@ -224,6 +225,24 @@ export default function GameDetail() {
             ) : null}
           </div>
 
+          {/* Percentile Distribution Chart */}
+          {history.length >= 3 && (
+            <div className="bg-card rounded-xl border border-border p-6 shadow-card">
+              <div className="flex items-center gap-2 mb-4">
+                <BarChart3 className="h-5 w-5 text-muted-foreground" />
+                <h2 className="text-lg font-semibold">Score Distribution</h2>
+                <span className="text-sm text-muted-foreground ml-auto">{history.length} games</span>
+              </div>
+              <HistoricalDistributionChart
+                totals={history.map(g => g.total)}
+                p05={stats?.p05 ?? null}
+                p95={stats?.p95 ?? null}
+                median={stats?.median ?? null}
+                dkLine={edge?.dk_total_line ?? null}
+              />
+            </div>
+          )}
+
           {/* H2H History */}
           {history.length > 0 && (
             <div className="bg-card rounded-xl border border-border p-6 shadow-card">
@@ -232,7 +251,7 @@ export default function GameDetail() {
                 <h2 className="text-lg font-semibold">H2H History</h2>
                 <span className="text-sm text-muted-foreground ml-auto">Last {history.length} games</span>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-96 overflow-y-auto">
                 {history.map((game) => (
                   <div
                     key={game.id}
