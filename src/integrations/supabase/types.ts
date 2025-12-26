@@ -22,6 +22,7 @@ export type Database = {
           dk_total_line: number | null
           game_id: string
           id: string
+          is_visible: boolean
           league_id: string | null
           n_h2h: number
           p05: number | null
@@ -36,6 +37,7 @@ export type Database = {
           dk_total_line?: number | null
           game_id: string
           id?: string
+          is_visible?: boolean
           league_id?: string | null
           n_h2h?: number
           p05?: number | null
@@ -50,6 +52,7 @@ export type Database = {
           dk_total_line?: number | null
           game_id?: string
           id?: string
+          is_visible?: boolean
           league_id?: string | null
           n_h2h?: number
           p05?: number | null
@@ -512,6 +515,7 @@ export type Database = {
       teams: {
         Row: {
           abbrev: string | null
+          city: string | null
           created_at: string
           id: string
           league_id: string | null
@@ -521,6 +525,7 @@ export type Database = {
         }
         Insert: {
           abbrev?: string | null
+          city?: string | null
           created_at?: string
           id?: string
           league_id?: string | null
@@ -530,6 +535,7 @@ export type Database = {
         }
         Update: {
           abbrev?: string | null
+          city?: string | null
           created_at?: string
           id?: string
           league_id?: string | null

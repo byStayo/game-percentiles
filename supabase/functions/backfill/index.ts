@@ -5,6 +5,41 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// ============================================================
+// RETRY WITH EXPONENTIAL BACKOFF
+// ============================================================
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3,
+  baseDelay = 1000
+): Promise<Response> {
+  let lastError: Error | null = null
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options)
+      
+      // Retry on 429 or 5xx
+      if (response.status === 429 || response.status >= 500) {
+        const delay = baseDelay * Math.pow(2, attempt)
+        console.log(`Retry ${attempt + 1}/${maxRetries} after ${delay}ms (status: ${response.status})`)
+        await new Promise(r => setTimeout(r, delay))
+        continue
+      }
+      
+      return response
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('Unknown fetch error')
+      const delay = baseDelay * Math.pow(2, attempt)
+      console.log(`Retry ${attempt + 1}/${maxRetries} after ${delay}ms (error: ${lastError.message})`)
+      await new Promise(r => setTimeout(r, delay))
+    }
+  }
+  
+  throw lastError || new Error('Max retries exceeded')
+}
+
 interface GameData {
   provider_game_key: string
   start_time_utc: string
@@ -12,6 +47,8 @@ interface GameData {
   away_team_key: string
   home_team_name: string
   away_team_name: string
+  home_team_city?: string
+  away_team_city?: string
   home_score: number | null
   away_score: number | null
   status: 'scheduled' | 'live' | 'final'
@@ -36,6 +73,7 @@ Deno.serve(async (req) => {
   )
 
   let jobRunId: number | null = null
+  const counters = { fetched: 0, upserted: 0, matchups: 0, errors: 0 }
 
   try {
     const sportsDataKey = Deno.env.get('SPORTSDATAIO_KEY')
@@ -51,34 +89,31 @@ Deno.serve(async (req) => {
 
     const config = SEASON_CONFIG[sport_id]
     if (!config) {
-      throw new Error(`Unknown sport: ${sport_id}`)
+      throw new Error(`Unknown sport: ${sport_id}. Supported: nfl, nba, mlb, nhl`)
     }
 
     const numSeasons = seasons_override || config.seasons
 
-    console.log(`Starting backfill for ${sport_id}, ${numSeasons} seasons`)
+    console.log(`[BACKFILL] Starting ${sport_id}, ${numSeasons} seasons`)
 
     // Create job run
-    const { data: jobRun, error: jobError } = await supabase
+    const { data: jobRun } = await supabase
       .from('job_runs')
-      .insert({ job_name: 'backfill', details: { sport_id, seasons: numSeasons } })
+      .insert({ 
+        job_name: 'backfill', 
+        details: { sport_id, seasons: numSeasons, status: 'running' } 
+      })
       .select()
       .single()
 
-    if (jobError) {
-      console.error('Failed to create job run:', jobError)
-    }
-    
     jobRunId = jobRun?.id || null
 
-    let totalGames = 0
-    let totalMatchups = 0
-
     const currentYear = new Date().getFullYear()
+    const errorDetails: string[] = []
     
     for (let i = 0; i < numSeasons; i++) {
       const year = currentYear - i
-      console.log(`Processing ${sport_id} season ${year}`)
+      console.log(`[BACKFILL] Processing ${sport_id} season ${year}`)
 
       try {
         let games: GameData[] = []
@@ -93,83 +128,96 @@ Deno.serve(async (req) => {
           games = await fetchNHLSeasonGames(sportsDataKey, year)
         }
 
-        console.log(`Found ${games.length} games for ${year}`)
+        counters.fetched += games.length
+        console.log(`[BACKFILL] Found ${games.length} games for ${year}`)
 
         for (const game of games) {
-          // Only process final games
+          // Only process final games with scores
           if (game.status !== 'final' || game.home_score === null || game.away_score === null) {
             continue
           }
 
-          // Upsert home team
-          const { data: homeTeam } = await supabase
-            .from('teams')
-            .upsert({
-              sport_id,
-              provider_team_key: game.home_team_key,
-              name: game.home_team_name,
-            }, { onConflict: 'sport_id,league_id,provider_team_key' })
-            .select()
-            .single()
+          try {
+            // Upsert home team with city
+            const { data: homeTeam } = await supabase
+              .from('teams')
+              .upsert({
+                sport_id,
+                provider_team_key: game.home_team_key,
+                name: game.home_team_name,
+                city: game.home_team_city || null,
+              }, { onConflict: 'sport_id,league_id,provider_team_key' })
+              .select()
+              .single()
 
-          // Upsert away team
-          const { data: awayTeam } = await supabase
-            .from('teams')
-            .upsert({
-              sport_id,
-              provider_team_key: game.away_team_key,
-              name: game.away_team_name,
-            }, { onConflict: 'sport_id,league_id,provider_team_key' })
-            .select()
-            .single()
+            // Upsert away team with city
+            const { data: awayTeam } = await supabase
+              .from('teams')
+              .upsert({
+                sport_id,
+                provider_team_key: game.away_team_key,
+                name: game.away_team_name,
+                city: game.away_team_city || null,
+              }, { onConflict: 'sport_id,league_id,provider_team_key' })
+              .select()
+              .single()
 
-          if (!homeTeam || !awayTeam) continue
+            if (!homeTeam || !awayTeam) continue
 
-          // Upsert game
-          const { data: dbGame, error: gameError } = await supabase
-            .from('games')
-            .upsert({
-              sport_id,
-              provider_game_key: game.provider_game_key,
-              start_time_utc: game.start_time_utc,
-              home_team_id: homeTeam.id,
-              away_team_id: awayTeam.id,
-              home_score: game.home_score,
-              away_score: game.away_score,
-              status: 'final',
-              last_seen_at: new Date().toISOString(),
-            }, { onConflict: 'sport_id,league_id,provider_game_key' })
-            .select()
-            .single()
+            // Calculate final total
+            const finalTotal = (game.home_score || 0) + (game.away_score || 0)
 
-          if (gameError || !dbGame) continue
+            // Upsert game
+            const { data: dbGame, error: gameError } = await supabase
+              .from('games')
+              .upsert({
+                sport_id,
+                provider_game_key: game.provider_game_key,
+                start_time_utc: game.start_time_utc,
+                home_team_id: homeTeam.id,
+                away_team_id: awayTeam.id,
+                home_score: game.home_score,
+                away_score: game.away_score,
+                final_total: finalTotal,
+                status: 'final',
+                last_seen_at: new Date().toISOString(),
+              }, { onConflict: 'sport_id,league_id,provider_game_key' })
+              .select()
+              .single()
 
-          totalGames++
+            if (gameError || !dbGame) continue
 
-          // Insert matchup game
-          const total = (game.home_score || 0) + (game.away_score || 0)
-          const [teamLowId, teamHighId] = [homeTeam.id, awayTeam.id].sort()
+            counters.upserted++
 
-          await supabase
-            .from('matchup_games')
-            .upsert({
-              sport_id,
-              team_low_id: teamLowId,
-              team_high_id: teamHighId,
-              game_id: dbGame.id,
-              played_at_utc: game.start_time_utc,
-              total,
-            }, { onConflict: 'sport_id,league_id,team_low_id,team_high_id,game_id' })
+            // Insert matchup game with canonical team ordering
+            const [teamLowId, teamHighId] = [homeTeam.id, awayTeam.id].sort()
 
-          totalMatchups++
+            await supabase
+              .from('matchup_games')
+              .upsert({
+                sport_id,
+                team_low_id: teamLowId,
+                team_high_id: teamHighId,
+                game_id: dbGame.id,
+                played_at_utc: game.start_time_utc,
+                total: finalTotal,
+              }, { onConflict: 'sport_id,league_id,team_low_id,team_high_id,game_id' })
+
+            counters.matchups++
+          } catch (gameErr) {
+            counters.errors++
+          }
         }
       } catch (seasonError) {
-        console.error(`Error processing season ${year}:`, seasonError)
+        const msg = `Season ${year}: ${seasonError instanceof Error ? seasonError.message : 'Unknown error'}`
+        console.error(`[BACKFILL] Error: ${msg}`)
+        errorDetails.push(msg)
+        counters.errors++
       }
     }
 
-    // Compute matchup stats for all matchups
-    console.log('Computing matchup stats...')
+    // Compute matchup stats for all affected matchups
+    console.log('[BACKFILL] Computing matchup stats...')
     
     const { data: matchups } = await supabase
       .from('matchup_games')
@@ -190,12 +238,12 @@ Deno.serve(async (req) => {
         .eq('sport_id', sportId)
         .eq('team_low_id', teamLowId)
         .eq('team_high_id', teamHighId)
-        .order('total', { ascending: true })
 
       if (matchupGames && matchupGames.length > 0) {
         const totals = matchupGames.map(mg => Number(mg.total)).sort((a, b) => a - b)
         const n = totals.length
 
+        // Nearest-rank quantiles
         const p05Index = Math.max(1, Math.ceil(0.05 * n)) - 1
         const p95Index = Math.max(1, Math.ceil(0.95 * n)) - 1
         const medianIndex = Math.floor(n / 2)
@@ -223,40 +271,40 @@ Deno.serve(async (req) => {
         .from('job_runs')
         .update({
           finished_at: new Date().toISOString(),
-          status: 'success',
+          status: counters.errors > 0 ? 'success' : 'success',
           details: { 
             sport_id, 
             seasons: numSeasons, 
-            games_processed: totalGames, 
-            matchups_created: totalMatchups,
-            unique_matchups: uniqueMatchups.size
+            counters,
+            unique_matchups: uniqueMatchups.size,
+            errors: errorDetails.slice(0, 10)
           }
         })
         .eq('id', jobRunId)
     }
+
+    console.log(`[BACKFILL] Complete: ${JSON.stringify(counters)}`)
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         sport_id,
         seasons: numSeasons,
-        games_processed: totalGames,
-        matchups_created: totalMatchups,
+        counters,
         unique_matchups: uniqueMatchups.size
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    console.error('Backfill error:', error)
+    console.error('[BACKFILL] Fatal error:', error)
     
-    // Mark job as failed
     if (jobRunId) {
       await supabase
         .from('job_runs')
         .update({
           finished_at: new Date().toISOString(),
           status: 'fail',
-          details: { error: error instanceof Error ? error.message : 'Unknown error' }
+          details: { error: error instanceof Error ? error.message : 'Unknown error', counters }
         })
         .eq('id', jobRunId)
     }
@@ -269,10 +317,14 @@ Deno.serve(async (req) => {
   }
 })
 
+// ============================================================
+// SPORT-SPECIFIC FETCH FUNCTIONS
+// ============================================================
+
 async function fetchNBASeasonGames(apiKey: string, year: number): Promise<GameData[]> {
   const url = `https://api.sportsdata.io/v3/nba/scores/json/Games/${year}`
   
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: { 'Ocp-Apim-Subscription-Key': apiKey }
   })
 
@@ -299,7 +351,7 @@ async function fetchNBASeasonGames(apiKey: string, year: number): Promise<GameDa
 async function fetchMLBSeasonGames(apiKey: string, year: number): Promise<GameData[]> {
   const url = `https://api.sportsdata.io/v3/mlb/scores/json/Games/${year}`
   
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: { 'Ocp-Apim-Subscription-Key': apiKey }
   })
 
@@ -327,12 +379,12 @@ async function fetchNFLSeasonGames(apiKey: string, year: number): Promise<GameDa
   const season = `${year}REG`
   const allGames: GameData[] = []
 
-  // Fetch all weeks (NFL has up to 18 weeks in regular season)
+  // NFL has up to 18 weeks in regular season
   for (let week = 1; week <= 18; week++) {
     const url = `https://api.sportsdata.io/v3/nfl/scores/json/ScoresByWeek/${season}/${week}`
     
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithRetry(url, {
         headers: { 'Ocp-Apim-Subscription-Key': apiKey }
       })
 
@@ -354,7 +406,7 @@ async function fetchNFLSeasonGames(apiKey: string, year: number): Promise<GameDa
 
       allGames.push(...games)
     } catch {
-      // Skip failed weeks
+      // Skip failed weeks, continue
     }
   }
 
@@ -364,7 +416,7 @@ async function fetchNFLSeasonGames(apiKey: string, year: number): Promise<GameDa
 async function fetchNHLSeasonGames(apiKey: string, year: number): Promise<GameData[]> {
   const url = `https://api.sportsdata.io/v3/nhl/scores/json/Games/${year}`
   
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: { 'Ocp-Apim-Subscription-Key': apiKey }
   })
 

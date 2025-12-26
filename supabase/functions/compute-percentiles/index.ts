@@ -8,7 +8,6 @@ const corsHeaders = {
 // Get today's date in America/New_York timezone
 function getTodayET(): string {
   const now = new Date()
-  // Format as YYYY-MM-DD in ET timezone
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/New_York',
     year: 'numeric',
@@ -29,13 +28,20 @@ Deno.serve(async (req) => {
   )
 
   let jobRunId: number | null = null
+  const counters = { computed: 0, visible: 0, hidden: 0, errors: 0 }
 
   try {
-    const { date } = await req.json()
-    // Use provided date or default to today in ET
+    let requestBody: { date?: string } = {}
+    try {
+      requestBody = await req.json()
+    } catch {
+      // Empty body is OK
+    }
+    
+    const { date } = requestBody
     const targetDate = date || getTodayET()
 
-    console.log(`Computing percentiles for games on ${targetDate}`)
+    console.log(`[COMPUTE] Computing percentiles for ${targetDate}`)
 
     // Create job run
     const { data: jobRun } = await supabase
@@ -46,96 +52,97 @@ Deno.serve(async (req) => {
 
     jobRunId = jobRun?.id || null
 
-    // Get all games for the target date
-    const startOfDay = `${targetDate}T00:00:00Z`
-    const endOfDay = `${targetDate}T23:59:59Z`
+    // Get all games for the target date (using ET date range)
+    // Convert ET date to UTC range
+    const startOfDayET = new Date(`${targetDate}T00:00:00-05:00`)
+    const endOfDayET = new Date(`${targetDate}T23:59:59-05:00`)
 
     const { data: games, error: gamesError } = await supabase
       .from('games')
       .select('*')
-      .gte('start_time_utc', startOfDay)
-      .lte('start_time_utc', endOfDay)
+      .gte('start_time_utc', startOfDayET.toISOString())
+      .lte('start_time_utc', endOfDayET.toISOString())
 
     if (gamesError) {
       throw gamesError
     }
 
-    console.log(`Found ${games?.length || 0} games to compute`)
-
-    let processedCount = 0
+    console.log(`[COMPUTE] Found ${games?.length || 0} games for ${targetDate}`)
 
     for (const game of games || []) {
-      // Determine team_low and team_high (sorted for consistent lookup)
-      const [teamLowId, teamHighId] = [game.home_team_id, game.away_team_id].sort()
+      try {
+        // Canonical team ordering for matchup lookup
+        const [teamLowId, teamHighId] = [game.home_team_id, game.away_team_id].sort()
 
-      // Get or compute matchup stats
-      let { data: stats } = await supabase
-        .from('matchup_stats')
-        .select('*')
-        .eq('sport_id', game.sport_id)
-        .eq('team_low_id', teamLowId)
-        .eq('team_high_id', teamHighId)
-        .maybeSingle()
-
-      // If no stats exist or they're stale, compute from matchup_games
-      if (!stats) {
+        // Get H2H totals from matchup_games
         const { data: matchupGames } = await supabase
           .from('matchup_games')
           .select('total')
           .eq('sport_id', game.sport_id)
           .eq('team_low_id', teamLowId)
           .eq('team_high_id', teamHighId)
-          .order('total', { ascending: true })
 
-        if (matchupGames && matchupGames.length > 0) {
-          const totals = matchupGames.map(mg => Number(mg.total)).sort((a, b) => a - b)
-          const n = totals.length
+        const n = matchupGames?.length || 0
+        let p05: number | null = null
+        let p95: number | null = null
+        let isVisible = false
 
-          // Calculate percentiles using nearest-rank method
+        if (n >= 5) {
+          // Sort totals and compute nearest-rank quantiles
+          const totals = matchupGames!.map(mg => Number(mg.total)).sort((a, b) => a - b)
+          
+          // P05 = totals[ceil(0.05*n) - 1]
           const p05Index = Math.max(1, Math.ceil(0.05 * n)) - 1
+          // P95 = totals[ceil(0.95*n) - 1]
           const p95Index = Math.max(1, Math.ceil(0.95 * n)) - 1
           const medianIndex = Math.floor(n / 2)
 
-          const newStats = {
-            sport_id: game.sport_id,
-            team_low_id: teamLowId,
-            team_high_id: teamHighId,
-            n_games: n,
-            p05: totals[p05Index],
-            p95: totals[p95Index],
-            median: n % 2 === 0 ? (totals[medianIndex - 1] + totals[medianIndex]) / 2 : totals[medianIndex],
-            min_total: totals[0],
-            max_total: totals[n - 1],
-            updated_at: new Date().toISOString(),
-          }
+          p05 = totals[p05Index]
+          p95 = totals[p95Index]
+          isVisible = true
 
-          const { data: upsertedStats } = await supabase
+          // Also update/create matchup_stats cache
+          await supabase
             .from('matchup_stats')
-            .upsert(newStats, { onConflict: 'sport_id,league_id,team_low_id,team_high_id' })
-            .select()
-            .single()
+            .upsert({
+              sport_id: game.sport_id,
+              league_id: game.league_id,
+              team_low_id: teamLowId,
+              team_high_id: teamHighId,
+              n_games: n,
+              p05: totals[p05Index],
+              p95: totals[p95Index],
+              median: n % 2 === 0 ? (totals[medianIndex - 1] + totals[medianIndex]) / 2 : totals[medianIndex],
+              min_total: totals[0],
+              max_total: totals[n - 1],
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'sport_id,league_id,team_low_id,team_high_id' })
 
-          stats = upsertedStats
+          counters.visible++
+        } else {
+          counters.hidden++
         }
+
+        // Upsert daily_edge
+        await supabase
+          .from('daily_edges')
+          .upsert({
+            date_local: targetDate,
+            sport_id: game.sport_id,
+            league_id: game.league_id,
+            game_id: game.id,
+            n_h2h: n,
+            p05,
+            p95,
+            is_visible: isVisible,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'date_local,game_id' })
+
+        counters.computed++
+      } catch (gameErr) {
+        console.error(`[COMPUTE] Error for game ${game.id}:`, gameErr)
+        counters.errors++
       }
-
-      // Upsert daily_edge
-      const dailyEdge = {
-        date_local: targetDate,
-        sport_id: game.sport_id,
-        league_id: game.league_id,
-        game_id: game.id,
-        n_h2h: stats?.n_games || 0,
-        p05: stats?.p05 || null,
-        p95: stats?.p95 || null,
-        updated_at: new Date().toISOString(),
-      }
-
-      await supabase
-        .from('daily_edges')
-        .upsert(dailyEdge, { onConflict: 'date_local,game_id' })
-
-      processedCount++
     }
 
     // Update job run as success
@@ -145,30 +152,31 @@ Deno.serve(async (req) => {
         .update({
           finished_at: new Date().toISOString(),
           status: 'success',
-          details: { date: targetDate, games_processed: processedCount }
+          details: { date: targetDate, counters }
         })
         .eq('id', jobRunId)
     }
+
+    console.log(`[COMPUTE] Complete: ${JSON.stringify(counters)}`)
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         date: targetDate,
-        games_processed: processedCount
+        counters
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    console.error('Compute error:', error)
+    console.error('[COMPUTE] Fatal error:', error)
     
-    // Mark job as failed
     if (jobRunId) {
       await supabase
         .from('job_runs')
         .update({
           finished_at: new Date().toISOString(),
           status: 'fail',
-          details: { error: error instanceof Error ? error.message : 'Unknown error' }
+          details: { error: error instanceof Error ? error.message : 'Unknown error', counters }
         })
         .eq('id', jobRunId)
     }
