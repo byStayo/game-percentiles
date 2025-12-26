@@ -5,12 +5,12 @@ import { toZonedTime } from "date-fns-tz";
 import { Layout } from "@/components/layout/Layout";
 import { GameCard } from "@/components/game/GameCardNew";
 import { GameCardSkeleton } from "@/components/game/GameCardSkeleton";
-import { EmptyState } from "@/components/game/EmptyState";
 import { ErrorState } from "@/components/game/ErrorState";
 import { useTodayGames, TodayGame } from "@/hooks/useApi";
 import { cn } from "@/lib/utils";
-import { Calendar, Clock, TrendingUp, Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { Calendar, Clock, TrendingUp, Filter, ChevronDown, ChevronUp, Zap, Star } from "lucide-react";
 import type { SportId } from "@/types";
+import { Link } from "react-router-dom";
 
 const ET_TIMEZONE = 'America/New_York';
 
@@ -35,6 +35,24 @@ interface DayData {
   games: TodayGame[];
   isLoading: boolean;
   hasError: boolean;
+}
+
+// Helper to calculate EV
+function calculateEV(percentile: number): number {
+  const JUICE = -110;
+  const impliedProb = Math.abs(JUICE) / (Math.abs(JUICE) + 100);
+  let winProb: number;
+  
+  if (percentile <= 30) {
+    winProb = (30 - percentile) / 30 * 0.3 + 0.5;
+  } else if (percentile >= 70) {
+    winProb = (percentile - 70) / 30 * 0.3 + 0.5;
+  } else {
+    winProb = 0.5;
+  }
+  
+  const ev = (winProb * (100 / Math.abs(JUICE))) - ((1 - winProb) * 1);
+  return ev * 100;
 }
 
 function useWeekGames() {
@@ -77,10 +95,96 @@ function useWeekGames() {
   return { dates, dayDataMap, isAnyLoading, allGames, refetchAll };
 }
 
+// Best Picks Card Component
+function BestPickCard({ game }: { game: TodayGame }) {
+  const percentile = game.dk_line_percentile;
+  if (percentile === null) return null;
+  
+  const isOver = percentile <= 30;
+  const isStrong = percentile <= 15 || percentile >= 85;
+  const ev = calculateEV(percentile);
+  const gameDate = new Date(game.start_time_utc);
+  const isToday = format(getTodayInET(), 'yyyy-MM-dd') === game.date_local;
+  
+  const sportColors: Record<SportId, string> = {
+    nfl: 'border-sport-nfl/30 bg-sport-nfl/5',
+    nba: 'border-sport-nba/30 bg-sport-nba/5',
+    nhl: 'border-sport-nhl/30 bg-sport-nhl/5',
+    mlb: 'border-sport-mlb/30 bg-sport-mlb/5',
+  };
+
+  return (
+    <Link
+      to={`/game/${game.game_id}`}
+      className={cn(
+        "block p-4 rounded-2xl border-2 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg",
+        sportColors[game.sport_id]
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          {/* Sport & Date */}
+          <div className="flex items-center gap-2 mb-2">
+            <span className={cn(
+              "px-2 py-0.5 rounded-md text-xs font-bold uppercase",
+              game.sport_id === 'nfl' && "bg-sport-nfl/20 text-sport-nfl",
+              game.sport_id === 'nba' && "bg-sport-nba/20 text-sport-nba",
+              game.sport_id === 'nhl' && "bg-sport-nhl/20 text-sport-nhl",
+              game.sport_id === 'mlb' && "bg-sport-mlb/20 text-sport-mlb",
+            )}>
+              {game.sport_id}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {isToday ? format(gameDate, 'h:mm a') : format(gameDate, 'EEE, MMM d')}
+            </span>
+          </div>
+          
+          {/* Teams */}
+          <div className="space-y-0.5">
+            <div className="font-medium text-sm truncate">
+              {game.away_team?.name || 'Away'}
+            </div>
+            <div className="font-medium text-sm truncate">
+              @ {game.home_team?.name || 'Home'}
+            </div>
+          </div>
+          
+          {/* Line info */}
+          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Line: {game.dk_total_line}</span>
+            <span>•</span>
+            <span>P{game.p05} - P{game.p95}</span>
+          </div>
+        </div>
+        
+        {/* Pick badge */}
+        <div className="flex flex-col items-end gap-1">
+          <div className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-sm",
+            isOver
+              ? "bg-status-over text-white"
+              : "bg-status-under text-white"
+          )}>
+            {isStrong && <Star className="h-3.5 w-3.5 fill-current" />}
+            {isOver ? 'OVER' : 'UNDER'}
+          </div>
+          <div className={cn(
+            "text-xs font-semibold px-2 py-0.5 rounded",
+            ev > 0 ? "text-emerald-600 bg-emerald-500/10" : "text-red-600 bg-red-500/10"
+          )}>
+            EV: {ev > 0 ? '+' : ''}{ev.toFixed(1)}%
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 export default function WeekAhead() {
   const [sortBy, setSortBy] = useState<SortOption>('time');
   const [selectedSports, setSelectedSports] = useState<Set<SportId>>(new Set(['nfl', 'nba', 'nhl', 'mlb']));
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set());
+  const [showBestPicks, setShowBestPicks] = useState(true);
   
   const { dates, dayDataMap, isAnyLoading, allGames, refetchAll } = useWeekGames();
 
@@ -107,6 +211,22 @@ export default function WeekAhead() {
       return next;
     });
   };
+
+  // Get best picks (strong signals only: percentile ≤15 or ≥85)
+  const bestPicks = useMemo(() => {
+    return allGames
+      .filter(g => {
+        if (!selectedSports.has(g.sport_id)) return false;
+        if (g.dk_line_percentile === null) return false;
+        return g.dk_line_percentile <= 15 || g.dk_line_percentile >= 85;
+      })
+      .sort((a, b) => {
+        // Sort by edge strength (distance from 50)
+        const aEdge = Math.abs(50 - (a.dk_line_percentile || 50));
+        const bEdge = Math.abs(50 - (b.dk_line_percentile || 50));
+        return bEdge - aEdge;
+      });
+  }, [allGames, selectedSports]);
 
   // Filter and sort games for a given day
   const getFilteredGames = (games: TodayGame[]) => {
@@ -190,6 +310,48 @@ export default function WeekAhead() {
               </button>
             ))}
           </div>
+
+          {/* Best Picks Section */}
+          {!isAnyLoading && bestPicks.length > 0 && (
+            <div className="space-y-4">
+              <button
+                onClick={() => setShowBestPicks(!showBestPicks)}
+                className="w-full flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-red-500/10 border-2 border-amber-500/20 hover:border-amber-500/40 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white">
+                    <Zap className="h-6 w-6" />
+                  </div>
+                  <div className="text-left">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-lg">Best Picks</span>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 text-xs font-bold">
+                        STRONG
+                      </span>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {bestPicks.length} high-confidence {bestPicks.length === 1 ? 'pick' : 'picks'} this week
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {showBestPicks ? (
+                    <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </div>
+              </button>
+
+              {showBestPicks && (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {bestPicks.map((game) => (
+                    <BestPickCard key={game.id} game={game} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Sort controls */}
           <div className="flex items-center justify-center gap-2">
