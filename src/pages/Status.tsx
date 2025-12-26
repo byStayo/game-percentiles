@@ -4,6 +4,7 @@ import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Database, Activity 
 import { Layout } from "@/components/layout/Layout";
 import { useSystemStatus } from "@/hooks/useApi";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const jobLabels: Record<string, { name: string; description: string }> = {
@@ -77,7 +78,7 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: string |
 }
 
 export default function Status() {
-  const { data, isLoading, error } = useSystemStatus();
+  const { data, isLoading, error, refetch, isFetching } = useSystemStatus();
 
   return (
     <>
@@ -88,11 +89,23 @@ export default function Status() {
 
       <Layout>
         <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">System Status</h1>
-            <p className="text-muted-foreground mt-1">
-              Pipeline health & strict odds matching
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">System Status</h1>
+              <p className="text-muted-foreground mt-1">
+                Pipeline health & strict odds matching
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="gap-2"
+            >
+              <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
+              Refresh
+            </Button>
           </div>
 
           {isLoading ? (
@@ -165,10 +178,10 @@ export default function Status() {
                 {/* Unmatched samples */}
                 {data.sample_unmatched.length > 0 && (
                   <div className="border-t border-border pt-4 mt-4">
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Sample unmatched (strict mode):
+                    <p className="text-sm font-medium mb-3">
+                      Unmatched Games (DK lines not found)
                     </p>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
                       {data.sample_unmatched.map((item, i) => {
                         // Handle both string and object formats
                         if (typeof item === 'string') {
@@ -181,10 +194,30 @@ export default function Status() {
                         // Object format with internal, internal_normalized, odds
                         const obj = item as { internal: string; internal_normalized?: string; odds?: Array<{ raw: string; normalized: string; time_diff_hrs: string }> };
                         return (
-                          <div key={i} className="text-xs font-mono bg-secondary/20 p-2 rounded">
-                            <p className="text-foreground">{obj.internal}</p>
-                            {obj.internal_normalized && (
-                              <p className="text-muted-foreground">→ {obj.internal_normalized}</p>
+                          <div key={i} className="bg-secondary/20 p-3 rounded-lg space-y-2">
+                            <div>
+                              <p className="text-xs text-muted-foreground">Our game:</p>
+                              <p className="text-sm font-medium">{obj.internal}</p>
+                              {obj.internal_normalized && (
+                                <p className="text-xs text-muted-foreground font-mono">
+                                  normalized: {obj.internal_normalized}
+                                </p>
+                              )}
+                            </div>
+                            {obj.odds && obj.odds.length > 0 && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">Closest DK events:</p>
+                                <div className="space-y-1 mt-1">
+                                  {obj.odds.map((odds, j) => (
+                                    <div key={j} className="flex items-center justify-between text-xs bg-background/50 px-2 py-1 rounded">
+                                      <span className="font-mono">{odds.raw}</span>
+                                      <span className="text-muted-foreground">
+                                        {odds.time_diff_hrs}h diff
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
                             )}
                           </div>
                         );
