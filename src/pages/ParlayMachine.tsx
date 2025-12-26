@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
@@ -12,6 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useTodayGames, TodayGame } from "@/hooks/useApi";
 import { getTeamDisplayName } from "@/lib/teamNames";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { Heart, Copy, Download, Trash2 } from "lucide-react";
 import type { SportId } from "@/types";
 
 const ET_TIMEZONE = 'America/New_York';
@@ -36,6 +38,23 @@ interface ParlayCombo {
   legs: number;
 }
 
+interface SavedParlay {
+  id: string;
+  date: string;
+  picks: Array<{
+    matchup: string;
+    line: number;
+    pick: 'over' | 'under';
+    confidence: number;
+    sport: string;
+  }>;
+  combinedConfidence: number;
+  expectedValue: number;
+  savedAt: string;
+}
+
+const SAVED_PARLAYS_KEY = 'percentile-totals-saved-parlays';
+
 // Generate all combinations of size k from array
 function combinations<T>(arr: T[], k: number): T[][] {
   if (k === 0) return [[]];
@@ -48,11 +67,38 @@ function combinations<T>(arr: T[], k: number): T[][] {
   return [...withFirst, ...withoutFirst];
 }
 
+function generateParlayId(combo: ParlayCombo, date: string): string {
+  return `${date}-${combo.picks.map(p => p.game.id).sort().join('-')}`;
+}
+
 export default function ParlayMachine() {
   const [selectedDate, setSelectedDate] = useState(getTodayInET);
   const [selectedSports, setSelectedSports] = useState<Set<SportId>>(new Set(['nfl', 'nba', 'nhl']));
   const [minConfidence, setMinConfidence] = useState(70);
   const [parlaySize, setParlaySize] = useState<2 | 3 | 4 | 5>(3);
+  const [savedParlays, setSavedParlays] = useState<SavedParlay[]>([]);
+  
+  // Load saved parlays from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SAVED_PARLAYS_KEY);
+      if (stored) {
+        setSavedParlays(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error('Failed to load saved parlays:', e);
+    }
+  }, []);
+  
+  // Save to localStorage when parlays change
+  const saveParlaysToStorage = (parlays: SavedParlay[]) => {
+    try {
+      localStorage.setItem(SAVED_PARLAYS_KEY, JSON.stringify(parlays));
+      setSavedParlays(parlays);
+    } catch (e) {
+      console.error('Failed to save parlays:', e);
+    }
+  };
   
   // Fetch games for all selected sports
   const nflQuery = useTodayGames(selectedDate, 'nfl');
@@ -134,6 +180,89 @@ export default function ParlayMachine() {
       newSet.add(sport);
     }
     setSelectedSports(newSet);
+  };
+  
+  const dateStr = format(selectedDate, 'yyyy-MM-dd');
+  
+  const saveParlay = (combo: ParlayCombo) => {
+    const parlayId = generateParlayId(combo, dateStr);
+    const isAlreadySaved = savedParlays.some(p => p.id === parlayId);
+    
+    if (isAlreadySaved) {
+      // Remove from saved
+      const updated = savedParlays.filter(p => p.id !== parlayId);
+      saveParlaysToStorage(updated);
+      toast.success("Parlay removed from favorites");
+    } else {
+      // Add to saved
+      const newParlay: SavedParlay = {
+        id: parlayId,
+        date: dateStr,
+        picks: combo.picks.map(p => ({
+          matchup: `${getTeamDisplayName(p.game.away_team, p.game.sport_id)} @ ${getTeamDisplayName(p.game.home_team, p.game.sport_id)}`,
+          line: p.game.dk_total_line || 0,
+          pick: p.pick,
+          confidence: p.confidence,
+          sport: p.game.sport_id.toUpperCase(),
+        })),
+        combinedConfidence: combo.combinedConfidence,
+        expectedValue: combo.expectedValue,
+        savedAt: new Date().toISOString(),
+      };
+      saveParlaysToStorage([newParlay, ...savedParlays]);
+      toast.success("Parlay saved to favorites!");
+    }
+  };
+  
+  const isParlayFavorited = (combo: ParlayCombo): boolean => {
+    const parlayId = generateParlayId(combo, dateStr);
+    return savedParlays.some(p => p.id === parlayId);
+  };
+  
+  const removeSavedParlay = (id: string) => {
+    const updated = savedParlays.filter(p => p.id !== id);
+    saveParlaysToStorage(updated);
+    toast.success("Parlay removed");
+  };
+  
+  const exportParlayToClipboard = (combo: ParlayCombo) => {
+    const lines = [
+      `📊 PARLAY PICKS - ${format(selectedDate, 'MMM d, yyyy')}`,
+      `═══════════════════════════`,
+      '',
+      ...combo.picks.map((pick, i) => 
+        `${i + 1}. [${pick.game.sport_id.toUpperCase()}] ${getTeamDisplayName(pick.game.away_team, pick.game.sport_id)} @ ${getTeamDisplayName(pick.game.home_team, pick.game.sport_id)}\n   Line: ${pick.game.dk_total_line?.toFixed(1)} → ${pick.pick.toUpperCase()} (${pick.confidence.toFixed(0)}% conf)`
+      ),
+      '',
+      `═══════════════════════════`,
+      `Combined Confidence: ${combo.combinedConfidence.toFixed(1)}%`,
+      `Expected Value: ${combo.expectedValue.toFixed(2)}x`,
+      '',
+      `Generated by Percentile Totals`
+    ];
+    
+    navigator.clipboard.writeText(lines.join('\n'));
+    toast.success("Parlay copied to clipboard!");
+  };
+  
+  const exportSavedParlay = (parlay: SavedParlay) => {
+    const lines = [
+      `📊 PARLAY PICKS - ${format(new Date(parlay.date), 'MMM d, yyyy')}`,
+      `═══════════════════════════`,
+      '',
+      ...parlay.picks.map((pick, i) => 
+        `${i + 1}. [${pick.sport}] ${pick.matchup}\n   Line: ${pick.line.toFixed(1)} → ${pick.pick.toUpperCase()} (${pick.confidence.toFixed(0)}% conf)`
+      ),
+      '',
+      `═══════════════════════════`,
+      `Combined Confidence: ${parlay.combinedConfidence.toFixed(1)}%`,
+      `Expected Value: ${parlay.expectedValue.toFixed(2)}x`,
+      '',
+      `Generated by Percentile Totals`
+    ];
+    
+    navigator.clipboard.writeText(lines.join('\n'));
+    toast.success("Parlay copied to clipboard!");
   };
 
   return (
@@ -334,19 +463,44 @@ export default function ParlayMachine() {
                             {combo.legs}-Leg Parlay
                           </Badge>
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm">
-                            <span className="text-muted-foreground">Combined: </span>
-                            <span className="font-bold">{combo.combinedConfidence.toFixed(1)}%</span>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">Combined: </span>
+                              <span className="font-bold">{combo.combinedConfidence.toFixed(1)}%</span>
+                            </div>
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">EV: </span>
+                              <span className={cn(
+                                "font-bold",
+                                combo.expectedValue >= 1 ? "text-status-under" : "text-status-over"
+                              )}>
+                                {combo.expectedValue.toFixed(2)}x
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-sm">
-                            <span className="text-muted-foreground">EV: </span>
-                            <span className={cn(
-                              "font-bold",
-                              combo.expectedValue >= 1 ? "text-status-under" : "text-status-over"
-                            )}>
-                              {combo.expectedValue.toFixed(2)}x
-                            </span>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => saveParlay(combo)}
+                              title={isParlayFavorited(combo) ? "Remove from favorites" : "Save to favorites"}
+                            >
+                              <Heart className={cn(
+                                "h-4 w-4",
+                                isParlayFavorited(combo) ? "fill-red-500 text-red-500" : ""
+                              )} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => exportParlayToClipboard(combo)}
+                              title="Copy to clipboard"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -383,6 +537,105 @@ export default function ParlayMachine() {
               )}
             </CardContent>
           </Card>
+
+          {/* Saved Parlays */}
+          {savedParlays.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-red-500 fill-red-500" />
+                  Saved Parlays
+                  <Badge variant="secondary">{savedParlays.length}</Badge>
+                </CardTitle>
+                <CardDescription>
+                  Your favorited parlay combinations
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {savedParlays.map((parlay) => (
+                    <div
+                      key={parlay.id}
+                      className="p-4 rounded-lg border bg-muted/20"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">
+                            {format(new Date(parlay.date), 'MMM d, yyyy')}
+                          </Badge>
+                          <Badge variant="secondary">
+                            {parlay.picks.length}-Leg
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">Combined: </span>
+                              <span className="font-bold">{parlay.combinedConfidence.toFixed(1)}%</span>
+                            </div>
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">EV: </span>
+                              <span className={cn(
+                                "font-bold",
+                                parlay.expectedValue >= 1 ? "text-status-under" : "text-status-over"
+                              )}>
+                                {parlay.expectedValue.toFixed(2)}x
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => exportSavedParlay(parlay)}
+                              title="Copy to clipboard"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => removeSavedParlay(parlay.id)}
+                              title="Remove from saved"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        {parlay.picks.map((pick, j) => (
+                          <div key={j} className="flex items-center justify-between text-sm py-1 border-t border-border/50 first:border-t-0">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-2xs">
+                                {pick.sport}
+                              </Badge>
+                              <span>{pick.matchup}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">
+                                {pick.line.toFixed(1)}
+                              </span>
+                              <Badge className={cn(
+                                "text-2xs",
+                                pick.pick === 'under' ? "bg-status-under" : "bg-status-over"
+                              )}>
+                                {pick.pick.toUpperCase()}
+                              </Badge>
+                              <span className="font-medium w-12 text-right">{pick.confidence.toFixed(0)}%</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Disclaimer */}
           <p className="text-xs text-muted-foreground text-center">
