@@ -25,6 +25,156 @@ const ABBREVIATION_MAP: Record<string, string> = {
   'l.a.': 'los angeles',
 }
 
+// NFL team abbreviation to full name mapping (from SportsData.io)
+const NFL_ABBREV_MAP: Record<string, string> = {
+  'ari': 'arizona cardinals',
+  'atl': 'atlanta falcons',
+  'bal': 'baltimore ravens',
+  'buf': 'buffalo bills',
+  'car': 'carolina panthers',
+  'chi': 'chicago bears',
+  'cin': 'cincinnati bengals',
+  'cle': 'cleveland browns',
+  'dal': 'dallas cowboys',
+  'den': 'denver broncos',
+  'det': 'detroit lions',
+  'gb': 'green bay packers',
+  'hou': 'houston texans',
+  'ind': 'indianapolis colts',
+  'jax': 'jacksonville jaguars',
+  'kc': 'kansas city chiefs',
+  'lv': 'las vegas raiders',
+  'lac': 'los angeles chargers',
+  'lar': 'los angeles rams',
+  'mia': 'miami dolphins',
+  'min': 'minnesota vikings',
+  'ne': 'new england patriots',
+  'no': 'new orleans saints',
+  'nyg': 'new york giants',
+  'nyj': 'new york jets',
+  'phi': 'philadelphia eagles',
+  'pit': 'pittsburgh steelers',
+  'sf': 'san francisco 49ers',
+  'sea': 'seattle seahawks',
+  'tb': 'tampa bay buccaneers',
+  'ten': 'tennessee titans',
+  'was': 'washington commanders',
+}
+
+// NBA team abbreviation mapping
+const NBA_ABBREV_MAP: Record<string, string> = {
+  'atl': 'atlanta hawks',
+  'bos': 'boston celtics',
+  'bkn': 'brooklyn nets',
+  'cha': 'charlotte hornets',
+  'chi': 'chicago bulls',
+  'cle': 'cleveland cavaliers',
+  'dal': 'dallas mavericks',
+  'den': 'denver nuggets',
+  'det': 'detroit pistons',
+  'gs': 'golden state warriors',
+  'gsw': 'golden state warriors',
+  'hou': 'houston rockets',
+  'ind': 'indiana pacers',
+  'lac': 'los angeles clippers',
+  'lal': 'los angeles lakers',
+  'mem': 'memphis grizzlies',
+  'mia': 'miami heat',
+  'mil': 'milwaukee bucks',
+  'min': 'minnesota timberwolves',
+  'no': 'new orleans pelicans',
+  'nop': 'new orleans pelicans',
+  'ny': 'new york knicks',
+  'nyk': 'new york knicks',
+  'okc': 'oklahoma city thunder',
+  'orl': 'orlando magic',
+  'phi': 'philadelphia 76ers',
+  'phx': 'phoenix suns',
+  'por': 'portland trail blazers',
+  'sac': 'sacramento kings',
+  'sa': 'san antonio spurs',
+  'sas': 'san antonio spurs',
+  'tor': 'toronto raptors',
+  'uta': 'utah jazz',
+  'was': 'washington wizards',
+}
+
+// NHL team abbreviation mapping
+const NHL_ABBREV_MAP: Record<string, string> = {
+  'ana': 'anaheim ducks',
+  'ari': 'arizona coyotes',
+  'bos': 'boston bruins',
+  'buf': 'buffalo sabres',
+  'cgy': 'calgary flames',
+  'car': 'carolina hurricanes',
+  'chi': 'chicago blackhawks',
+  'col': 'colorado avalanche',
+  'cbj': 'columbus blue jackets',
+  'dal': 'dallas stars',
+  'det': 'detroit red wings',
+  'edm': 'edmonton oilers',
+  'fla': 'florida panthers',
+  'la': 'los angeles kings',
+  'lak': 'los angeles kings',
+  'min': 'minnesota wild',
+  'mtl': 'montreal canadiens',
+  'nsh': 'nashville predators',
+  'nj': 'new jersey devils',
+  'njd': 'new jersey devils',
+  'nyi': 'new york islanders',
+  'nyr': 'new york rangers',
+  'ott': 'ottawa senators',
+  'phi': 'philadelphia flyers',
+  'pit': 'pittsburgh penguins',
+  'sj': 'san jose sharks',
+  'sjs': 'san jose sharks',
+  'sea': 'seattle kraken',
+  'stl': 'st louis blues',
+  'tb': 'tampa bay lightning',
+  'tbl': 'tampa bay lightning',
+  'tor': 'toronto maple leafs',
+  'uta': 'utah hockey club',
+  'van': 'vancouver canucks',
+  'vgk': 'vegas golden knights',
+  'wsh': 'washington capitals',
+  'wpg': 'winnipeg jets',
+}
+
+// MLB team abbreviation mapping
+const MLB_ABBREV_MAP: Record<string, string> = {
+  'ari': 'arizona diamondbacks',
+  'atl': 'atlanta braves',
+  'bal': 'baltimore orioles',
+  'bos': 'boston red sox',
+  'chc': 'chicago cubs',
+  'cws': 'chicago white sox',
+  'cin': 'cincinnati reds',
+  'cle': 'cleveland guardians',
+  'col': 'colorado rockies',
+  'det': 'detroit tigers',
+  'hou': 'houston astros',
+  'kc': 'kansas city royals',
+  'la': 'los angeles angels',
+  'laa': 'los angeles angels',
+  'lad': 'los angeles dodgers',
+  'mia': 'miami marlins',
+  'mil': 'milwaukee brewers',
+  'min': 'minnesota twins',
+  'nym': 'new york mets',
+  'nyy': 'new york yankees',
+  'oak': 'oakland athletics',
+  'phi': 'philadelphia phillies',
+  'pit': 'pittsburgh pirates',
+  'sd': 'san diego padres',
+  'sf': 'san francisco giants',
+  'sea': 'seattle mariners',
+  'stl': 'st louis cardinals',
+  'tb': 'tampa bay rays',
+  'tex': 'texas rangers',
+  'tor': 'toronto blue jays',
+  'wsh': 'washington nationals',
+}
+
 // Hardcoded alias dictionary for known vendor variants
 const ALIAS_DICTIONARY: Record<string, string> = {
   // NBA
@@ -88,11 +238,25 @@ function removeDiacritics(str: string): string {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
-function normalizeTeamName(name: string): string {
+function normalizeTeamName(name: string, sportId?: string): string {
   let normalized = name.toLowerCase().trim()
   normalized = removeDiacritics(normalized)
   normalized = normalized.replace(/[^\w\s]/g, ' ')
   normalized = normalized.replace(/\s+/g, ' ').trim()
+  
+  // Check if this is a sport abbreviation first (single word, all letters)
+  if (sportId && !normalized.includes(' ')) {
+    const abbrevMaps: Record<string, Record<string, string>> = {
+      nfl: NFL_ABBREV_MAP,
+      nba: NBA_ABBREV_MAP,
+      nhl: NHL_ABBREV_MAP,
+      mlb: MLB_ABBREV_MAP,
+    }
+    const sportMap = abbrevMaps[sportId]
+    if (sportMap && sportMap[normalized]) {
+      return sportMap[normalized]
+    }
+  }
   
   // Expand abbreviations
   const words = normalized.split(' ')
@@ -240,7 +404,7 @@ Deno.serve(async (req) => {
 
     jobRunId = jobRun?.id || null
 
-    const unmatchedPairs: Array<{ internal: string; odds: string[] }> = []
+    const unmatchedPairs: Array<{ internal: string; internal_normalized?: string; odds: any[] }> = []
 
     for (const sportId of sportsToRefresh) {
       const config = SPORT_CONFIGS[sportId]
@@ -302,9 +466,14 @@ Deno.serve(async (req) => {
             ? `${awayTeamData.city} ${awayTeamData.name}` 
             : awayTeamData.name
 
-          // Normalize internal team names
-          const homeNorm = getCanonicalName(normalizeTeamName(homeDisplay))
-          const awayNorm = getCanonicalName(normalizeTeamName(awayDisplay))
+          // Normalize internal team names (pass sportId to resolve abbreviations)
+          const homeNorm = getCanonicalName(normalizeTeamName(homeDisplay, sportId))
+          const awayNorm = getCanonicalName(normalizeTeamName(awayDisplay, sportId))
+
+          // Debug log for first few games
+          if (counters.matched + counters.unmatched < 3) {
+            console.log(`[ODDS-DEBUG] Internal: ${homeDisplay} (${homeNorm}) vs ${awayDisplay} (${awayNorm})`)
+          }
 
           // Find EXACT matches within time window
           const exactMatches: Array<{ event: OddsEvent; timeDiff: number }> = []
@@ -318,6 +487,11 @@ Deno.serve(async (req) => {
             const eventHomeNorm = getCanonicalName(normalizeTeamName(event.home_team))
             const eventAwayNorm = getCanonicalName(normalizeTeamName(event.away_team))
 
+            // Debug log for potential matches
+            if (counters.matched + counters.unmatched < 3) {
+              console.log(`[ODDS-DEBUG] Odds: ${event.home_team} (${eventHomeNorm}) vs ${event.away_team} (${eventAwayNorm}) | timeDiff: ${(timeDiff / 60000).toFixed(0)}min`)
+            }
+
             // Check for exact match (allow swapped home/away)
             const normalMatch = (homeNorm === eventHomeNorm && awayNorm === eventAwayNorm)
             const swappedMatch = (homeNorm === eventAwayNorm && awayNorm === eventHomeNorm)
@@ -330,9 +504,20 @@ Deno.serve(async (req) => {
           if (exactMatches.length === 0) {
             counters.unmatched++
             if (unmatchedPairs.length < 20) {
+              // Find closest odds event by time for debugging
+              const closestByTime = oddsData
+                .map(e => ({ event: e, timeDiff: Math.abs(new Date(e.commence_time).getTime() - gameTime) }))
+                .sort((a, b) => a.timeDiff - b.timeDiff)
+                .slice(0, 3)
+              
               unmatchedPairs.push({
                 internal: `${awayDisplay} @ ${homeDisplay}`,
-                odds: oddsData.slice(0, 5).map(e => `${e.away_team} @ ${e.home_team}`)
+                internal_normalized: `${awayNorm} @ ${homeNorm}`,
+                odds: closestByTime.map(e => ({
+                  raw: `${e.event.away_team} @ ${e.event.home_team}`,
+                  normalized: `${getCanonicalName(normalizeTeamName(e.event.away_team))} @ ${getCanonicalName(normalizeTeamName(e.event.home_team))}`,
+                  time_diff_hrs: (e.timeDiff / (1000 * 60 * 60)).toFixed(1)
+                }))
               })
             }
             continue
@@ -448,10 +633,12 @@ Deno.serve(async (req) => {
             date: targetDate,
             mode: 'strict_hardcoded',
             counters,
-            sample_unmatched: unmatchedPairs.slice(0, 5)
+            sample_unmatched: unmatchedPairs.slice(0, 10)
           }
         })
         .eq('id', jobRunId)
+      
+      console.log(`[ODDS-REFRESH] Unmatched pairs: ${JSON.stringify(unmatchedPairs.slice(0, 3))}`)
     }
 
     console.log(`[ODDS-REFRESH] Complete: ${JSON.stringify(counters)}`)
@@ -461,7 +648,8 @@ Deno.serve(async (req) => {
         success: true, 
         mode: 'strict_hardcoded',
         date: targetDate,
-        counters
+        counters,
+        sample_unmatched: unmatchedPairs.slice(0, 5)
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
