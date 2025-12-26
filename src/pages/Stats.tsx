@@ -5,10 +5,15 @@ import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Target, BarChart3, Calendar, Filter, LineChart } from "lucide-react";
+import { TrendingUp, TrendingDown, Target, BarChart3, Calendar, Filter, LineChart, DollarSign, Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, ComposedChart } from "recharts";
 import type { SportId } from "@/types";
+
+// Betting constants
+const BET_AMOUNT = 100; // $100 per bet
+const JUICE = -110; // Standard -110 odds
+const WIN_PROFIT = BET_AMOUNT * (100 / 110); // ~$90.91 profit on a win
 
 interface CompletedGame {
   game_id: string;
@@ -175,7 +180,11 @@ export default function Stats() {
       const dateStr = format(date, 'yyyy-MM-dd');
       const dayGames = edgeGames.filter(g => g.date_local === dateStr);
       const dayHits = dayGames.filter(g => g.result.type === 'hit').length;
+      const dayMisses = dayGames.length - dayHits;
       const dayTotal = dayGames.length;
+      
+      // ROI calculation: wins get +90.91, losses get -100
+      const dayProfit = (dayHits * WIN_PROFIT) - (dayMisses * BET_AMOUNT);
       
       return {
         date: dateStr,
@@ -183,20 +192,31 @@ export default function Stats() {
         hitRate: dayTotal > 0 ? (dayHits / dayTotal) * 100 : null,
         picks: dayTotal,
         hits: dayHits,
+        misses: dayMisses,
+        profit: dayProfit,
       };
     }).filter(d => d.picks > 0);
 
-    // Calculate cumulative/rolling hit rate
+    // Calculate cumulative data
     let cumulativeHits = 0;
     let cumulativeTotal = 0;
+    let cumulativeProfit = 0;
     const cumulativeData = timeSeriesData.map(d => {
       cumulativeHits += d.hits;
       cumulativeTotal += d.picks;
+      cumulativeProfit += d.profit;
       return {
         ...d,
         cumulativeRate: cumulativeTotal > 0 ? (cumulativeHits / cumulativeTotal) * 100 : null,
+        cumulativeProfit: cumulativeProfit,
+        cumulativeWagered: cumulativeTotal * BET_AMOUNT,
       };
     });
+
+    // ROI calculations
+    const totalWagered = edgeGames.length * BET_AMOUNT;
+    const totalProfit = (hits.length * WIN_PROFIT) - (misses.length * BET_AMOUNT);
+    const roi = totalWagered > 0 ? (totalProfit / totalWagered) * 100 : 0;
 
     return {
       totalGames: filteredGames.length,
@@ -213,6 +233,9 @@ export default function Stats() {
       underHits: underHits.length,
       underRate: underPicks.length > 0 ? (underHits.length / underPicks.length) * 100 : 0,
       timeSeriesData: cumulativeData,
+      totalWagered,
+      totalProfit,
+      roi,
     };
   }, [games, sportFilter, dateRange]);
 
@@ -288,7 +311,7 @@ export default function Stats() {
         ) : stats ? (
           <>
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               <Card className="bg-card border-border/60 shadow-card">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -340,6 +363,164 @@ export default function Stats() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* ROI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+              <Card className="bg-card border-border/60 shadow-card">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Wallet className="h-4 w-4" />
+                    Total Wagered
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-4xl font-bold text-foreground">
+                    ${stats.totalWagered.toLocaleString()}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    ${BET_AMOUNT} × {stats.edgeGames} bets
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className={cn(
+                "border-border/60 shadow-card",
+                stats.totalProfit >= 0 ? "bg-status-under/5" : "bg-status-over/5"
+              )}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <DollarSign className="h-4 w-4" />
+                    Net Profit/Loss
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className={cn(
+                    "text-4xl font-bold",
+                    stats.totalProfit >= 0 ? "text-status-under" : "text-status-over"
+                  )}>
+                    {stats.totalProfit >= 0 ? '+' : ''}{stats.totalProfit < 0 ? '-' : ''}${Math.abs(stats.totalProfit).toFixed(2)}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    At -110 odds per bet
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className={cn(
+                "border-border/60 shadow-card",
+                stats.roi >= 0 ? "bg-status-under/5" : "bg-status-over/5"
+              )}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    ROI
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className={cn(
+                    "text-4xl font-bold",
+                    stats.roi >= 0 ? "text-status-under" : "text-status-over"
+                  )}>
+                    {stats.roi >= 0 ? '+' : ''}{stats.roi.toFixed(1)}%
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Return on investment
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Profit Chart */}
+            {stats.timeSeriesData.length > 0 && (
+              <Card className="bg-card border-border/60 shadow-card mb-10">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5" />
+                    Cumulative Profit
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={stats.timeSeriesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="profitGradientPositive" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="hsl(var(--status-under))" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="hsl(var(--status-under))" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="profitGradientNegative" x1="0" y1="1" x2="0" y2="0">
+                            <stop offset="5%" stopColor="hsl(var(--status-over))" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="hsl(var(--status-over))" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                        <XAxis 
+                          dataKey="displayDate" 
+                          stroke="hsl(var(--muted-foreground))"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis 
+                          stroke="hsl(var(--muted-foreground))"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(value) => `$${value}`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '12px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                          }}
+                          labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}
+                          formatter={(value: number, name: string) => {
+                            if (name === 'cumulativeProfit') {
+                              return [`${value >= 0 ? '+' : ''}$${value.toFixed(2)}`, 'Cumulative P/L'];
+                            }
+                            return [`$${value.toFixed(2)}`, 'Daily P/L'];
+                          }}
+                        />
+                        <ReferenceLine 
+                          y={0} 
+                          stroke="hsl(var(--muted-foreground))" 
+                          strokeWidth={1.5}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="cumulativeProfit"
+                          stroke="none"
+                          fill={stats.totalProfit >= 0 ? "url(#profitGradientPositive)" : "url(#profitGradientNegative)"}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="cumulativeProfit"
+                          stroke={stats.totalProfit >= 0 ? "hsl(var(--status-under))" : "hsl(var(--status-over))"}
+                          strokeWidth={2.5}
+                          dot={{ 
+                            fill: stats.totalProfit >= 0 ? "hsl(var(--status-under))" : "hsl(var(--status-over))", 
+                            strokeWidth: 0, 
+                            r: 4 
+                          }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex items-center justify-center gap-6 mt-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "w-3 h-3 rounded-full",
+                        stats.totalProfit >= 0 ? "bg-status-under" : "bg-status-over"
+                      )} />
+                      <span className="text-muted-foreground">Cumulative P/L (${BET_AMOUNT}/bet @ -110)</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Accuracy Trend Chart */}
             {stats.timeSeriesData.length > 1 && (
