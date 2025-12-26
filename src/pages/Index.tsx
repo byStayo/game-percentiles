@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Helmet } from "react-helmet-async";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
@@ -10,6 +10,8 @@ import { GameCardSkeleton } from "@/components/game/GameCardSkeleton";
 import { EmptyState } from "@/components/game/EmptyState";
 import { ErrorState } from "@/components/game/ErrorState";
 import { useTodayGames } from "@/hooks/useApi";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { SportId } from "@/types";
 
 const ET_TIMEZONE = 'America/New_York';
@@ -29,18 +31,48 @@ const sports = [
   { id: 'nhl' as SportId, display_name: 'NHL' },
 ];
 
+type SortOption = 'time' | 'confidence' | 'edge';
+type FilterOption = 'all' | 'high' | 'moderate' | 'limited';
+
 export default function Index() {
   const [selectedDate, setSelectedDate] = useState(getTodayInET);
-  const [selectedSport, setSelectedSport] = useState<SportId>('nfl'); // Default to NFL where we have data
+  const [selectedSport, setSelectedSport] = useState<SportId>('nfl');
+  const [sortBy, setSortBy] = useState<SortOption>('time');
+  const [filterBy, setFilterBy] = useState<FilterOption>('all');
   
   const { data, isLoading, error, refetch } = useTodayGames(selectedDate, selectedSport);
 
   const games = data?.games || [];
 
-  // Sort games by start time
-  const sortedGames = [...games].sort((a, b) => 
-    new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime()
-  );
+  // Filter and sort games
+  const filteredAndSortedGames = useMemo(() => {
+    let result = [...games];
+    
+    // Apply filter
+    if (filterBy === 'high') {
+      result = result.filter(g => g.n_h2h >= 10);
+    } else if (filterBy === 'moderate') {
+      result = result.filter(g => g.n_h2h >= 5);
+    } else if (filterBy === 'limited') {
+      result = result.filter(g => g.n_h2h >= 2);
+    }
+    
+    // Apply sort
+    if (sortBy === 'time') {
+      result.sort((a, b) => new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime());
+    } else if (sortBy === 'confidence') {
+      result.sort((a, b) => b.n_h2h - a.n_h2h);
+    } else if (sortBy === 'edge') {
+      // Sort by how extreme the DK line is relative to percentiles (potential edge)
+      result.sort((a, b) => {
+        const aEdge = a.dk_line_percentile !== null ? Math.abs(50 - a.dk_line_percentile) : 0;
+        const bEdge = b.dk_line_percentile !== null ? Math.abs(50 - b.dk_line_percentile) : 0;
+        return bEdge - aEdge;
+      });
+    }
+    
+    return result;
+  }, [games, filterBy, sortBy]);
 
   return (
     <>
@@ -101,6 +133,51 @@ export default function Index() {
                 <span>Very limited</span>
               </div>
             </div>
+
+            {/* Sort & Filter Controls */}
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Sort:</span>
+                <div className="flex gap-1">
+                  {[
+                    { value: 'time', label: 'Time' },
+                    { value: 'confidence', label: 'Confidence' },
+                    { value: 'edge', label: 'Edge' },
+                  ].map((option) => (
+                    <Button
+                      key={option.value}
+                      variant={sortBy === option.value ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSortBy(option.value as SortOption)}
+                      className="text-xs"
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Filter:</span>
+                <div className="flex gap-1">
+                  {[
+                    { value: 'all', label: 'All' },
+                    { value: 'limited', label: 'n≥2' },
+                    { value: 'moderate', label: 'n≥5' },
+                    { value: 'high', label: 'n≥10' },
+                  ].map((option) => (
+                    <Button
+                      key={option.value}
+                      variant={filterBy === option.value ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setFilterBy(option.value as FilterOption)}
+                      className="text-xs"
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Games grid */}
@@ -116,9 +193,9 @@ export default function Index() {
               description={error instanceof Error ? error.message : 'An error occurred while fetching games.'}
               onRetry={() => refetch()}
             />
-          ) : sortedGames.length > 0 ? (
+          ) : filteredAndSortedGames.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {sortedGames.map((game) => (
+              {filteredAndSortedGames.map((game) => (
                 <GameCard key={game.id} game={game} />
               ))}
             </div>
