@@ -116,6 +116,7 @@ async function findOrCreateTeam(
 }
 
 // Find or create game helper
+// NOTE: final_total is a GENERATED column - we don't insert it, the DB computes it
 async function findOrCreateGame(
   supabase: any,
   sportId: string,
@@ -126,7 +127,6 @@ async function findOrCreateGame(
     away_team_id: string
     home_score: number | null
     away_score: number | null
-    final_total: number | null
     status: string
   }
 ): Promise<{ id: string } | null> {
@@ -140,24 +140,34 @@ async function findOrCreateGame(
     .maybeSingle()
 
   if (existing) {
-    // Update existing game
+    // Update existing game (don't include final_total - it's generated)
     await supabase
       .from('games')
       .update({
-        ...gameData,
+        start_time_utc: gameData.start_time_utc,
+        home_team_id: gameData.home_team_id,
+        away_team_id: gameData.away_team_id,
+        home_score: gameData.home_score,
+        away_score: gameData.away_score,
+        status: gameData.status,
         last_seen_at: new Date().toISOString(),
       })
       .eq('id', existing.id)
     return existing
   }
 
-  // Create new game
+  // Create new game (don't include final_total - it's generated)
   const { data: created, error } = await supabase
     .from('games')
     .insert({
       sport_id: sportId,
       provider_game_key: providerKey,
-      ...gameData,
+      start_time_utc: gameData.start_time_utc,
+      home_team_id: gameData.home_team_id,
+      away_team_id: gameData.away_team_id,
+      home_score: gameData.home_score,
+      away_score: gameData.away_score,
+      status: gameData.status,
       last_seen_at: new Date().toISOString(),
     })
     .select('id')
@@ -248,18 +258,17 @@ Deno.serve(async (req) => {
 
             if (!homeTeam || !awayTeam) continue
 
-            // Calculate final total if game is final
+            // Check if game is final for matchup insertion
             const isFinal = game.status === 'final' && game.home_score !== null && game.away_score !== null
             const finalTotal = isFinal ? (game.home_score! + game.away_score!) : null
 
-            // Find or create game
+            // Find or create game (final_total is computed by DB, not passed here)
             const dbGame = await findOrCreateGame(supabase, sportId, game.provider_game_key, {
               start_time_utc: game.start_time_utc,
               home_team_id: homeTeam.id,
               away_team_id: awayTeam.id,
               home_score: game.home_score,
               away_score: game.away_score,
-              final_total: finalTotal,
               status: game.status,
             })
 

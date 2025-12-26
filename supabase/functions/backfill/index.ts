@@ -229,7 +229,7 @@ Deno.serve(async (req) => {
 
             if (existingGame) {
               gameId = existingGame.id
-              // Update existing game
+              // Update existing game (don't include final_total - it's a generated column)
               await supabase
                 .from('games')
                 .update({
@@ -238,13 +238,12 @@ Deno.serve(async (req) => {
                   away_team_id: awayTeamId,
                   home_score: game.home_score,
                   away_score: game.away_score,
-                  final_total: finalTotal,
                   status: 'final',
                   last_seen_at: new Date().toISOString(),
                 })
                 .eq('id', gameId)
             } else {
-              // Create new game
+              // Create new game (don't include final_total - it's a generated column)
               const { data: newGame, error: gameError } = await supabase
                 .from('games')
                 .insert({
@@ -255,7 +254,6 @@ Deno.serve(async (req) => {
                   away_team_id: awayTeamId,
                   home_score: game.home_score,
                   away_score: game.away_score,
-                  final_total: finalTotal,
                   status: 'final',
                   last_seen_at: new Date().toISOString(),
                 })
