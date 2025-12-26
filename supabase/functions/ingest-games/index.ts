@@ -372,15 +372,21 @@ Deno.serve(async (req) => {
 // ============================================================
 
 async function fetchNBAGames(apiKey: string, date: string): Promise<GameData[]> {
-  const formattedDate = date.replace(/-/g, '')
+  // SportsData.io expects date format: YYYY-MMM-DD (e.g., 2024-DEC-25)
+  const dateObj = new Date(date + 'T12:00:00Z')
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+  const formattedDate = `${dateObj.getFullYear()}-${months[dateObj.getMonth()]}-${String(dateObj.getDate()).padStart(2, '0')}`
+  
   const url = `https://api.sportsdata.io/v3/nba/scores/json/GamesByDate/${formattedDate}`
+  console.log(`[INGEST] NBA API URL: ${url}`)
   
   const response = await fetchWithRetry(url, {
     headers: { 'Ocp-Apim-Subscription-Key': apiKey }
   })
 
   if (!response.ok) {
-    console.error('NBA API error:', response.status)
+    const errorText = await response.text().catch(() => 'Unknown error')
+    console.error(`NBA API error: ${response.status} - ${errorText}`)
     return []
   }
 
@@ -400,15 +406,21 @@ async function fetchNBAGames(apiKey: string, date: string): Promise<GameData[]> 
 }
 
 async function fetchMLBGames(apiKey: string, date: string): Promise<GameData[]> {
-  const formattedDate = date.replace(/-/g, '')
+  // SportsData.io expects date format: YYYY-MMM-DD (e.g., 2024-DEC-25)
+  const dateObj = new Date(date + 'T12:00:00Z')
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+  const formattedDate = `${dateObj.getFullYear()}-${months[dateObj.getMonth()]}-${String(dateObj.getDate()).padStart(2, '0')}`
+  
   const url = `https://api.sportsdata.io/v3/mlb/scores/json/GamesByDate/${formattedDate}`
+  console.log(`[INGEST] MLB API URL: ${url}`)
   
   const response = await fetchWithRetry(url, {
     headers: { 'Ocp-Apim-Subscription-Key': apiKey }
   })
 
   if (!response.ok) {
-    console.error('MLB API error:', response.status)
+    const errorText = await response.text().catch(() => 'Unknown error')
+    console.error(`MLB API error: ${response.status} - ${errorText}`)
     return []
   }
 
@@ -473,15 +485,21 @@ async function fetchNFLGames(apiKey: string): Promise<GameData[]> {
 }
 
 async function fetchNHLGames(apiKey: string, date: string): Promise<GameData[]> {
-  const formattedDate = date.replace(/-/g, '')
+  // SportsData.io expects date format: YYYY-MMM-DD (e.g., 2024-DEC-25)
+  const dateObj = new Date(date + 'T12:00:00Z')
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+  const formattedDate = `${dateObj.getFullYear()}-${months[dateObj.getMonth()]}-${String(dateObj.getDate()).padStart(2, '0')}`
+  
   const url = `https://api.sportsdata.io/v3/nhl/scores/json/GamesByDate/${formattedDate}`
+  console.log(`[INGEST] NHL API URL: ${url}`)
   
   const response = await fetchWithRetry(url, {
     headers: { 'Ocp-Apim-Subscription-Key': apiKey }
   })
 
   if (!response.ok) {
-    console.error('NHL API error:', response.status)
+    const errorText = await response.text().catch(() => 'Unknown error')
+    console.error(`NHL API error: ${response.status} - ${errorText}`)
     return []
   }
 
