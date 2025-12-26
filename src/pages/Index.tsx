@@ -259,15 +259,15 @@ export default function Index() {
           <div className="flex flex-wrap items-center justify-center gap-6 pt-6 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-status-under" />
-              <span>Under signal (P≤20)</span>
+              <span>Take UNDER (P≥70)</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-status-edge" />
-              <span>Neutral range</span>
+              <span>No edge (P 30-70)</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-status-over" />
-              <span>Over signal (P≥80)</span>
+              <span>Take OVER (P≤30)</span>
             </div>
           </div>
         </div>

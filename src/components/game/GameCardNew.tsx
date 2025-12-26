@@ -188,6 +188,7 @@ export function GameCard({ game }: GameCardProps) {
             dkLine={game.dk_total_line}
             dkPercentile={game.dk_line_percentile}
             finalTotal={isFinal ? game.final_total : undefined}
+            showRecommendation={!isFinal && !isLive}
           />
         </div>
       )}

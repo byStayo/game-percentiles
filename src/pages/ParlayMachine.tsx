@@ -404,6 +404,12 @@ export default function ParlayMachine() {
                         <div className="text-xs text-muted-foreground mt-0.5">
                           Line: {pick.game.dk_total_line?.toFixed(1)} · n={pick.game.n_h2h}
                         </div>
+                        {/* Show P05/P95 range */}
+                        <div className="flex items-center gap-2 mt-1.5 text-xs">
+                          <span className="text-status-under font-medium">P5: {pick.game.p05?.toFixed(1)}</span>
+                          <span className="text-muted-foreground">—</span>
+                          <span className="text-status-over font-medium">P95: {pick.game.p95?.toFixed(1)}</span>
+                        </div>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <span className={cn(
