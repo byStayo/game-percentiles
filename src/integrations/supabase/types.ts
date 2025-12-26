@@ -360,6 +360,41 @@ export type Database = {
           },
         ]
       }
+      odds_event_map: {
+        Row: {
+          confidence: number
+          game_id: string
+          id: string
+          matched_at: string
+          odds_event_id: string
+          odds_sport_key: string
+        }
+        Insert: {
+          confidence?: number
+          game_id: string
+          id?: string
+          matched_at?: string
+          odds_event_id: string
+          odds_sport_key: string
+        }
+        Update: {
+          confidence?: number
+          game_id?: string
+          id?: string
+          matched_at?: string
+          odds_event_id?: string
+          odds_sport_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "odds_event_map_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: true
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       odds_snapshots: {
         Row: {
           bookmaker: string
@@ -400,28 +435,40 @@ export type Database = {
       }
       provider_mappings: {
         Row: {
+          confidence: number | null
           id: number
           last_verified_at: string | null
           league_id: string | null
+          method: string | null
           odds_api_team_name: string
+          odds_sport_key: string | null
           sport_id: string
           team_id: string
+          updated_at: string | null
         }
         Insert: {
+          confidence?: number | null
           id?: number
           last_verified_at?: string | null
           league_id?: string | null
+          method?: string | null
           odds_api_team_name: string
+          odds_sport_key?: string | null
           sport_id: string
           team_id: string
+          updated_at?: string | null
         }
         Update: {
+          confidence?: number | null
           id?: number
           last_verified_at?: string | null
           league_id?: string | null
+          method?: string | null
           odds_api_team_name?: string
+          odds_sport_key?: string | null
           sport_id?: string
           team_id?: string
+          updated_at?: string | null
         }
         Relationships: [
           {

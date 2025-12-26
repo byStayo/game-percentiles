@@ -3,19 +3,16 @@ import { format, formatDistanceToNow } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, XCircle, Clock, RefreshCw, AlertTriangle, Play } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Zap } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
 import { useJobStatus, useRecentJobs } from "@/hooks/useJobStatus";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { JobRun, SportId } from "@/types";
+import type { JobRun } from "@/types";
 
 const ET_TIMEZONE = 'America/New_York';
 
-// Get today's date in ET timezone as YYYY-MM-DD
 function getTodayET(): string {
   const now = new Date();
   const etDate = toZonedTime(now, ET_TIMEZONE);
@@ -27,9 +24,8 @@ const jobLabels: Record<string, { name: string; description: string }> = {
   ingest: { name: "Daily Ingest", description: "Today's games sync" },
   compute: { name: "Compute", description: "Percentile calculations" },
   odds_refresh: { name: "Odds Refresh", description: "DraftKings lines sync" },
+  participants_mapping: { name: "Auto Mapping", description: "Team name matching" },
 };
-
-const sports: SportId[] = ['nfl', 'nba', 'mlb', 'nhl', 'soccer'];
 
 function JobStatusCard({ jobName, job }: { jobName: string; job: JobRun | null }) {
   const label = jobLabels[jobName] || { name: jobName, description: "" };
@@ -85,76 +81,88 @@ function JobStatusCard({ jobName, job }: { jobName: string; job: JobRun | null }
   );
 }
 
-function TriggerJobButton({ jobName, sportId }: { jobName: string; sportId?: SportId }) {
-  const triggerJob = async () => {
-    try {
-      const functionName = jobName === 'ingest' ? 'ingest-games' :
-                          jobName === 'compute' ? 'compute-percentiles' :
-                          jobName === 'odds_refresh' ? 'refresh-odds' :
-                          jobName;
-
-      const body: Record<string, unknown> = {};
-      if (sportId) body.sport_id = sportId;
-      // Use ET timezone for date
-      if (jobName !== 'backfill') body.date = getTodayET();
-
-      const { error } = await supabase.functions.invoke(functionName, { body });
-
-      if (error) throw error;
-      toast.success(`${jobLabels[jobName]?.name || jobName} job triggered`);
-    } catch (error) {
-      toast.error(`Failed to trigger job: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
-
-  return (
-    <Button size="sm" variant="outline" onClick={triggerJob} className="gap-1">
-      <Play className="h-3 w-3" />
-      Run {sportId?.toUpperCase() || ''}
-    </Button>
-  );
-}
-
 export default function Status() {
   const { data: jobStatus, isLoading: statusLoading } = useJobStatus();
   const { data: recentJobs, isLoading: jobsLoading } = useRecentJobs();
 
-  // Get mapping stats
+  // Get mapping coverage stats
   const { data: mappingStats } = useQuery({
-    queryKey: ['mapping-stats'],
+    queryKey: ['mapping-coverage'],
     queryFn: async () => {
       const { data: teams } = await supabase.from('teams').select('id, sport_id');
-      const { data: mappings } = await supabase.from('provider_mappings').select('team_id, sport_id');
+      const { data: mappings } = await supabase.from('provider_mappings').select('team_id, sport_id, confidence, method');
 
       const mappedTeamIds = new Set((mappings || []).map(m => m.team_id));
-      const unmappedBySport: Record<string, number> = {};
-
+      const totalTeams = teams?.length || 0;
+      const mappedTeams = mappings?.length || 0;
+      
+      // Coverage by sport
+      const bySport: Record<string, { total: number; mapped: number }> = {};
+      
       (teams || []).forEach(team => {
-        if (!mappedTeamIds.has(team.id)) {
-          unmappedBySport[team.sport_id] = (unmappedBySport[team.sport_id] || 0) + 1;
+        if (!bySport[team.sport_id]) {
+          bySport[team.sport_id] = { total: 0, mapped: 0 };
+        }
+        bySport[team.sport_id].total++;
+        if (mappedTeamIds.has(team.id)) {
+          bySport[team.sport_id].mapped++;
         }
       });
 
+      // Method distribution
+      const methodCounts: Record<string, number> = {};
+      (mappings || []).forEach(m => {
+        const method = (m as any).method || 'manual';
+        methodCounts[method] = (methodCounts[method] || 0) + 1;
+      });
+
+      // Average confidence
+      const confidenceSum = (mappings || []).reduce((sum, m) => sum + ((m as any).confidence || 1), 0);
+      const avgConfidence = mappedTeams > 0 ? confidenceSum / mappedTeams : 0;
+
       return {
-        totalTeams: teams?.length || 0,
-        mappedTeams: mappings?.length || 0,
-        unmappedBySport,
+        totalTeams,
+        mappedTeams,
+        coverage: totalTeams > 0 ? (mappedTeams / totalTeams) * 100 : 0,
+        bySport,
+        methodCounts,
+        avgConfidence,
       };
     },
   });
 
-  // Get unmatched odds events (games without DK line) - use ET timezone
-  const { data: unmatchedCount } = useQuery({
-    queryKey: ['unmatched-odds'],
+  // Get today's odds stats
+  const { data: oddsStats } = useQuery({
+    queryKey: ['odds-stats'],
     queryFn: async () => {
       const today = getTodayET();
-      const { data } = await supabase
+      
+      const { data: edges } = await supabase
         .from('daily_edges')
-        .select('id')
-        .eq('date_local', today)
-        .eq('dk_offered', false);
+        .select('dk_offered')
+        .eq('date_local', today);
 
-      return data?.length || 0;
+      const total = edges?.length || 0;
+      const withOdds = edges?.filter(e => e.dk_offered).length || 0;
+
+      // Get recent unmatched reasons from job runs
+      const { data: recentOddsJob } = await supabase
+        .from('job_runs')
+        .select('details')
+        .eq('job_name', 'odds_refresh')
+        .eq('status', 'success')
+        .order('finished_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const unmatchedReasons = (recentOddsJob?.details as any)?.unmatched_reasons || [];
+
+      return {
+        total,
+        withOdds,
+        coverage: total > 0 ? (withOdds / total) * 100 : 0,
+        unmatchedReasons,
+      };
     },
   });
 
@@ -162,7 +170,7 @@ export default function Status() {
     <>
       <Helmet>
         <title>System Status | Percentile Totals</title>
-        <meta name="description" content="View data pipeline status and job history for Percentile Totals system." />
+        <meta name="description" content="View data pipeline status and automatic mapping health." />
       </Helmet>
 
       <Layout>
@@ -170,94 +178,134 @@ export default function Status() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">System Status</h1>
             <p className="text-muted-foreground mt-1">
-              Data pipeline health and job history
+              Data pipeline health and automatic mapping coverage
             </p>
           </div>
 
-          {/* Quick actions */}
+          {/* Mapping Coverage */}
           <div className="bg-card rounded-xl border border-border p-5 shadow-card">
-            <h2 className="text-lg font-semibold mb-4">Trigger Jobs</h2>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Backfill historical data:</p>
-                <div className="flex flex-wrap gap-2">
-                  {sports.map(sport => (
-                    <TriggerJobButton key={sport} jobName="backfill" sportId={sport} />
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Ingest today's games:</p>
-                <div className="flex flex-wrap gap-2">
-                  {sports.map(sport => (
-                    <TriggerJobButton key={sport} jobName="ingest" sportId={sport} />
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Refresh odds:</p>
-                <div className="flex flex-wrap gap-2">
-                  {sports.map(sport => (
-                    <TriggerJobButton key={sport} jobName="odds_refresh" sportId={sport} />
-                  ))}
-                </div>
-              </div>
+            <div className="flex items-center gap-2 mb-4">
+              <Zap className="h-5 w-5 text-status-live" />
+              <h2 className="text-lg font-semibold">Automatic Mapping Coverage</h2>
             </div>
-          </div>
-
-          {/* Mapping health */}
-          {mappingStats && (
-            <div className="bg-card rounded-xl border border-border p-5 shadow-card">
-              <div className="flex items-center gap-2 mb-4">
-                <AlertTriangle className="h-5 w-5 text-muted-foreground" />
-                <h2 className="text-lg font-semibold">Mapping Health</h2>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <p className="text-2xl font-bold">{mappingStats.totalTeams}</p>
-                  <p className="text-xs text-muted-foreground">Total Teams</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-status-live">{mappingStats.mappedTeams}</p>
-                  <p className="text-xs text-muted-foreground">Mapped</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-percentile-mid">
-                    {mappingStats.totalTeams - mappingStats.mappedTeams}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Unmapped</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-muted-foreground">{unmatchedCount || 0}</p>
-                  <p className="text-xs text-muted-foreground">Missing Odds Today</p>
-                </div>
-              </div>
-              {Object.keys(mappingStats.unmappedBySport).length > 0 && (
-                <div className="mt-4 pt-4 border-t border-border">
-                  <p className="text-sm text-muted-foreground mb-2">Unmapped by sport:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(mappingStats.unmappedBySport).map(([sport, count]) => (
-                      <Badge key={sport} variant="outline" className="bg-percentile-mid/10 text-percentile-mid border-percentile-mid/30">
-                        {sport.toUpperCase()}: {count}
-                      </Badge>
-                    ))}
+            
+            {mappingStats ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-2xl font-bold">{mappingStats.coverage.toFixed(1)}%</p>
+                    <p className="text-xs text-muted-foreground">Overall Coverage</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-status-live">{mappingStats.mappedTeams}</p>
+                    <p className="text-xs text-muted-foreground">Teams Mapped</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{mappingStats.totalTeams}</p>
+                    <p className="text-xs text-muted-foreground">Total Teams</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{(mappingStats.avgConfidence * 100).toFixed(0)}%</p>
+                    <p className="text-xs text-muted-foreground">Avg Confidence</p>
                   </div>
                 </div>
-              )}
+
+                {/* Coverage by sport */}
+                <div className="pt-4 border-t border-border">
+                  <p className="text-sm text-muted-foreground mb-2">Coverage by sport:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(mappingStats.bySport).map(([sport, stats]) => {
+                      const pct = stats.total > 0 ? (stats.mapped / stats.total) * 100 : 0;
+                      return (
+                        <Badge 
+                          key={sport} 
+                          variant="outline" 
+                          className={cn(
+                            pct >= 90 && "bg-status-live/10 text-status-live border-status-live/30",
+                            pct >= 70 && pct < 90 && "bg-percentile-mid/10 text-percentile-mid border-percentile-mid/30",
+                            pct < 70 && "bg-destructive/10 text-destructive border-destructive/30"
+                          )}
+                        >
+                          {sport.toUpperCase()}: {pct.toFixed(0)}%
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Method distribution */}
+                {Object.keys(mappingStats.methodCounts).length > 0 && (
+                  <div className="pt-4 border-t border-border">
+                    <p className="text-sm text-muted-foreground mb-2">Mapping methods:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(mappingStats.methodCounts).map(([method, count]) => (
+                        <Badge key={method} variant="secondary">
+                          {method}: {count}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Skeleton className="h-32" />
+            )}
+          </div>
+
+          {/* Today's Odds Coverage */}
+          <div className="bg-card rounded-xl border border-border p-5 shadow-card">
+            <div className="flex items-center gap-2 mb-4">
+              <BarChart3 className="h-5 w-5 text-muted-foreground" />
+              <h2 className="text-lg font-semibold">Today's Odds Coverage</h2>
             </div>
-          )}
+            
+            {oddsStats ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-2xl font-bold">{oddsStats.coverage.toFixed(0)}%</p>
+                    <p className="text-xs text-muted-foreground">Games with DK Lines</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-status-live">{oddsStats.withOdds}</p>
+                    <p className="text-xs text-muted-foreground">Matched</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-muted-foreground">{oddsStats.total - oddsStats.withOdds}</p>
+                    <p className="text-xs text-muted-foreground">Unmatched</p>
+                  </div>
+                </div>
+
+                {/* Unmatched reasons */}
+                {oddsStats.unmatchedReasons.length > 0 && (
+                  <div className="pt-4 border-t border-border">
+                    <p className="text-sm text-muted-foreground mb-2">Recent unmatched events:</p>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {oddsStats.unmatchedReasons.slice(0, 5).map((reason: string, i: number) => (
+                        <p key={i} className="text-xs text-muted-foreground font-mono">
+                          {reason}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Skeleton className="h-24" />
+            )}
+          </div>
 
           {/* Job status cards */}
           <div>
             <h2 className="text-lg font-semibold mb-4">Pipeline Status</h2>
             {statusLoading ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                {[...Array(4)].map((_, i) => (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {[...Array(5)].map((_, i) => (
                   <Skeleton key={i} className="h-32" />
                 ))}
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {Object.keys(jobLabels).map((jobName) => (
                   <JobStatusCard
                     key={jobName}
@@ -323,7 +371,7 @@ export default function Status() {
               <div className="text-center py-12 bg-card rounded-xl border border-border">
                 <p className="text-muted-foreground">No job runs yet</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Use the buttons above to trigger jobs manually
+                  Jobs are triggered automatically on schedule
                 </p>
               </div>
             )}
