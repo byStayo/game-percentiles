@@ -487,7 +487,8 @@ async function fetchNBASeasonGames(apiKey: string, year: number): Promise<GameDa
   
   return data.map((game: any) => ({
     provider_game_key: String(game.GameID),
-    start_time_utc: game.DateTime || game.Day,
+    // Use DateTimeUTC which is explicitly UTC, fallback to DateTime if not available
+    start_time_utc: game.DateTimeUTC || game.DateTime || game.Day,
     home_team_key: game.HomeTeamID ? String(game.HomeTeamID) : game.HomeTeam,
     away_team_key: game.AwayTeamID ? String(game.AwayTeamID) : game.AwayTeam,
     home_team_name: game.HomeTeam,
@@ -514,7 +515,8 @@ async function fetchMLBSeasonGames(apiKey: string, year: number): Promise<GameDa
   
   return data.map((game: any) => ({
     provider_game_key: String(game.GameID),
-    start_time_utc: game.DateTime || game.Day,
+    // Use DateTimeUTC which is explicitly UTC, fallback to DateTime if not available
+    start_time_utc: game.DateTimeUTC || game.DateTime || game.Day,
     home_team_key: game.HomeTeamID ? String(game.HomeTeamID) : game.HomeTeam,
     away_team_key: game.AwayTeamID ? String(game.AwayTeamID) : game.AwayTeam,
     home_team_name: game.HomeTeam,
@@ -544,7 +546,8 @@ async function fetchNFLSeasonGames(apiKey: string, year: number): Promise<GameDa
       
       const games = data.map((game: any) => ({
         provider_game_key: String(game.GameKey || game.ScoreID),
-        start_time_utc: game.DateTime || game.Date,
+        // Use DateTimeUTC which is explicitly UTC, fallback to DateTime if not available
+        start_time_utc: game.DateTimeUTC || game.DateTime || game.Date,
         home_team_key: game.HomeTeamID ? String(game.HomeTeamID) : game.HomeTeam,
         away_team_key: game.AwayTeamID ? String(game.AwayTeamID) : game.AwayTeam,
         home_team_name: game.HomeTeam,
@@ -579,7 +582,8 @@ async function fetchNHLSeasonGames(apiKey: string, year: number): Promise<GameDa
   
   return data.map((game: any) => ({
     provider_game_key: String(game.GameID),
-    start_time_utc: game.DateTime || game.Day,
+    // Use DateTimeUTC which is explicitly UTC, fallback to DateTime if not available
+    start_time_utc: game.DateTimeUTC || game.DateTime || game.Day,
     home_team_key: game.HomeTeamID ? String(game.HomeTeamID) : game.HomeTeam,
     away_team_key: game.AwayTeamID ? String(game.AwayTeamID) : game.AwayTeam,
     home_team_name: game.HomeTeam,
