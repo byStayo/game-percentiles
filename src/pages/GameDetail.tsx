@@ -16,7 +16,6 @@ const sportColors: Record<SportId, string> = {
   nba: "bg-sport-nba",
   mlb: "bg-sport-mlb",
   nhl: "bg-sport-nhl",
-  soccer: "bg-sport-soccer",
 };
 
 function GameDetailSkeleton() {

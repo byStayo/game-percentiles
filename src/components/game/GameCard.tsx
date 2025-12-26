@@ -17,7 +17,6 @@ const sportAccents: Record<SportId, string> = {
   nba: "border-l-sport-nba",
   mlb: "border-l-sport-mlb",
   nhl: "border-l-sport-nhl",
-  soccer: "border-l-sport-soccer",
 };
 
 export function GameCard({ edge, game, homeTeam, awayTeam }: GameCardProps) {

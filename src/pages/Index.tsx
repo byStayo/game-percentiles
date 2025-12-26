@@ -27,7 +27,6 @@ const sports = [
   { id: 'nba' as SportId, display_name: 'NBA' },
   { id: 'mlb' as SportId, display_name: 'MLB' },
   { id: 'nhl' as SportId, display_name: 'NHL' },
-  { id: 'soccer' as SportId, display_name: 'Soccer' },
 ];
 
 export default function Index() {
@@ -47,7 +46,7 @@ export default function Index() {
     <>
       <Helmet>
         <title>Percentile Totals | H2H Historical Analysis</title>
-        <meta name="description" content="Analyze head-to-head historical totals distribution for NFL, NBA, MLB, NHL, and Soccer games. View P05/P95 percentile bounds and DraftKings line analysis." />
+        <meta name="description" content="Analyze head-to-head historical totals distribution for NFL, NBA, MLB, and NHL games. View P05/P95 percentile bounds and DraftKings line analysis." />
       </Helmet>
 
       <Layout>

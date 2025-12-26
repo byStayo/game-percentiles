@@ -15,7 +15,6 @@ const sportAccents: Record<SportId, string> = {
   nba: "hover:border-l-sport-nba",
   mlb: "hover:border-l-sport-mlb",
   nhl: "hover:border-l-sport-nhl",
-  soccer: "hover:border-l-sport-soccer",
 };
 
 export function GameCard({ game }: GameCardProps) {
