@@ -20,7 +20,6 @@ async function fetchWithRetry(
     try {
       const response = await fetch(url, options)
       
-      // Retry on 429 or 5xx
       if (response.status === 429 || response.status >= 500) {
         const delay = baseDelay * Math.pow(2, attempt)
         console.log(`Retry ${attempt + 1}/${maxRetries} after ${delay}ms (status: ${response.status})`)
@@ -62,6 +61,69 @@ const SEASON_CONFIG: Record<string, { seasons: number; yearsBack: number }> = {
   nhl: { seasons: 10, yearsBack: 10 },
 }
 
+// Team cache to avoid duplicate lookups
+const teamCache = new Map<string, string>()
+
+// Find or create team helper
+async function findOrCreateTeam(
+  supabase: any,
+  sportId: string,
+  providerKey: string,
+  name: string,
+  city?: string
+): Promise<string | null> {
+  const cacheKey = `${sportId}:${providerKey}`
+  if (teamCache.has(cacheKey)) {
+    return teamCache.get(cacheKey)!
+  }
+
+  // First try to find existing team
+  const { data: existing } = await supabase
+    .from('teams')
+    .select('id')
+    .eq('sport_id', sportId)
+    .eq('provider_team_key', providerKey)
+    .is('league_id', null)
+    .maybeSingle()
+
+  if (existing) {
+    teamCache.set(cacheKey, existing.id)
+    return existing.id
+  }
+
+  // Create new team
+  const { data: created, error } = await supabase
+    .from('teams')
+    .insert({
+      sport_id: sportId,
+      provider_team_key: providerKey,
+      name: name,
+      city: city || null,
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    console.error('Team insert error:', error.message)
+    // Try to find again in case of race condition
+    const { data: retry } = await supabase
+      .from('teams')
+      .select('id')
+      .eq('sport_id', sportId)
+      .eq('provider_team_key', providerKey)
+      .is('league_id', null)
+      .maybeSingle()
+    if (retry) {
+      teamCache.set(cacheKey, retry.id)
+      return retry.id
+    }
+    return null
+  }
+
+  teamCache.set(cacheKey, created.id)
+  return created.id
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -95,6 +157,9 @@ Deno.serve(async (req) => {
     const numSeasons = seasons_override || config.seasons
 
     console.log(`[BACKFILL] Starting ${sport_id}, ${numSeasons} seasons`)
+
+    // Clear team cache
+    teamCache.clear()
 
     // Create job run
     const { data: jobRun } = await supabase
@@ -138,72 +203,99 @@ Deno.serve(async (req) => {
           }
 
           try {
-            // Upsert home team with city
-            const { data: homeTeam } = await supabase
-              .from('teams')
-              .upsert({
-                sport_id,
-                provider_team_key: game.home_team_key,
-                name: game.home_team_name,
-                city: game.home_team_city || null,
-              }, { onConflict: 'sport_id,league_id,provider_team_key' })
-              .select()
-              .single()
+            // Find or create teams
+            const homeTeamId = await findOrCreateTeam(
+              supabase, sport_id, game.home_team_key, game.home_team_name, game.home_team_city
+            )
+            const awayTeamId = await findOrCreateTeam(
+              supabase, sport_id, game.away_team_key, game.away_team_name, game.away_team_city
+            )
 
-            // Upsert away team with city
-            const { data: awayTeam } = await supabase
-              .from('teams')
-              .upsert({
-                sport_id,
-                provider_team_key: game.away_team_key,
-                name: game.away_team_name,
-                city: game.away_team_city || null,
-              }, { onConflict: 'sport_id,league_id,provider_team_key' })
-              .select()
-              .single()
-
-            if (!homeTeam || !awayTeam) continue
+            if (!homeTeamId || !awayTeamId) continue
 
             // Calculate final total
             const finalTotal = (game.home_score || 0) + (game.away_score || 0)
 
-            // Upsert game
-            const { data: dbGame, error: gameError } = await supabase
+            // Check if game already exists
+            const { data: existingGame } = await supabase
               .from('games')
-              .upsert({
-                sport_id,
-                provider_game_key: game.provider_game_key,
-                start_time_utc: game.start_time_utc,
-                home_team_id: homeTeam.id,
-                away_team_id: awayTeam.id,
-                home_score: game.home_score,
-                away_score: game.away_score,
-                final_total: finalTotal,
-                status: 'final',
-                last_seen_at: new Date().toISOString(),
-              }, { onConflict: 'sport_id,league_id,provider_game_key' })
-              .select()
-              .single()
+              .select('id')
+              .eq('sport_id', sport_id)
+              .eq('provider_game_key', game.provider_game_key)
+              .is('league_id', null)
+              .maybeSingle()
 
-            if (gameError || !dbGame) continue
+            let gameId: string
+
+            if (existingGame) {
+              gameId = existingGame.id
+              // Update existing game
+              await supabase
+                .from('games')
+                .update({
+                  start_time_utc: game.start_time_utc,
+                  home_team_id: homeTeamId,
+                  away_team_id: awayTeamId,
+                  home_score: game.home_score,
+                  away_score: game.away_score,
+                  final_total: finalTotal,
+                  status: 'final',
+                  last_seen_at: new Date().toISOString(),
+                })
+                .eq('id', gameId)
+            } else {
+              // Create new game
+              const { data: newGame, error: gameError } = await supabase
+                .from('games')
+                .insert({
+                  sport_id,
+                  provider_game_key: game.provider_game_key,
+                  start_time_utc: game.start_time_utc,
+                  home_team_id: homeTeamId,
+                  away_team_id: awayTeamId,
+                  home_score: game.home_score,
+                  away_score: game.away_score,
+                  final_total: finalTotal,
+                  status: 'final',
+                  last_seen_at: new Date().toISOString(),
+                })
+                .select('id')
+                .single()
+
+              if (gameError || !newGame) continue
+              gameId = newGame.id
+            }
 
             counters.upserted++
 
             // Insert matchup game with canonical team ordering
-            const [teamLowId, teamHighId] = [homeTeam.id, awayTeam.id].sort()
+            const [teamLowId, teamHighId] = [homeTeamId, awayTeamId].sort()
 
-            await supabase
+            // Check if matchup game already exists
+            const { data: existingMg } = await supabase
               .from('matchup_games')
-              .upsert({
-                sport_id,
-                team_low_id: teamLowId,
-                team_high_id: teamHighId,
-                game_id: dbGame.id,
-                played_at_utc: game.start_time_utc,
-                total: finalTotal,
-              }, { onConflict: 'sport_id,league_id,team_low_id,team_high_id,game_id' })
+              .select('id')
+              .eq('sport_id', sport_id)
+              .eq('team_low_id', teamLowId)
+              .eq('team_high_id', teamHighId)
+              .eq('game_id', gameId)
+              .is('league_id', null)
+              .maybeSingle()
 
-            counters.matchups++
+            if (!existingMg) {
+              await supabase
+                .from('matchup_games')
+                .insert({
+                  sport_id,
+                  team_low_id: teamLowId,
+                  team_high_id: teamHighId,
+                  game_id: gameId,
+                  played_at_utc: game.start_time_utc,
+                  total: finalTotal,
+                })
+
+              counters.matchups++
+            }
           } catch (gameErr) {
             counters.errors++
           }
@@ -225,7 +317,7 @@ Deno.serve(async (req) => {
       .eq('sport_id', sport_id)
     
     const uniqueMatchups = new Set<string>()
-    matchups?.forEach(m => {
+    matchups?.forEach((m: any) => {
       uniqueMatchups.add(`${m.sport_id}|${m.team_low_id}|${m.team_high_id}`)
     })
 
@@ -238,9 +330,10 @@ Deno.serve(async (req) => {
         .eq('sport_id', sportId)
         .eq('team_low_id', teamLowId)
         .eq('team_high_id', teamHighId)
+        .is('league_id', null)
 
       if (matchupGames && matchupGames.length > 0) {
-        const totals = matchupGames.map(mg => Number(mg.total)).sort((a, b) => a - b)
+        const totals = matchupGames.map((mg: any) => Number(mg.total)).sort((a: number, b: number) => a - b)
         const n = totals.length
 
         // Nearest-rank quantiles
@@ -248,20 +341,41 @@ Deno.serve(async (req) => {
         const p95Index = Math.max(1, Math.ceil(0.95 * n)) - 1
         const medianIndex = Math.floor(n / 2)
 
-        await supabase
+        // Check if matchup stats exists
+        const { data: existingStats } = await supabase
           .from('matchup_stats')
-          .upsert({
-            sport_id: sportId,
-            team_low_id: teamLowId,
-            team_high_id: teamHighId,
-            n_games: n,
-            p05: totals[p05Index],
-            p95: totals[p95Index],
-            median: n % 2 === 0 ? (totals[medianIndex - 1] + totals[medianIndex]) / 2 : totals[medianIndex],
-            min_total: totals[0],
-            max_total: totals[n - 1],
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'sport_id,league_id,team_low_id,team_high_id' })
+          .select('id')
+          .eq('sport_id', sportId)
+          .eq('team_low_id', teamLowId)
+          .eq('team_high_id', teamHighId)
+          .is('league_id', null)
+          .maybeSingle()
+
+        const statsData = {
+          n_games: n,
+          p05: totals[p05Index],
+          p95: totals[p95Index],
+          median: n % 2 === 0 ? (totals[medianIndex - 1] + totals[medianIndex]) / 2 : totals[medianIndex],
+          min_total: totals[0],
+          max_total: totals[n - 1],
+          updated_at: new Date().toISOString(),
+        }
+
+        if (existingStats) {
+          await supabase
+            .from('matchup_stats')
+            .update(statsData)
+            .eq('id', existingStats.id)
+        } else {
+          await supabase
+            .from('matchup_stats')
+            .insert({
+              sport_id: sportId,
+              team_low_id: teamLowId,
+              team_high_id: teamHighId,
+              ...statsData,
+            })
+        }
       }
     }
 
@@ -271,7 +385,7 @@ Deno.serve(async (req) => {
         .from('job_runs')
         .update({
           finished_at: new Date().toISOString(),
-          status: counters.errors > 0 ? 'success' : 'success',
+          status: 'success',
           details: { 
             sport_id, 
             seasons: numSeasons, 
