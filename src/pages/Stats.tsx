@@ -1,19 +1,16 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, subDays, eachDayOfInterval, startOfDay, parseISO } from "date-fns";
+import { format, subDays, eachDayOfInterval, startOfWeek, endOfWeek, getDay, startOfMonth, endOfMonth, eachWeekOfInterval, addDays } from "date-fns";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Target, BarChart3, Calendar, Filter, LineChart, DollarSign, Wallet } from "lucide-react";
+import { TrendingUp, TrendingDown, Target, BarChart3, Calendar, Filter, LineChart, DollarSign, Wallet, Grid3X3, Layers } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, ComposedChart } from "recharts";
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SportId } from "@/types";
-
-// Betting constants
-const BET_AMOUNT = 100; // $100 per bet
-const JUICE = -110; // Standard -110 odds
-const WIN_PROFIT = BET_AMOUNT * (100 / 110); // ~$90.91 profit on a win
 
 interface CompletedGame {
   game_id: string;
@@ -69,9 +66,31 @@ const confidenceBuckets = [
   { label: 'n = 1', min: 1, max: 1 },
 ];
 
+// Generate parlay combinations
+function generateParlays(games: Array<{ result: PredictionResult }>, size: number): Array<Array<number>> {
+  const indices = games.map((_, i) => i);
+  const result: Array<Array<number>> = [];
+  
+  function combine(start: number, combo: number[]) {
+    if (combo.length === size) {
+      result.push([...combo]);
+      return;
+    }
+    for (let i = start; i < indices.length; i++) {
+      combo.push(indices[i]);
+      combine(i + 1, combo);
+      combo.pop();
+    }
+  }
+  
+  combine(0, []);
+  return result;
+}
+
 export default function Stats() {
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
   const [sportFilter, setSportFilter] = useState<SportId | 'all'>('all');
+  const [betAmount, setBetAmount] = useState(100);
 
   const { data: games, isLoading } = useQuery({
     queryKey: ['stats-games', dateRange],
@@ -120,6 +139,9 @@ export default function Stats() {
 
   const stats = useMemo(() => {
     if (!games) return null;
+
+    // Calculate win profit based on current bet amount at -110 odds
+    const winProfit = betAmount * (100 / 110);
 
     const filteredGames = sportFilter === 'all' 
       ? games 
@@ -183,8 +205,8 @@ export default function Stats() {
       const dayMisses = dayGames.length - dayHits;
       const dayTotal = dayGames.length;
       
-      // ROI calculation: wins get +90.91, losses get -100
-      const dayProfit = (dayHits * WIN_PROFIT) - (dayMisses * BET_AMOUNT);
+      // ROI calculation based on bet amount
+      const dayProfit = (dayHits * winProfit) - (dayMisses * betAmount);
       
       return {
         date: dateStr,
@@ -209,14 +231,60 @@ export default function Stats() {
         ...d,
         cumulativeRate: cumulativeTotal > 0 ? (cumulativeHits / cumulativeTotal) * 100 : null,
         cumulativeProfit: cumulativeProfit,
-        cumulativeWagered: cumulativeTotal * BET_AMOUNT,
+        cumulativeWagered: cumulativeTotal * betAmount,
       };
     });
 
     // ROI calculations
-    const totalWagered = edgeGames.length * BET_AMOUNT;
-    const totalProfit = (hits.length * WIN_PROFIT) - (misses.length * BET_AMOUNT);
+    const totalWagered = edgeGames.length * betAmount;
+    const totalProfit = (hits.length * winProfit) - (misses.length * betAmount);
     const roi = totalWagered > 0 ? (totalProfit / totalWagered) * 100 : 0;
+
+    // Calendar heatmap data
+    const calendarData = dateInterval.map(date => {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const dayGames = edgeGames.filter(g => g.date_local === dateStr);
+      const dayHits = dayGames.filter(g => g.result.type === 'hit').length;
+      const dayTotal = dayGames.length;
+      return {
+        date: dateStr,
+        dayOfWeek: getDay(date),
+        hits: dayHits,
+        total: dayTotal,
+        hitRate: dayTotal > 0 ? (dayHits / dayTotal) * 100 : null,
+      };
+    });
+
+    // Parlay backtesting - group edge games by date
+    const gamesByDate: Record<string, typeof edgeGames> = {};
+    edgeGames.forEach(g => {
+      if (!gamesByDate[g.date_local]) gamesByDate[g.date_local] = [];
+      gamesByDate[g.date_local].push(g);
+    });
+
+    // Calculate parlay performance for different sizes
+    const parlayStats = [2, 3, 4, 5].map(size => {
+      let totalParlays = 0;
+      let hitParlays = 0;
+
+      Object.values(gamesByDate).forEach(dayGames => {
+        if (dayGames.length >= size) {
+          const combos = generateParlays(dayGames, size);
+          combos.forEach(combo => {
+            totalParlays++;
+            const allHit = combo.every(idx => dayGames[idx].result.type === 'hit');
+            if (allHit) hitParlays++;
+          });
+        }
+      });
+
+      return {
+        size,
+        total: totalParlays,
+        hits: hitParlays,
+        hitRate: totalParlays > 0 ? (hitParlays / totalParlays) * 100 : 0,
+      };
+    }).filter(p => p.total > 0);
 
     return {
       totalGames: filteredGames.length,
@@ -236,8 +304,10 @@ export default function Stats() {
       totalWagered,
       totalProfit,
       roi,
+      calendarData,
+      parlayStats,
     };
-  }, [games, sportFilter, dateRange]);
+  }, [games, sportFilter, dateRange, betAmount]);
 
   return (
     <Layout>
@@ -299,6 +369,23 @@ export default function Stats() {
                 {sport}
               </button>
             ))}
+          </div>
+
+          {/* Bet Amount Input */}
+          <div className="flex items-center gap-2 bg-card rounded-xl p-1.5 border border-border/60">
+            <DollarSign className="h-4 w-4 text-muted-foreground ml-2" />
+            <Input
+              type="number"
+              min={1}
+              max={10000}
+              value={betAmount}
+              onChange={(e) => {
+                const val = Math.min(10000, Math.max(1, parseInt(e.target.value) || 100));
+                setBetAmount(val);
+              }}
+              className="w-20 h-8 text-sm text-center border-0 bg-transparent focus-visible:ring-0"
+            />
+            <span className="text-sm text-muted-foreground pr-2">per bet</span>
           </div>
         </div>
 
@@ -378,7 +465,7 @@ export default function Stats() {
                     ${stats.totalWagered.toLocaleString()}
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    ${BET_AMOUNT} × {stats.edgeGames} bets
+                    ${betAmount} × {stats.edgeGames} bets
                   </p>
                 </CardContent>
               </Card>
@@ -515,7 +602,7 @@ export default function Stats() {
                         "w-3 h-3 rounded-full",
                         stats.totalProfit >= 0 ? "bg-status-under" : "bg-status-over"
                       )} />
-                      <span className="text-muted-foreground">Cumulative P/L (${BET_AMOUNT}/bet @ -110)</span>
+                      <span className="text-muted-foreground">Cumulative P/L (${betAmount}/bet @ -110)</span>
                     </div>
                   </div>
                 </CardContent>
@@ -682,6 +769,146 @@ export default function Stats() {
                           <span className="text-xs text-muted-foreground ml-1">
                             ({bucket.hits}/{bucket.edgeGames})
                           </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Calendar Heatmap */}
+            {stats.calendarData.length > 0 && (
+              <Card className="bg-card border-border/60 shadow-card mb-10">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Grid3X3 className="h-5 w-5" />
+                    Daily Performance Heatmap
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-start gap-2">
+                    <div className="flex flex-col gap-1 text-xs text-muted-foreground pt-6">
+                      <span className="h-5 flex items-center">Sun</span>
+                      <span className="h-5 flex items-center">Mon</span>
+                      <span className="h-5 flex items-center">Tue</span>
+                      <span className="h-5 flex items-center">Wed</span>
+                      <span className="h-5 flex items-center">Thu</span>
+                      <span className="h-5 flex items-center">Fri</span>
+                      <span className="h-5 flex items-center">Sat</span>
+                    </div>
+                    <div className="flex-1 overflow-x-auto">
+                      <div className="flex gap-1">
+                        {(() => {
+                          // Group by week
+                          const weeks: Array<typeof stats.calendarData> = [];
+                          let currentWeek: typeof stats.calendarData = [];
+                          
+                          stats.calendarData.forEach((day, i) => {
+                            if (i > 0 && day.dayOfWeek === 0) {
+                              weeks.push(currentWeek);
+                              currentWeek = [];
+                            }
+                            currentWeek.push(day);
+                          });
+                          if (currentWeek.length > 0) weeks.push(currentWeek);
+                          
+                          return weeks.map((week, weekIdx) => (
+                            <div key={weekIdx} className="flex flex-col gap-1">
+                              {weekIdx === 0 && (
+                                <div className="text-xs text-muted-foreground h-5 flex items-center justify-center">
+                                  {format(new Date(week[0]?.date || new Date()), 'MMM')}
+                                </div>
+                              )}
+                              {weekIdx > 0 && week[0]?.date && new Date(week[0].date).getDate() <= 7 && (
+                                <div className="text-xs text-muted-foreground h-5 flex items-center justify-center">
+                                  {format(new Date(week[0].date), 'MMM')}
+                                </div>
+                              )}
+                              {weekIdx > 0 && !(week[0]?.date && new Date(week[0].date).getDate() <= 7) && (
+                                <div className="h-5" />
+                              )}
+                              {Array.from({ length: 7 }).map((_, dayIdx) => {
+                                const dayData = week.find(d => d.dayOfWeek === dayIdx);
+                                if (!dayData) {
+                                  return <div key={dayIdx} className="w-5 h-5" />;
+                                }
+                                return (
+                                  <TooltipProvider key={dayIdx}>
+                                    <UITooltip>
+                                      <TooltipTrigger asChild>
+                                        <div
+                                          className={cn(
+                                            "w-5 h-5 rounded-sm cursor-default transition-all",
+                                            dayData.total === 0 ? "bg-secondary" :
+                                            dayData.hitRate === null ? "bg-secondary" :
+                                            dayData.hitRate >= 75 ? "bg-status-under" :
+                                            dayData.hitRate >= 50 ? "bg-status-under/60" :
+                                            dayData.hitRate >= 25 ? "bg-status-over/60" :
+                                            "bg-status-over"
+                                          )}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <div className="text-xs">
+                                          <div className="font-semibold">{format(new Date(dayData.date), 'MMM d, yyyy')}</div>
+                                          {dayData.total > 0 ? (
+                                            <div>{dayData.hits}/{dayData.total} hits ({dayData.hitRate?.toFixed(0)}%)</div>
+                                          ) : (
+                                            <div className="text-muted-foreground">No edge picks</div>
+                                          )}
+                                        </div>
+                                      </TooltipContent>
+                                    </UITooltip>
+                                  </TooltipProvider>
+                                );
+                              })}
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-center gap-4 mt-6 text-xs text-muted-foreground">
+                    <span>Less</span>
+                    <div className="flex gap-1">
+                      <div className="w-4 h-4 rounded-sm bg-status-over" />
+                      <div className="w-4 h-4 rounded-sm bg-status-over/60" />
+                      <div className="w-4 h-4 rounded-sm bg-status-under/60" />
+                      <div className="w-4 h-4 rounded-sm bg-status-under" />
+                    </div>
+                    <span>More</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Parlay Backtesting */}
+            {stats.parlayStats.length > 0 && (
+              <Card className="bg-card border-border/60 shadow-card mb-10">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Layers className="h-5 w-5" />
+                    Historical Parlay Performance
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Backtested parlay combinations using same-day edge picks
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {stats.parlayStats.map(parlay => (
+                      <div key={parlay.size} className="bg-secondary/50 rounded-xl p-4 text-center">
+                        <div className="text-2xl font-bold mb-1">{parlay.size}-Leg</div>
+                        <div className={cn(
+                          "text-3xl font-bold mb-2",
+                          parlay.hitRate >= 20 ? "text-status-under" :
+                          parlay.hitRate >= 10 ? "text-status-edge" : "text-status-over"
+                        )}>
+                          {parlay.hitRate.toFixed(1)}%
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {parlay.hits} / {parlay.total} hit
                         </div>
                       </div>
                     ))}
