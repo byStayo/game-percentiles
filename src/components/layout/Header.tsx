@@ -4,6 +4,7 @@ import { Activity } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Today" },
+  { href: "/parlay", label: "Parlay Machine" },
   { href: "/status", label: "Status" },
 ];
 
