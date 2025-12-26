@@ -7,6 +7,7 @@ import { HelmetProvider } from "react-helmet-async";
 import Index from "./pages/Index";
 import GameDetail from "./pages/GameDetail";
 import Status from "./pages/Status";
+import Stats from "./pages/Stats";
 import ParlayMachine from "./pages/ParlayMachine";
 import NotFound from "./pages/NotFound";
 
@@ -23,6 +24,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/game/:id" element={<GameDetail />} />
             <Route path="/status" element={<Status />} />
+            <Route path="/stats" element={<Stats />} />
             <Route path="/parlay" element={<ParlayMachine />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

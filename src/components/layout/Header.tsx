@@ -5,6 +5,7 @@ import { TrendingUp } from "lucide-react";
 const navItems = [
   { href: "/", label: "Today" },
   { href: "/parlay", label: "Parlay" },
+  { href: "/stats", label: "Stats" },
   { href: "/status", label: "Status" },
 ];
 
