@@ -89,6 +89,7 @@ const NBA_ABBREV_MAP: Record<string, string> = {
   'okc': 'oklahoma city thunder',
   'orl': 'orlando magic',
   'phi': 'philadelphia 76ers',
+  'pho': 'phoenix suns',  // Alternative abbreviation used by some providers
   'phx': 'phoenix suns',
   'por': 'portland trail blazers',
   'sac': 'sacramento kings',
