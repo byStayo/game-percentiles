@@ -11,3 +11,12 @@ verify_jwt = false
 
 [functions.backfill]
 verify_jwt = false
+
+[functions.api-today]
+verify_jwt = false
+
+[functions.api-game]
+verify_jwt = false
+
+[functions.api-status]
+verify_jwt = false
