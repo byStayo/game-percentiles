@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { getTeamDisplayName } from "@/lib/teamNames";
 import { PercentileBar } from "@/components/ui/percentile-bar";
 import type { TodayGame } from "@/hooks/useApi";
 import type { SportId } from "@/types";
@@ -22,18 +23,9 @@ export function GameCard({ game }: GameCardProps) {
   const isLive = game.status === 'live';
   const isFinal = game.status === 'final';
 
-  // If city exists, show "City Name", otherwise just show name (likely abbreviation)
-  const homeTeamName = game.home_team?.city 
-    ? `${game.home_team.city} ${game.home_team.name}` 
-    : game.home_team?.name || 'TBD';
-  
-  const awayTeamName = game.away_team?.city 
-    ? `${game.away_team.city} ${game.away_team.name}` 
-    : game.away_team?.name || 'TBD';
-
-  // For display, use abbrev if available, otherwise name
-  const homeAbbrev = game.home_team?.abbrev || game.home_team?.name || '?';
-  const awayAbbrev = game.away_team?.abbrev || game.away_team?.name || '?';
+  // Get full team names using expansion
+  const homeTeamName = getTeamDisplayName(game.home_team, game.sport_id);
+  const awayTeamName = getTeamDisplayName(game.away_team, game.sport_id);
 
   return (
     <Link
