@@ -61,6 +61,7 @@ export const NBA_TEAMS: Record<string, string> = {
   'OKC': 'Oklahoma City Thunder',
   'ORL': 'Orlando Magic',
   'PHI': 'Philadelphia 76ers',
+  'PHO': 'Phoenix Suns',
   'PHX': 'Phoenix Suns',
   'POR': 'Portland Trail Blazers',
   'SAC': 'Sacramento Kings',
