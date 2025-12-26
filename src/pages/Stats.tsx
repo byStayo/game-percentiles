@@ -22,6 +22,8 @@ interface CompletedGame {
   p95: number;
   n_h2h: number;
   date_local: string;
+  home_team_name: string | null;
+  away_team_name: string | null;
 }
 
 interface PredictionResult {
@@ -106,7 +108,12 @@ export default function Stats() {
           p95,
           n_h2h,
           date_local,
-          games!inner(final_total, status)
+          games!inner(
+            final_total, 
+            status,
+            home_team:teams!games_home_team_id_fkey(name),
+            away_team:teams!games_away_team_id_fkey(name)
+          )
         `)
         .eq('games.status', 'final')
         .not('games.final_total', 'is', null)
@@ -132,6 +139,8 @@ export default function Stats() {
         p95: row.p95,
         n_h2h: row.n_h2h,
         date_local: row.date_local,
+        home_team_name: row.games.home_team?.name || null,
+        away_team_name: row.games.away_team?.name || null,
       })) as CompletedGame[];
     },
     staleTime: 60000,
@@ -262,18 +271,51 @@ export default function Stats() {
       gamesByDate[g.date_local].push(g);
     });
 
+    // Track detailed winning parlays
+    interface WinningParlay {
+      date: string;
+      size: number;
+      games: Array<{
+        matchup: string;
+        line: number;
+        pick: 'over' | 'under';
+        final: number;
+        sport: SportId;
+      }>;
+    }
+    const winningParlays: WinningParlay[] = [];
+
     // Calculate parlay performance for different sizes
     const parlayStats = [2, 3, 4, 5].map(size => {
       let totalParlays = 0;
       let hitParlays = 0;
 
-      Object.values(gamesByDate).forEach(dayGames => {
+      Object.entries(gamesByDate).forEach(([dateStr, dayGames]) => {
         if (dayGames.length >= size) {
           const combos = generateParlays(dayGames, size);
           combos.forEach(combo => {
             totalParlays++;
             const allHit = combo.every(idx => dayGames[idx].result.type === 'hit');
-            if (allHit) hitParlays++;
+            if (allHit) {
+              hitParlays++;
+              // Track the winning parlay details (limit to first 50 total)
+              if (winningParlays.length < 50) {
+                winningParlays.push({
+                  date: dateStr,
+                  size,
+                  games: combo.map(idx => {
+                    const g = dayGames[idx];
+                    return {
+                      matchup: `${g.away_team_name || 'Away'} @ ${g.home_team_name || 'Home'}`,
+                      line: g.dk_total_line,
+                      pick: g.result.direction as 'over' | 'under',
+                      final: g.final_total,
+                      sport: g.sport_id,
+                    };
+                  }),
+                });
+              }
+            }
           });
         }
       });
@@ -285,6 +327,9 @@ export default function Stats() {
         hitRate: totalParlays > 0 ? (hitParlays / totalParlays) * 100 : 0,
       };
     }).filter(p => p.total > 0);
+
+    // Sort winning parlays by date descending
+    winningParlays.sort((a, b) => b.date.localeCompare(a.date));
 
     return {
       totalGames: filteredGames.length,
@@ -306,6 +351,7 @@ export default function Stats() {
       roi,
       calendarData,
       parlayStats,
+      winningParlays,
     };
   }, [games, sportFilter, dateRange, betAmount]);
 
@@ -896,7 +942,7 @@ export default function Stats() {
                   <p className="text-sm text-muted-foreground mb-6">
                     Backtested parlay combinations using same-day edge picks
                   </p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     {stats.parlayStats.map(parlay => (
                       <div key={parlay.size} className="bg-secondary/50 rounded-xl p-4 text-center">
                         <div className="text-2xl font-bold mb-1">{parlay.size}-Leg</div>
@@ -913,6 +959,64 @@ export default function Stats() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Winning Parlays Breakdown */}
+                  {stats.winningParlays.length > 0 && (
+                    <div className="mt-6">
+                      <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-status-under" />
+                        Winning Parlay Details (showing {Math.min(stats.winningParlays.length, 20)})
+                      </h4>
+                      <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                        {stats.winningParlays.slice(0, 20).map((parlay, idx) => (
+                          <div 
+                            key={idx} 
+                            className="bg-status-under/5 border border-status-under/20 rounded-xl p-4"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-status-under bg-status-under/10 px-2 py-1 rounded-lg">
+                                  {parlay.size}-LEG HIT
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {format(new Date(parlay.date), 'MMM d, yyyy')}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              {parlay.games.map((game, gameIdx) => (
+                                <div 
+                                  key={gameIdx} 
+                                  className="flex items-center justify-between text-sm py-1.5 border-t border-border/30 first:border-t-0 first:pt-0"
+                                >
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <span className="text-2xs font-semibold text-muted-foreground uppercase px-1.5 py-0.5 bg-secondary rounded">
+                                      {game.sport}
+                                    </span>
+                                    <span className="truncate">{game.matchup}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    <span className="text-muted-foreground text-xs">
+                                      {game.line.toFixed(1)} →
+                                    </span>
+                                    <span className="font-semibold text-status-under">
+                                      {game.final.toFixed(0)}
+                                    </span>
+                                    <span className={cn(
+                                      "text-2xs font-bold px-1.5 py-0.5 rounded",
+                                      game.pick === 'under' ? "bg-status-under text-white" : "bg-status-over text-white"
+                                    )}>
+                                      {game.pick.toUpperCase()}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}

@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { TrendingUp, TrendingDown, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface PercentileBarProps {
   p05: number;
@@ -9,9 +10,42 @@ interface PercentileBarProps {
   finalTotal?: number | null;
   className?: string;
   showRecommendation?: boolean;
+  showEV?: boolean;
 }
 
-export function PercentileBar({ p05, p95, dkLine, dkPercentile, finalTotal, className, showRecommendation = true }: PercentileBarProps) {
+// Calculate EV based on percentile and -110 odds
+function calculateEV(percentile: number | null | undefined): { ev: number; impliedProb: number } | null {
+  if (percentile == null) return null;
+  
+  // At -110 odds, you need to bet $110 to win $100
+  // Break-even probability is 110/210 = 52.38%
+  const breakEvenProb = 110 / 210; // ~52.38%
+  
+  // Historical percentile tells us how often the line was exceeded
+  // If percentile is low (<30), line is below historical norms → lean OVER
+  // If percentile is high (>70), line is above historical norms → lean UNDER
+  
+  let impliedWinProb: number;
+  if (percentile <= 30) {
+    // OVER play: lower percentile = higher confidence
+    impliedWinProb = (100 - percentile) / 100;
+  } else if (percentile >= 70) {
+    // UNDER play: higher percentile = higher confidence
+    impliedWinProb = percentile / 100;
+  } else {
+    // Neutral zone - no clear edge
+    return null;
+  }
+  
+  // EV = (win prob × profit) - (lose prob × stake)
+  // For $100 bet at -110: win profit = $90.91, lose = $100
+  const winProfit = 100 * (100 / 110); // ~$90.91
+  const ev = (impliedWinProb * winProfit) - ((1 - impliedWinProb) * 100);
+  
+  return { ev, impliedProb: impliedWinProb * 100 };
+}
+
+export function PercentileBar({ p05, p95, dkLine, dkPercentile, finalTotal, className, showRecommendation = true, showEV = true }: PercentileBarProps) {
   const range = p95 - p05;
   const padding = range * 0.15;
   const min = Math.max(0, p05 - padding);
@@ -32,6 +66,7 @@ export function PercentileBar({ p05, p95, dkLine, dkPercentile, finalTotal, clas
   };
 
   const recommendation = getRecommendation();
+  const evData = calculateEV(dkPercentile);
 
   const getIndicatorStyle = (percentile: number | null | undefined) => {
     if (percentile == null) return { bg: "bg-muted-foreground", ring: "ring-muted-foreground/20" };
@@ -48,7 +83,7 @@ export function PercentileBar({ p05, p95, dkLine, dkPercentile, finalTotal, clas
 
   return (
     <div className={cn("", className)}>
-      {/* Recommendation Badge - Only show when there's a signal and no final result */}
+      {/* Recommendation Badge with EV - Only show when there's a signal and no final result */}
       {showRecommendation && recommendation && !finalTotal && (
         <div className="flex justify-center mb-3">
           <div className={cn(
@@ -69,14 +104,40 @@ export function PercentileBar({ p05, p95, dkLine, dkPercentile, finalTotal, clas
             {recommendation.strength === 'strong' && (
               <span className="ml-1 px-1.5 py-0.5 rounded bg-white/20 text-xs">STRONG</span>
             )}
+            {showEV && evData && (
+              <span className={cn(
+                "ml-1 px-1.5 py-0.5 rounded text-xs",
+                evData.ev > 0 ? "bg-white/20" : "bg-black/20"
+              )}>
+                EV: {evData.ev > 0 ? '+' : ''}{evData.ev.toFixed(1)}%
+              </span>
+            )}
           </div>
         </div>
       )}
 
-      {/* P05 / P95 Range with clear labels */}
+      {/* P05 / P95 Range with clear labels and info tooltip */}
       <div className="flex justify-between items-end mb-2">
         <div className="text-center">
-          <div className="text-2xs text-muted-foreground uppercase tracking-wide mb-0.5">5th %ile</div>
+          <div className="flex items-center gap-1">
+            <span className="text-2xs text-muted-foreground uppercase tracking-wide">5th %ile</span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[280px] text-xs">
+                  <p className="font-semibold mb-1">What do these numbers mean?</p>
+                  <p className="mb-2">Based on historical head-to-head matchups between these teams:</p>
+                  <ul className="space-y-1 list-disc pl-3">
+                    <li><strong>5th %ile ({p05.toFixed(1)})</strong>: 95% of past games scored above this</li>
+                    <li><strong>95th %ile ({p95.toFixed(1)})</strong>: Only 5% of past games scored above this</li>
+                  </ul>
+                  <p className="mt-2 text-muted-foreground">If the betting line is near the 5th percentile → take OVER. If near the 95th → take UNDER.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <div className="text-sm font-bold tabular-nums text-status-under">{p05.toFixed(1)}</div>
         </div>
         
