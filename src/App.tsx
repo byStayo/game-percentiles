@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import Index from "./pages/Index";
+import WeekAhead from "./pages/WeekAhead";
 import GameDetail from "./pages/GameDetail";
 import Status from "./pages/Status";
 import Stats from "./pages/Stats";
@@ -22,6 +23,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/week" element={<WeekAhead />} />
             <Route path="/game/:id" element={<GameDetail />} />
             <Route path="/status" element={<Status />} />
             <Route path="/stats" element={<Stats />} />
