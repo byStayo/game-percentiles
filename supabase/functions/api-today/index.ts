@@ -23,9 +23,10 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Use service role key to bypass RLS for read operations
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
     // Parse query parameters
@@ -35,7 +36,7 @@ Deno.serve(async (req) => {
 
     console.log(`[API/TODAY] Fetching edges for ${date}, sport: ${sportId || 'all'}`)
 
-    // Build query for daily_edges with game and team data
+    // Build query for daily_edges
     let query = supabase
       .from('daily_edges')
       .select(`
@@ -50,20 +51,10 @@ Deno.serve(async (req) => {
         dk_offered,
         dk_total_line,
         dk_line_percentile,
-        updated_at,
-        game:games!daily_edges_game_id_fkey(
-          id,
-          start_time_utc,
-          status,
-          home_score,
-          away_score,
-          final_total,
-          home_team:teams!games_home_team_id_fkey(id, name, city, abbrev),
-          away_team:teams!games_away_team_id_fkey(id, name, city, abbrev)
-        )
+        updated_at
       `)
       .eq('date_local', date)
-      .eq('is_visible', true) // Only return visible (n >= 5) games
+      .eq('is_visible', true) // Only return visible (n >= 3) games
 
     if (sportId) {
       query = query.eq('sport_id', sportId)
@@ -79,9 +70,41 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Fetch games and teams for each edge
+    const gameIds = (edges || []).map(e => e.game_id)
+    
+    const { data: gamesData } = gameIds.length > 0 
+      ? await supabase
+          .from('games')
+          .select('id, start_time_utc, status, home_score, away_score, final_total, home_team_id, away_team_id')
+          .in('id', gameIds)
+      : { data: [] }
+
+    console.log(`[API/TODAY] Found ${gamesData?.length || 0} games, gameIds: ${gameIds.slice(0, 3).join(', ')}`)
+    const gamesMap = new Map((gamesData || []).map(g => [g.id, g]))
+
+    // Get all team IDs
+    const teamIds = new Set<string>()
+    for (const g of gamesData || []) {
+      if (g.home_team_id) teamIds.add(g.home_team_id)
+      if (g.away_team_id) teamIds.add(g.away_team_id)
+    }
+
+    const { data: teamsData } = teamIds.size > 0
+      ? await supabase
+          .from('teams')
+          .select('id, name, city, abbrev')
+          .in('id', Array.from(teamIds))
+      : { data: [] }
+
+    const teamsMap = new Map((teamsData || []).map(t => [t.id, t]))
+
     // Transform data for frontend consumption
     const games = (edges || []).map(edge => {
-      const game = edge.game as any
+      const game = gamesMap.get(edge.game_id)
+      const homeTeam = game?.home_team_id ? teamsMap.get(game.home_team_id) : null
+      const awayTeam = game?.away_team_id ? teamsMap.get(game.away_team_id) : null
+      
       return {
         id: edge.id,
         game_id: edge.game_id,
@@ -89,8 +112,8 @@ Deno.serve(async (req) => {
         sport_id: edge.sport_id,
         start_time_utc: game?.start_time_utc,
         status: game?.status,
-        home_team: game?.home_team?.[0] || null,
-        away_team: game?.away_team?.[0] || null,
+        home_team: homeTeam,
+        away_team: awayTeam,
         home_score: game?.home_score,
         away_score: game?.away_score,
         final_total: game?.final_total,

@@ -81,13 +81,16 @@ Deno.serve(async (req) => {
           .eq('sport_id', game.sport_id)
           .eq('team_low_id', teamLowId)
           .eq('team_high_id', teamHighId)
+          .is('league_id', null)
+
+        console.log(`[COMPUTE] Game ${game.id}: team_low=${teamLowId}, team_high=${teamHighId}, n=${matchupGames?.length || 0}`)
 
         const n = matchupGames?.length || 0
         let p05: number | null = null
         let p95: number | null = null
         let isVisible = false
 
-        if (n >= 5) {
+        if (n >= 3) { // Lowered from 5 to 3 for initial testing with limited historical data
           // Sort totals and compute nearest-rank quantiles
           const totals = matchupGames!.map(mg => Number(mg.total)).sort((a, b) => a - b)
           
