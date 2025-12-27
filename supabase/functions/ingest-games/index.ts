@@ -46,6 +46,8 @@ interface GameData {
   away_team_key: string
   home_team_name: string
   away_team_name: string
+  home_team_abbrev: string
+  away_team_abbrev: string
   home_team_city?: string
   away_team_city?: string
   home_score: number | null
@@ -63,6 +65,60 @@ function getTodayET(): string {
     day: '2-digit',
   })
   return formatter.format(now)
+}
+
+// Normalize team abbreviation for franchise lookup
+function normalizeAbbrev(sport: string, abbrev: string): string {
+  const normalized = abbrev?.toUpperCase() || ''
+  
+  const mappings: Record<string, Record<string, string>> = {
+    nfl: { 'WSH': 'WAS', 'JAC': 'JAX', 'LVR': 'LV', 'LAR': 'LA' },
+    nba: { 'PHX': 'PHO', 'BKN': 'BRK', 'CHA': 'CHO', 'NOP': 'NO' },
+    nhl: { 'VGK': 'VEG', 'SJS': 'SJ', 'NJD': 'NJ', 'TBL': 'TB' },
+    mlb: { 'ARI': 'AZ', 'CHW': 'CWS', 'KCR': 'KC', 'SFG': 'SF', 'TBR': 'TB', 'WSN': 'WSH' },
+  }
+  
+  return mappings[sport]?.[normalized] || normalized
+}
+
+// Find franchise by team abbreviation (cached)
+async function findFranchiseByAbbrev(
+  supabase: any,
+  sportId: string,
+  abbrev: string,
+  cache: Map<string, string | null>
+): Promise<string | null> {
+  const cacheKey = `${sportId}:${abbrev}`
+  if (cache.has(cacheKey)) return cache.get(cacheKey) || null
+
+  const normalized = normalizeAbbrev(sportId, abbrev)
+  
+  // Try team_versions first (most reliable)
+  const { data: teamVersion } = await supabase
+    .from('team_versions')
+    .select('franchise_id')
+    .eq('sport_id', sportId)
+    .ilike('abbrev', normalized)
+    .limit(1)
+    .maybeSingle()
+
+  if (teamVersion?.franchise_id) {
+    cache.set(cacheKey, teamVersion.franchise_id)
+    return teamVersion.franchise_id
+  }
+
+  // Fallback: search franchises by canonical_name
+  const { data: franchise } = await supabase
+    .from('franchises')
+    .select('id')
+    .eq('sport_id', sportId)
+    .ilike('canonical_name', `%${abbrev}%`)
+    .limit(1)
+    .maybeSingle()
+
+  const franchiseId = franchise?.id || null
+  cache.set(cacheKey, franchiseId)
+  return franchiseId
 }
 
 // All supported sports
@@ -125,6 +181,8 @@ async function findOrCreateGame(
     start_time_utc: string
     home_team_id: string
     away_team_id: string
+    home_franchise_id: string | null
+    away_franchise_id: string | null
     home_score: number | null
     away_score: number | null
     status: string
@@ -140,13 +198,15 @@ async function findOrCreateGame(
     .maybeSingle()
 
   if (existing) {
-    // Update existing game (don't include final_total - it's generated)
+    // Update existing game with franchise IDs
     await supabase
       .from('games')
       .update({
         start_time_utc: gameData.start_time_utc,
         home_team_id: gameData.home_team_id,
         away_team_id: gameData.away_team_id,
+        home_franchise_id: gameData.home_franchise_id,
+        away_franchise_id: gameData.away_franchise_id,
         home_score: gameData.home_score,
         away_score: gameData.away_score,
         status: gameData.status,
@@ -156,7 +216,7 @@ async function findOrCreateGame(
     return existing
   }
 
-  // Create new game (don't include final_total - it's generated)
+  // Create new game with franchise IDs
   const { data: created, error } = await supabase
     .from('games')
     .insert({
@@ -165,6 +225,8 @@ async function findOrCreateGame(
       start_time_utc: gameData.start_time_utc,
       home_team_id: gameData.home_team_id,
       away_team_id: gameData.away_team_id,
+      home_franchise_id: gameData.home_franchise_id,
+      away_franchise_id: gameData.away_franchise_id,
       home_score: gameData.home_score,
       away_score: gameData.away_score,
       status: gameData.status,
@@ -192,7 +254,8 @@ Deno.serve(async (req) => {
   )
 
   let jobRunId: number | null = null
-  const counters = { fetched: 0, upserted: 0, finals: 0, errors: 0 }
+  const counters = { fetched: 0, upserted: 0, finals: 0, franchises_linked: 0, errors: 0 }
+  const franchiseCache = new Map<string, string | null>()
 
   try {
     const sportsDataKey = Deno.env.get('SPORTSDATAIO_KEY')
@@ -258,15 +321,29 @@ Deno.serve(async (req) => {
 
             if (!homeTeam || !awayTeam) continue
 
+            // Look up franchise IDs from team abbreviations
+            const homeFranchiseId = await findFranchiseByAbbrev(
+              supabase, sportId, game.home_team_abbrev, franchiseCache
+            )
+            const awayFranchiseId = await findFranchiseByAbbrev(
+              supabase, sportId, game.away_team_abbrev, franchiseCache
+            )
+
+            if (homeFranchiseId || awayFranchiseId) {
+              counters.franchises_linked++
+            }
+
             // Check if game is final for matchup insertion
             const isFinal = game.status === 'final' && game.home_score !== null && game.away_score !== null
             const finalTotal = isFinal ? (game.home_score! + game.away_score!) : null
 
-            // Find or create game (final_total is computed by DB, not passed here)
+            // Find or create game with franchise IDs
             const dbGame = await findOrCreateGame(supabase, sportId, game.provider_game_key, {
               start_time_utc: game.start_time_utc,
               home_team_id: homeTeam.id,
               away_team_id: awayTeam.id,
+              home_franchise_id: homeFranchiseId,
+              away_franchise_id: awayFranchiseId,
               home_score: game.home_score,
               away_score: game.away_score,
               status: game.status,
@@ -277,9 +354,14 @@ Deno.serve(async (req) => {
             counters.upserted++
             sportResults[sportId].upserted++
 
-            // If game is final, insert matchup_games row
+            // If game is final, insert matchup_games row with franchise IDs
             if (isFinal && finalTotal !== null) {
               const [teamLowId, teamHighId] = [homeTeam.id, awayTeam.id].sort()
+              const [franchiseLowId, franchiseHighId] = [homeFranchiseId, awayFranchiseId].sort((a, b) => {
+                if (!a) return 1
+                if (!b) return -1
+                return a.localeCompare(b)
+              })
 
               // Check if matchup game already exists
               const { data: existingMg } = await supabase
@@ -299,6 +381,8 @@ Deno.serve(async (req) => {
                     sport_id: sportId,
                     team_low_id: teamLowId,
                     team_high_id: teamHighId,
+                    franchise_low_id: franchiseLowId || null,
+                    franchise_high_id: franchiseHighId || null,
                     game_id: dbGame.id,
                     played_at_utc: game.start_time_utc,
                     total: finalTotal,
@@ -394,12 +478,13 @@ async function fetchNBAGames(apiKey: string, date: string): Promise<GameData[]> 
   
   return data.map((game: any) => ({
     provider_game_key: String(game.GameID),
-    // Use DateTimeUTC which is explicitly UTC, fallback to DateTime if not available
     start_time_utc: game.DateTimeUTC || game.DateTime || game.Day,
     home_team_key: game.HomeTeamID ? String(game.HomeTeamID) : game.HomeTeam,
     away_team_key: game.AwayTeamID ? String(game.AwayTeamID) : game.AwayTeam,
     home_team_name: game.HomeTeam,
     away_team_name: game.AwayTeam,
+    home_team_abbrev: game.HomeTeam,
+    away_team_abbrev: game.AwayTeam,
     home_score: game.HomeTeamScore,
     away_score: game.AwayTeamScore,
     status: mapStatus(game.Status),
@@ -429,12 +514,13 @@ async function fetchMLBGames(apiKey: string, date: string): Promise<GameData[]> 
   
   return data.map((game: any) => ({
     provider_game_key: String(game.GameID),
-    // Use DateTimeUTC which is explicitly UTC, fallback to DateTime if not available
     start_time_utc: game.DateTimeUTC || game.DateTime || game.Day,
     home_team_key: game.HomeTeamID ? String(game.HomeTeamID) : game.HomeTeam,
     away_team_key: game.AwayTeamID ? String(game.AwayTeamID) : game.AwayTeam,
     home_team_name: game.HomeTeam,
     away_team_name: game.AwayTeam,
+    home_team_abbrev: game.HomeTeam,
+    away_team_abbrev: game.AwayTeam,
     home_score: game.HomeTeamRuns,
     away_score: game.AwayTeamRuns,
     status: mapStatus(game.Status),
@@ -475,12 +561,13 @@ async function fetchNFLGames(apiKey: string): Promise<GameData[]> {
   
   return data.map((game: any) => ({
     provider_game_key: String(game.GameKey || game.ScoreID),
-    // Use DateTimeUTC which is explicitly UTC, fallback to DateTime if not available
     start_time_utc: game.DateTimeUTC || game.DateTime || game.Date,
     home_team_key: game.HomeTeamID ? String(game.HomeTeamID) : game.HomeTeam,
     away_team_key: game.AwayTeamID ? String(game.AwayTeamID) : game.AwayTeam,
     home_team_name: game.HomeTeam,
     away_team_name: game.AwayTeam,
+    home_team_abbrev: game.HomeTeam,
+    away_team_abbrev: game.AwayTeam,
     home_score: game.HomeScore,
     away_score: game.AwayScore,
     status: mapStatus(game.Status),
@@ -510,12 +597,13 @@ async function fetchNHLGames(apiKey: string, date: string): Promise<GameData[]> 
   
   return data.map((game: any) => ({
     provider_game_key: String(game.GameID),
-    // Use DateTimeUTC which is explicitly UTC, fallback to DateTime if not available
     start_time_utc: game.DateTimeUTC || game.DateTime || game.Day,
     home_team_key: game.HomeTeamID ? String(game.HomeTeamID) : game.HomeTeam,
     away_team_key: game.AwayTeamID ? String(game.AwayTeamID) : game.AwayTeam,
     home_team_name: game.HomeTeam,
     away_team_name: game.AwayTeam,
+    home_team_abbrev: game.HomeTeam,
+    away_team_abbrev: game.AwayTeam,
     home_score: game.HomeTeamScore,
     away_score: game.AwayTeamScore,
     status: mapStatus(game.Status),
