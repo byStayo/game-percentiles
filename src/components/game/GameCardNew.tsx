@@ -6,6 +6,7 @@ import { PickPill } from "@/components/game/PickPill";
 import { SegmentBadge } from "@/components/game/SegmentBadge";
 import { RecencyIndicator } from "@/components/game/RecencyIndicator";
 import { ConfidenceBadge } from "@/components/game/ConfidenceBadge";
+import { DataQualityIndicator } from "@/components/game/DataQualityIndicator";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
 import { Star, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -89,6 +90,7 @@ export function GameCard({ game }: GameCardProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          <DataQualityIndicator nGames={game.n_h2h} showLabel={false} />
           <span
             className={cn(
               "px-2 py-1 rounded-md text-xs font-semibold tabular-nums",
