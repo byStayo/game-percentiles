@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { format, formatDistanceToNow } from "date-fns";
-import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Database, Activity, Play, Loader2, Timer, Calendar, Zap, Layers, TrendingUp, History } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Database, Activity, Play, Loader2, Timer, Calendar, Zap, Layers, TrendingUp, History, HeartPulse } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
 import { useSystemStatus, useCronStatus } from "@/hooks/useApi";
 import type { CronJob } from "@/hooks/useApi";
@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DataHealthDashboard } from "@/components/status/DataHealthDashboard";
 
 const API_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
@@ -447,192 +449,207 @@ export default function Status() {
 
       <Layout>
         <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">System Status</h1>
-              <p className="text-muted-foreground mt-1">
-                Pipeline health & strict odds matching
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => refetch()}
-              disabled={isFetching}
-              className="gap-2"
-            >
-              <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
-              Refresh
-            </Button>
-          </div>
-
-          {isLoading ? (
-            <div className="space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {[...Array(4)].map((_, i) => (
-                  <Skeleton key={i} className="h-28 rounded-xl" />
-                ))}
+          <Tabs defaultValue="overview" className="w-full">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">System Status</h1>
+                <p className="text-muted-foreground mt-1">
+                  Pipeline health, data coverage & strict odds matching
+                </p>
               </div>
-              <Skeleton className="h-48 rounded-xl" />
+              <div className="flex items-center gap-2">
+                <TabsList className="bg-secondary/50">
+                  <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+                  <TabsTrigger value="data-health" className="text-xs gap-1">
+                    <HeartPulse className="h-3 w-3" />
+                    Data Health
+                  </TabsTrigger>
+                </TabsList>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetch()}
+                  disabled={isFetching}
+                  className="gap-2"
+                >
+                  <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
+                  Refresh
+                </Button>
+              </div>
             </div>
-          ) : error ? (
-            <div className="bg-card rounded-xl border border-border p-8 text-center">
-              <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-              <h2 className="text-lg font-semibold mb-2">Unable to load status</h2>
-              <p className="text-sm text-muted-foreground">
-                {error instanceof Error ? error.message : 'An error occurred'}
-              </p>
-            </div>
-          ) : data ? (
-            <>
-              {/* Today's Coverage */}
-              <div className="bg-card rounded-xl border border-border p-6 shadow-card">
-                <div className="flex items-center gap-2 mb-4">
-                  <BarChart3 className="h-5 w-5 text-muted-foreground" />
-                  <h2 className="text-lg font-semibold">Today's DraftKings Coverage</h2>
-                  <span className="ml-auto text-xs text-muted-foreground">{data.date_et}</span>
-                </div>
-                
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                  <div>
-                    <p className="text-3xl font-bold">{data.today_coverage.visible_games}</p>
-                    <p className="text-xs text-muted-foreground">Total Games</p>
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold text-status-live">{data.today_coverage.with_dk_odds}</p>
-                    <p className="text-xs text-muted-foreground">With DK Lines</p>
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold text-muted-foreground">{data.today_coverage.unmatched}</p>
-                    <p className="text-xs text-muted-foreground">Unmatched</p>
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold">
-                      {data.today_coverage.visible_games > 0 
-                        ? Math.round((data.today_coverage.with_dk_odds / data.today_coverage.visible_games) * 100)
-                        : 0}%
-                    </p>
-                    <p className="text-xs text-muted-foreground">Match Rate</p>
-                  </div>
-                </div>
 
-                {/* Sport breakdown */}
-                {Object.keys(data.today_coverage.by_sport).length > 0 && (
-                  <div className="border-t border-border pt-4">
-                    <p className="text-sm text-muted-foreground mb-3">By Sport</p>
-                    <div className="flex flex-wrap gap-3">
-                      {Object.entries(data.today_coverage.by_sport).map(([sport, stats]) => (
-                        <div key={sport} className="px-3 py-2 bg-secondary/30 rounded-lg">
-                          <span className="text-xs font-medium uppercase">{sport}</span>
-                          <span className="text-sm ml-2">
-                            {stats.with_odds}/{stats.total}
-                          </span>
+            <TabsContent value="overview" className="space-y-8 mt-0">
+              {isLoading ? (
+                <div className="space-y-6">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {[...Array(4)].map((_, i) => (
+                      <Skeleton key={i} className="h-28 rounded-xl" />
+                    ))}
+                  </div>
+                  <Skeleton className="h-48 rounded-xl" />
+                </div>
+              ) : error ? (
+                <div className="bg-card rounded-xl border border-border p-8 text-center">
+                  <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+                  <h2 className="text-lg font-semibold mb-2">Unable to load status</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {error instanceof Error ? error.message : 'An error occurred'}
+                  </p>
+                </div>
+              ) : data ? (
+                <>
+                  {/* Today's Coverage */}
+                  <div className="bg-card rounded-xl border border-border p-6 shadow-card">
+                    <div className="flex items-center gap-2 mb-4">
+                      <BarChart3 className="h-5 w-5 text-muted-foreground" />
+                      <h2 className="text-lg font-semibold">Today's DraftKings Coverage</h2>
+                      <span className="ml-auto text-xs text-muted-foreground">{data.date_et}</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                      <div>
+                        <p className="text-3xl font-bold">{data.today_coverage.visible_games}</p>
+                        <p className="text-xs text-muted-foreground">Total Games</p>
+                      </div>
+                      <div>
+                        <p className="text-3xl font-bold text-status-live">{data.today_coverage.with_dk_odds}</p>
+                        <p className="text-xs text-muted-foreground">With DK Lines</p>
+                      </div>
+                      <div>
+                        <p className="text-3xl font-bold text-muted-foreground">{data.today_coverage.unmatched}</p>
+                        <p className="text-xs text-muted-foreground">Unmatched</p>
+                      </div>
+                      <div>
+                        <p className="text-3xl font-bold">
+                          {data.today_coverage.visible_games > 0 
+                            ? Math.round((data.today_coverage.with_dk_odds / data.today_coverage.visible_games) * 100)
+                            : 0}%
+                        </p>
+                        <p className="text-xs text-muted-foreground">Match Rate</p>
+                      </div>
+                    </div>
+
+                    {/* Sport breakdown */}
+                    {Object.keys(data.today_coverage.by_sport).length > 0 && (
+                      <div className="border-t border-border pt-4">
+                        <p className="text-sm text-muted-foreground mb-3">By Sport</p>
+                        <div className="flex flex-wrap gap-3">
+                          {Object.entries(data.today_coverage.by_sport).map(([sport, stats]) => (
+                            <div key={sport} className="px-3 py-2 bg-secondary/30 rounded-lg">
+                              <span className="text-xs font-medium uppercase">{sport}</span>
+                              <span className="text-sm ml-2">
+                                {stats.with_odds}/{stats.total}
+                              </span>
+                            </div>
+                          ))}
                         </div>
+                      </div>
+                    )}
+
+                    {/* Unmatched samples */}
+                    {data.sample_unmatched.length > 0 && (
+                      <div className="border-t border-border pt-4 mt-4">
+                        <p className="text-sm font-medium mb-3">
+                          Unmatched Games (DK lines not found)
+                        </p>
+                        <div className="space-y-3 max-h-64 overflow-y-auto">
+                          {data.sample_unmatched.map((item, i) => {
+                            if (typeof item === 'string') {
+                              return (
+                                <p key={i} className="text-xs text-muted-foreground font-mono">
+                                  {item}
+                                </p>
+                              );
+                            }
+                            const obj = item as { internal: string; internal_normalized?: string; odds?: Array<{ raw: string; normalized: string; time_diff_hrs: string }> };
+                            return (
+                              <div key={i} className="bg-secondary/20 p-3 rounded-lg space-y-2">
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Our game:</p>
+                                  <p className="text-sm font-medium">{obj.internal}</p>
+                                  {obj.internal_normalized && (
+                                    <p className="text-xs text-muted-foreground font-mono">
+                                      normalized: {obj.internal_normalized}
+                                    </p>
+                                  )}
+                                </div>
+                                {obj.odds && obj.odds.length > 0 && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Closest DK events:</p>
+                                    <div className="space-y-1 mt-1">
+                                      {obj.odds.map((odds, j) => (
+                                        <div key={j} className="flex items-center justify-between text-xs bg-background/50 px-2 py-1 rounded">
+                                          <span className="font-mono">{odds.raw}</span>
+                                          <span className="text-muted-foreground">
+                                            {odds.time_diff_hrs}h diff
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Cron Jobs */}
+                  <CronJobsSection />
+
+                  {/* Manual Controls */}
+                  <BackfillControls onComplete={() => refetch()} />
+
+                  {/* Pipeline Jobs (from job_runs table) */}
+                  <div>
+                    <h2 className="text-lg font-semibold mb-4">Pipeline Jobs (Last Run)</h2>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      {Object.keys(jobLabels).map((jobName) => (
+                        <JobCard
+                          key={jobName}
+                          jobName={jobName}
+                          job={data.jobs[jobName] || null}
+                        />
                       ))}
                     </div>
                   </div>
-                )}
 
-                {/* Unmatched samples */}
-                {data.sample_unmatched.length > 0 && (
-                  <div className="border-t border-border pt-4 mt-4">
-                    <p className="text-sm font-medium mb-3">
-                      Unmatched Games (DK lines not found)
-                    </p>
-                    <div className="space-y-3 max-h-64 overflow-y-auto">
-                      {data.sample_unmatched.map((item, i) => {
-                        // Handle both string and object formats
-                        if (typeof item === 'string') {
-                          return (
-                            <p key={i} className="text-xs text-muted-foreground font-mono">
-                              {item}
-                            </p>
-                          );
-                        }
-                        // Object format with internal, internal_normalized, odds
-                        const obj = item as { internal: string; internal_normalized?: string; odds?: Array<{ raw: string; normalized: string; time_diff_hrs: string }> };
-                        return (
-                          <div key={i} className="bg-secondary/20 p-3 rounded-lg space-y-2">
-                            <div>
-                              <p className="text-xs text-muted-foreground">Our game:</p>
-                              <p className="text-sm font-medium">{obj.internal}</p>
-                              {obj.internal_normalized && (
-                                <p className="text-xs text-muted-foreground font-mono">
-                                  normalized: {obj.internal_normalized}
-                                </p>
-                              )}
-                            </div>
-                            {obj.odds && obj.odds.length > 0 && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Closest DK events:</p>
-                                <div className="space-y-1 mt-1">
-                                  {obj.odds.map((odds, j) => (
-                                    <div key={j} className="flex items-center justify-between text-xs bg-background/50 px-2 py-1 rounded">
-                                      <span className="font-mono">{odds.raw}</span>
-                                      <span className="text-muted-foreground">
-                                        {odds.time_diff_hrs}h diff
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                  {/* Database Stats */}
+                  <div>
+                    <h2 className="text-lg font-semibold mb-4">Database</h2>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <StatCard
+                        label="Teams"
+                        value={data.database.teams.toLocaleString()}
+                        icon={Database}
+                      />
+                      <StatCard
+                        label="Games"
+                        value={data.database.games.toLocaleString()}
+                        icon={Activity}
+                      />
+                      <StatCard
+                        label="H2H Records"
+                        value={data.database.matchup_games.toLocaleString()}
+                        icon={BarChart3}
+                      />
                     </div>
                   </div>
-                )}
-              </div>
 
-              {/* Cron Jobs */}
-              <CronJobsSection />
+                  {/* Footer */}
+                  <p className="text-xs text-muted-foreground text-center">
+                    Mode: {data.mode} • Updated {format(new Date(data.timestamp), 'h:mm a')}
+                  </p>
+                </>
+              ) : null}
+            </TabsContent>
 
-              {/* Manual Controls */}
-              <BackfillControls onComplete={() => refetch()} />
-
-              {/* Pipeline Jobs (from job_runs table) */}
-              <div>
-                <h2 className="text-lg font-semibold mb-4">Pipeline Jobs (Last Run)</h2>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {Object.keys(jobLabels).map((jobName) => (
-                    <JobCard
-                      key={jobName}
-                      jobName={jobName}
-                      job={data.jobs[jobName] || null}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Database Stats */}
-              <div>
-                <h2 className="text-lg font-semibold mb-4">Database</h2>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <StatCard
-                    label="Teams"
-                    value={data.database.teams.toLocaleString()}
-                    icon={Database}
-                  />
-                  <StatCard
-                    label="Games"
-                    value={data.database.games.toLocaleString()}
-                    icon={Activity}
-                  />
-                  <StatCard
-                    label="H2H Records"
-                    value={data.database.matchup_games.toLocaleString()}
-                    icon={BarChart3}
-                  />
-                </div>
-              </div>
-
-              {/* Footer */}
-              <p className="text-xs text-muted-foreground text-center">
-                Mode: {data.mode} • Updated {format(new Date(data.timestamp), 'h:mm a')}
-              </p>
-            </>
-          ) : null}
+            <TabsContent value="data-health" className="mt-0">
+              <DataHealthDashboard />
+            </TabsContent>
+          </Tabs>
         </div>
       </Layout>
     </>
