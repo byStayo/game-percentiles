@@ -370,18 +370,34 @@ interface GameRow {
   away_team?: { name: string; city: string | null } | null
 }
 
+interface OddsOutcome {
+  name: string  // "Over" or "Under"
+  point?: number
+  price?: number
+}
+
+interface OddsMarket {
+  key: string
+  outcomes?: OddsOutcome[]
+}
+
+interface OddsBookmaker {
+  key: string
+  markets?: OddsMarket[]
+}
+
 interface OddsEvent {
   id: string
   commence_time: string
   home_team: string
   away_team: string
-  bookmakers?: Array<{
-    key: string
-    markets?: Array<{
-      key: string
-      outcomes?: Array<{ point?: number }>
-    }>
-  }>
+  bookmakers?: OddsBookmaker[]
+}
+
+interface AlternateLine {
+  point: number
+  over_price: number
+  under_price: number
 }
 
 Deno.serve(async (req) => {
@@ -624,18 +640,66 @@ Deno.serve(async (req) => {
               })
           }
 
-          // Insert odds snapshot
+          // Fetch alternate totals for this specific event
+          let alternateLines: AlternateLine[] = []
+          try {
+            const altUrl = `https://api.the-odds-api.com/v4/sports/${config.oddsKey}/events/${event.id}/odds?apiKey=${oddsApiKey}&regions=us&markets=alternate_totals&bookmakers=draftkings&oddsFormat=american`
+            const altResponse = await fetchWithRetry(altUrl, {})
+            
+            if (altResponse.ok) {
+              const altData = await altResponse.json()
+              const altDk = altData?.bookmakers?.find((b: OddsBookmaker) => b.key === 'draftkings')
+              const altMarket = altDk?.markets?.find((m: OddsMarket) => m.key === 'alternate_totals')
+              
+              if (altMarket?.outcomes) {
+                // Group outcomes by point to pair Over/Under
+                const byPoint: Record<number, { over?: number; under?: number }> = {}
+                for (const outcome of altMarket.outcomes as OddsOutcome[]) {
+                  if (outcome.point !== undefined && outcome.price !== undefined) {
+                    if (!byPoint[outcome.point]) byPoint[outcome.point] = {}
+                    if (outcome.name === 'Over') byPoint[outcome.point].over = outcome.price
+                    if (outcome.name === 'Under') byPoint[outcome.point].under = outcome.price
+                  }
+                }
+                
+                // Convert to array sorted by point
+                alternateLines = Object.entries(byPoint)
+                  .filter(([_, v]) => v.over !== undefined && v.under !== undefined)
+                  .map(([point, odds]) => ({
+                    point: Number(point),
+                    over_price: odds.over!,
+                    under_price: odds.under!,
+                  }))
+                  .sort((a, b) => a.point - b.point)
+                
+                console.log(`[ODDS-REFRESH] Found ${alternateLines.length} alternate lines for event ${event.id}`)
+              }
+            }
+          } catch (altError) {
+            console.log(`[ODDS-REFRESH] Could not fetch alternate totals for ${event.id}:`, altError)
+          }
+
+          // Insert odds snapshot with alternate lines
           await supabase.from('odds_snapshots').insert({
             game_id: game.id,
             bookmaker: 'draftkings',
             market: 'totals',
             total_line: totalLine,
             fetched_at: new Date().toISOString(),
-            raw_payload: event,
+            raw_payload: { ...event, alternate_lines: alternateLines },
           })
 
-          // Calculate DK line percentile
+          // Calculate DK line percentile and edge detection
           const [teamLowId, teamHighId] = [game.home_team_id, game.away_team_id].sort()
+
+          const { data: matchupStats } = await supabase
+            .from('matchup_stats')
+            .select('p05, p95, n_games')
+            .eq('sport_id', sportId)
+            .eq('team_low_id', teamLowId)
+            .eq('team_high_id', teamHighId)
+            .eq('segment_key', 'h2h_all')
+            .maybeSingle()
 
           const { data: matchupGames } = await supabase
             .from('matchup_games')
@@ -646,6 +710,12 @@ Deno.serve(async (req) => {
             .is('league_id', null)
 
           let dkLinePercentile: number | null = null
+          let p95OverLine: number | null = null
+          let p95OverOdds: number | null = null
+          let p05UnderLine: number | null = null
+          let p05UnderOdds: number | null = null
+          let bestOverEdge: number | null = null
+          let bestUnderEdge: number | null = null
 
           if (matchupGames && matchupGames.length > 0) {
             const totals = matchupGames.map(mg => Number(mg.total))
@@ -653,13 +723,48 @@ Deno.serve(async (req) => {
             dkLinePercentile = (countBelowOrEqual / totals.length) * 100
           }
 
-          // Update daily_edge
+          // Edge detection: find alternate lines at/near p05 and p95
+          if (matchupStats && alternateLines.length > 0) {
+            const p05 = matchupStats.p05 ? Number(matchupStats.p05) : null
+            const p95 = matchupStats.p95 ? Number(matchupStats.p95) : null
+
+            // Find lowest Over line >= p95 (edge on the high side)
+            if (p95 !== null) {
+              const overCandidates = alternateLines.filter(l => l.point >= p95)
+              if (overCandidates.length > 0) {
+                const best = overCandidates[0] // Lowest point >= p95
+                p95OverLine = best.point
+                p95OverOdds = best.over_price
+                bestOverEdge = p95 - totalLine // How far above main line is p95
+              }
+            }
+
+            // Find highest Under line <= p05 (edge on the low side)
+            if (p05 !== null) {
+              const underCandidates = alternateLines.filter(l => l.point <= p05).reverse()
+              if (underCandidates.length > 0) {
+                const best = underCandidates[0] // Highest point <= p05
+                p05UnderLine = best.point
+                p05UnderOdds = best.under_price
+                bestUnderEdge = totalLine - p05 // How far below main line is p05
+              }
+            }
+          }
+
+          // Update daily_edge with all edge data
           await supabase
             .from('daily_edges')
             .update({
               dk_offered: true,
               dk_total_line: totalLine,
               dk_line_percentile: dkLinePercentile,
+              p95_over_line: p95OverLine,
+              p95_over_odds: p95OverOdds,
+              p05_under_line: p05UnderLine,
+              p05_under_odds: p05UnderOdds,
+              best_over_edge: bestOverEdge,
+              best_under_edge: bestUnderEdge,
+              alternate_lines: alternateLines.length > 0 ? alternateLines : null,
               updated_at: new Date().toISOString(),
             })
             .eq('game_id', game.id)

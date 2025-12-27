@@ -16,6 +16,9 @@ export type Database = {
     Tables: {
       daily_edges: {
         Row: {
+          alternate_lines: Json | null
+          best_over_edge: number | null
+          best_under_edge: number | null
           date_local: string
           dk_line_percentile: number | null
           dk_offered: boolean
@@ -28,12 +31,19 @@ export type Database = {
           n_h2h: number
           n_used: number | null
           p05: number | null
+          p05_under_line: number | null
+          p05_under_odds: number | null
           p95: number | null
+          p95_over_line: number | null
+          p95_over_odds: number | null
           segment_used: string | null
           sport_id: string
           updated_at: string
         }
         Insert: {
+          alternate_lines?: Json | null
+          best_over_edge?: number | null
+          best_under_edge?: number | null
           date_local: string
           dk_line_percentile?: number | null
           dk_offered?: boolean
@@ -46,12 +56,19 @@ export type Database = {
           n_h2h?: number
           n_used?: number | null
           p05?: number | null
+          p05_under_line?: number | null
+          p05_under_odds?: number | null
           p95?: number | null
+          p95_over_line?: number | null
+          p95_over_odds?: number | null
           segment_used?: string | null
           sport_id: string
           updated_at?: string
         }
         Update: {
+          alternate_lines?: Json | null
+          best_over_edge?: number | null
+          best_under_edge?: number | null
           date_local?: string
           dk_line_percentile?: number | null
           dk_offered?: boolean
@@ -64,7 +81,11 @@ export type Database = {
           n_h2h?: number
           n_used?: number | null
           p05?: number | null
+          p05_under_line?: number | null
+          p05_under_odds?: number | null
           p95?: number | null
+          p95_over_line?: number | null
+          p95_over_odds?: number | null
           segment_used?: string | null
           sport_id?: string
           updated_at?: string
