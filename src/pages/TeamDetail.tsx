@@ -1,12 +1,13 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, Trophy, TrendingUp, TrendingDown, Calendar, Target } from "lucide-react";
+import { ArrowLeft, Trophy, TrendingUp, TrendingDown, Calendar, Target, Users, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { SportId } from "@/types";
 import {
@@ -21,6 +22,7 @@ import {
   Bar,
   Legend,
 } from "recharts";
+import { format } from "date-fns";
 
 interface TeamInfo {
   id: string;
@@ -38,6 +40,31 @@ interface SeasonStats {
   ppg_avg: number;
   opp_ppg_avg: number;
   playoff_result: string | null;
+  conference: string | null;
+  division: string | null;
+}
+
+interface H2HGame {
+  id: string;
+  start_time_utc: string;
+  home_score: number;
+  away_score: number;
+  home_team_id: string;
+  away_team_id: string;
+  final_total: number;
+  opponent_name: string;
+  opponent_id: string;
+  isHome: boolean;
+  won: boolean;
+}
+
+interface H2HSummary {
+  opponent_id: string;
+  opponent_name: string;
+  opponent_city: string | null;
+  wins: number;
+  losses: number;
+  games: H2HGame[];
 }
 
 const sportLabels: Record<SportId, string> = {
@@ -70,7 +97,7 @@ export default function TeamDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('team_seasons')
-        .select('id, season_year, wins, losses, ppg_avg, opp_ppg_avg, playoff_result')
+        .select('id, season_year, wins, losses, ppg_avg, opp_ppg_avg, playoff_result, conference, division')
         .eq('team_id', teamId!)
         .order('season_year', { ascending: true });
 
@@ -80,7 +107,102 @@ export default function TeamDetail() {
     enabled: !!teamId,
   });
 
-  const isLoading = teamLoading || seasonsLoading;
+  // Fetch head-to-head games
+  const { data: h2hGames, isLoading: h2hLoading } = useQuery({
+    queryKey: ['team-h2h', teamId],
+    queryFn: async () => {
+      // Get games where this team played (home or away)
+      const { data: games, error } = await supabase
+        .from('games')
+        .select(`
+          id,
+          start_time_utc,
+          home_score,
+          away_score,
+          home_team_id,
+          away_team_id,
+          final_total,
+          status
+        `)
+        .or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`)
+        .eq('status', 'final')
+        .order('start_time_utc', { ascending: false })
+        .limit(200);
+
+      if (error) throw error;
+
+      // Get all opponent team IDs
+      const opponentIds = new Set<string>();
+      games?.forEach(g => {
+        if (g.home_team_id === teamId) opponentIds.add(g.away_team_id);
+        else opponentIds.add(g.home_team_id);
+      });
+
+      // Fetch opponent names
+      const { data: opponents } = await supabase
+        .from('teams')
+        .select('id, name, city')
+        .in('id', Array.from(opponentIds));
+
+      const opponentMap = new Map(opponents?.map(o => [o.id, o]) || []);
+
+      return (games || []).map(g => {
+        const isHome = g.home_team_id === teamId;
+        const opponentId = isHome ? g.away_team_id : g.home_team_id;
+        const opponent = opponentMap.get(opponentId);
+        const teamScore = isHome ? g.home_score : g.away_score;
+        const oppScore = isHome ? g.away_score : g.home_score;
+
+        return {
+          id: g.id,
+          start_time_utc: g.start_time_utc,
+          home_score: g.home_score,
+          away_score: g.away_score,
+          home_team_id: g.home_team_id,
+          away_team_id: g.away_team_id,
+          final_total: g.final_total,
+          opponent_name: opponent?.name || 'Unknown',
+          opponent_city: opponent?.city || null,
+          opponent_id: opponentId,
+          isHome,
+          won: teamScore > oppScore,
+        };
+      }) as (H2HGame & { opponent_city: string | null })[];
+    },
+    enabled: !!teamId,
+  });
+
+  // Group H2H by opponent
+  const h2hSummaries = useMemo(() => {
+    if (!h2hGames) return [];
+    
+    const byOpponent = new Map<string, H2HSummary>();
+    
+    h2hGames.forEach(game => {
+      if (!byOpponent.has(game.opponent_id)) {
+        byOpponent.set(game.opponent_id, {
+          opponent_id: game.opponent_id,
+          opponent_name: game.opponent_name,
+          opponent_city: (game as any).opponent_city,
+          wins: 0,
+          losses: 0,
+          games: [],
+        });
+      }
+      
+      const summary = byOpponent.get(game.opponent_id)!;
+      if (game.won) summary.wins++;
+      else summary.losses++;
+      summary.games.push(game);
+    });
+    
+    // Sort by most games played
+    return Array.from(byOpponent.values()).sort((a, b) => 
+      (b.wins + b.losses) - (a.wins + a.losses)
+    );
+  }, [h2hGames]);
+
+  const isLoading = teamLoading || seasonsLoading || h2hLoading;
 
   // Calculate career stats
   const careerStats = useMemo(() => {
@@ -387,6 +509,89 @@ export default function TeamDetail() {
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Head-to-Head Records */}
+                {h2hSummaries.length > 0 && (
+                  <Card className="bg-card border-border/60 mt-8">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Users className="h-5 w-5" />
+                        Head-to-Head Records
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-border/60 text-left text-sm text-muted-foreground">
+                              <th className="px-4 py-3 font-medium">Opponent</th>
+                              <th className="px-4 py-3 font-medium text-center">W</th>
+                              <th className="px-4 py-3 font-medium text-center">L</th>
+                              <th className="px-4 py-3 font-medium text-center">Win%</th>
+                              <th className="px-4 py-3 font-medium text-center hidden sm:table-cell">Games</th>
+                              <th className="px-4 py-3 font-medium text-right hidden md:table-cell">Last Game</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {h2hSummaries.slice(0, 20).map((h2h) => {
+                              const totalGames = h2h.wins + h2h.losses;
+                              const winPct = totalGames > 0 ? ((h2h.wins / totalGames) * 100).toFixed(1) : '0.0';
+                              const lastGame = h2h.games[0];
+                              
+                              return (
+                                <tr
+                                  key={h2h.opponent_id}
+                                  className="border-b border-border/30 hover:bg-muted/30 transition-colors group"
+                                >
+                                  <td className="px-4 py-3">
+                                    <Link 
+                                      to={`/team/${h2h.opponent_id}`}
+                                      className="flex items-center gap-2 hover:text-primary transition-colors font-medium"
+                                    >
+                                      {h2h.opponent_city && <span className="hidden sm:inline text-muted-foreground">{h2h.opponent_city}</span>}
+                                      {h2h.opponent_name}
+                                      <ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />
+                                    </Link>
+                                  </td>
+                                  <td className="px-4 py-3 text-center font-medium text-status-over">{h2h.wins}</td>
+                                  <td className="px-4 py-3 text-center font-medium text-status-under">{h2h.losses}</td>
+                                  <td className={cn(
+                                    "px-4 py-3 text-center font-medium",
+                                    parseFloat(winPct) >= 50 ? "text-status-over" : "text-status-under"
+                                  )}>
+                                    {winPct}%
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-muted-foreground hidden sm:table-cell">
+                                    {totalGames}
+                                  </td>
+                                  <td className="px-4 py-3 text-right text-sm text-muted-foreground hidden md:table-cell">
+                                    {lastGame && (
+                                      <span className={cn(
+                                        "inline-flex items-center gap-1",
+                                        lastGame.won ? "text-status-over" : "text-status-under"
+                                      )}>
+                                        {lastGame.won ? 'W' : 'L'} {lastGame.isHome ? lastGame.home_score : lastGame.away_score}-{lastGame.isHome ? lastGame.away_score : lastGame.home_score}
+                                        <span className="text-muted-foreground ml-1">
+                                          ({format(new Date(lastGame.start_time_utc), 'MMM d, yyyy')})
+                                        </span>
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      
+                      {h2hSummaries.length === 0 && (
+                        <div className="px-4 py-12 text-center text-muted-foreground">
+                          No head-to-head data available
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
               </>
             )}
           </>

@@ -41,7 +41,23 @@ const sportColors: Record<SportId, { bg: string; text: string }> = {
   nhl: { bg: 'bg-cyan-500/10', text: 'text-cyan-500' },
 };
 
-function StandingsTable({ teams, showDivision = true }: { teams: TeamStanding[]; showDivision?: boolean }) {
+function getPlayoffSeed(rank: number, sportId: SportId): { seed: number | null; isPlayoff: boolean } {
+  // Playoff spots per sport (per conference for NBA/NHL, per division winner + wildcards for NFL/MLB)
+  const playoffSpots: Record<SportId, number> = {
+    nba: 6, // Top 6 in each conference auto-qualify
+    nhl: 4, // Top 3 in each division + wildcards (roughly top 4 per division)
+    nfl: 4, // Division winners + wildcards  
+    mlb: 3, // Division winners + wildcards
+  };
+  
+  const spots = playoffSpots[sportId];
+  if (rank <= spots) {
+    return { seed: rank, isPlayoff: true };
+  }
+  return { seed: null, isPlayoff: false };
+}
+
+function StandingsTable({ teams, sportId }: { teams: TeamStanding[]; sportId: SportId }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full">
@@ -58,15 +74,28 @@ function StandingsTable({ teams, showDivision = true }: { teams: TeamStanding[];
         </thead>
         <tbody>
           {teams.map((team, idx) => {
-            const winPct = ((team.wins / (team.wins + team.losses || 1)) * 100).toFixed(1);
-            const diff = team.ppg_avg - team.opp_ppg_avg;
+            const totalGames = team.wins + team.losses;
+            const winPct = totalGames > 0 ? ((team.wins / totalGames) * 100).toFixed(1) : '0.0';
+            const diff = (team.ppg_avg || 0) - (team.opp_ppg_avg || 0);
+            const { seed, isPlayoff } = getPlayoffSeed(idx + 1, sportId);
             
             return (
               <tr 
                 key={team.id} 
-                className="border-b border-border/30 hover:bg-muted/30 transition-colors group"
+                className={cn(
+                  "border-b border-border/30 hover:bg-muted/30 transition-colors group",
+                  isPlayoff && "bg-primary/5"
+                )}
               >
-                <td className="px-3 py-2 text-muted-foreground text-sm">{idx + 1}</td>
+                <td className="px-3 py-2 text-muted-foreground text-sm">
+                  {seed ? (
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-bold">
+                      {seed}
+                    </span>
+                  ) : (
+                    idx + 1
+                  )}
+                </td>
                 <td className="px-3 py-2">
                   <Link 
                     to={`/team/${team.team_id}`}
@@ -292,7 +321,7 @@ export default function Standings() {
                         <CardTitle className="text-base">{division}</CardTitle>
                       </CardHeader>
                       <CardContent className="p-0">
-                        <StandingsTable teams={teams} />
+                        <StandingsTable teams={teams} sportId={sportFilter} />
                       </CardContent>
                     </Card>
                   ))}
@@ -309,7 +338,7 @@ export default function Standings() {
                   <CardTitle className="text-lg">{conference}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <StandingsTable teams={teams} showDivision={false} />
+                  <StandingsTable teams={teams} sportId={sportFilter} />
                 </CardContent>
               </Card>
             ))}
