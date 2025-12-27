@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { 
@@ -16,15 +17,24 @@ import {
   Swords,
   Activity,
   DollarSign,
+  Menu,
+  X,
+  LayoutDashboard,
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 import type { LucideIcon } from "lucide-react";
 
 interface NavItem {
@@ -39,9 +49,10 @@ interface NavGroup {
 }
 
 const coreNav: NavItem[] = [
-  { href: "/", label: "Today" },
-  { href: "/week", label: "Week" },
-  { href: "/parlay", label: "Parlay" },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/", label: "Today", icon: Calendar },
+  { href: "/week", label: "Week", icon: Calendar },
+  { href: "/parlay", label: "Parlay", icon: Target },
 ];
 
 const teamsGroup: NavGroup = {
@@ -86,7 +97,7 @@ function NavDropdown({ group, isActive }: { group: NavGroup; isActive: boolean }
           <ChevronDown className="h-3 w-3" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
+      <DropdownMenuContent align="end" className="w-52 bg-popover">
         {group.items.map((item) => {
           const Icon = item.icon;
           return (
@@ -109,6 +120,67 @@ function NavDropdown({ group, isActive }: { group: NavGroup; isActive: boolean }
   );
 }
 
+function MobileNav() {
+  const [open, setOpen] = useState(false);
+  const location = useLocation();
+
+  const allNavItems = [
+    ...coreNav,
+    { href: "", label: "Teams", isHeader: true },
+    ...teamsGroup.items,
+    { href: "", label: "Analytics", isHeader: true },
+    ...analyticsGroup.items,
+  ];
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button variant="ghost" size="icon" className="md:hidden">
+          <Menu className="h-5 w-5" />
+          <span className="sr-only">Toggle menu</span>
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="right" className="w-72 bg-background">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            <Percent className="h-5 w-5 text-primary" />
+            Game Percentiles
+          </SheetTitle>
+        </SheetHeader>
+        <nav className="mt-6 flex flex-col gap-1">
+          {allNavItems.map((item, idx) => {
+            if ('isHeader' in item && item.isHeader) {
+              return (
+                <div key={idx} className="px-3 py-2 mt-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {item.label}
+                </div>
+              );
+            }
+            const Icon = (item as NavItem).icon;
+            const isActive = location.pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                to={item.href}
+                onClick={() => setOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "text-foreground hover:bg-muted"
+                )}
+              >
+                {Icon && <Icon className="h-4 w-4" />}
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export function Header() {
   const location = useLocation();
   const isTeamsActive = teamsGroup.items.some(item => location.pathname === item.href);
@@ -128,8 +200,9 @@ export function Header() {
           </div>
         </Link>
 
-        <nav className="flex items-center gap-1 p-1 rounded-full bg-secondary/50">
-          {coreNav.map((item) => (
+        {/* Desktop Navigation */}
+        <nav className="hidden md:flex items-center gap-1 p-1 rounded-full bg-secondary/50">
+          {coreNav.slice(0, 4).map((item) => (
             <Link
               key={item.href}
               to={item.href}
@@ -147,6 +220,9 @@ export function Header() {
           <NavDropdown group={teamsGroup} isActive={isTeamsActive} />
           <NavDropdown group={analyticsGroup} isActive={isAnalyticsActive} />
         </nav>
+
+        {/* Mobile Navigation */}
+        <MobileNav />
       </div>
     </header>
   );
