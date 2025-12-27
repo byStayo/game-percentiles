@@ -29,6 +29,7 @@ const RECENCY_WEIGHTS = {
 const MIN_SAMPLE = 5
 const HYBRID_MIN_GAMES = 10 // Each team needs at least this many recent games for hybrid
 const WEIGHTED_MIN_GAMES = 8 // Minimum games needed for recency-weighted segment
+const ENABLE_ON_DEMAND_HYDRATION = true // Enable hydration fallback for insufficient data
 
 function getTodayET(): string {
   const now = new Date()
@@ -290,7 +291,8 @@ Deno.serve(async (req) => {
     hybrid_form: 0,
     recency_weighted: 0,
     insufficient: 0, 
-    errors: 0 
+    errors: 0,
+    hydrated: 0,
   }
 
   try {
@@ -369,6 +371,71 @@ Deno.serve(async (req) => {
             game.home_team_id,
             game.away_team_id
           )
+        }
+
+        // If still no result and hydration is enabled, trigger on-demand hydration
+        if (!result && ENABLE_ON_DEMAND_HYDRATION) {
+          console.log(`[COMPUTE] Triggering hydration for ${game.sport_id}: ${game.home_team_id} vs ${game.away_team_id}`)
+          
+          try {
+            // Call hydrate-matchup edge function
+            const hydrateUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/hydrate-matchup`
+            const hydrateResponse = await fetch(hydrateUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              },
+              body: JSON.stringify({
+                sport_id: game.sport_id,
+                team_a_id: game.home_team_id,
+                team_b_id: game.away_team_id,
+                years_back: 10,
+              }),
+            })
+            
+            if (hydrateResponse.ok) {
+              const hydrateResult = await hydrateResponse.json()
+              console.log(`[COMPUTE] Hydration complete: ${hydrateResult.inserted} new games, ${hydrateResult.n_games_total} total`)
+              counters.hydrated++
+              
+              // Retry computing after hydration
+              if (use_recency_weighted) {
+                result = await computeRecencyWeighted(
+                  supabase,
+                  game.sport_id,
+                  franchiseLowId,
+                  franchiseHighId,
+                  teamLowId,
+                  teamHighId
+                )
+              }
+              
+              if (!result) {
+                result = await selectBestSegment(
+                  supabase,
+                  game.sport_id,
+                  franchiseLowId,
+                  franchiseHighId,
+                  teamLowId,
+                  teamHighId
+                )
+              }
+              
+              if (!result) {
+                result = await computeHybridForm(
+                  supabase,
+                  game.sport_id,
+                  game.home_team_id,
+                  game.away_team_id
+                )
+              }
+            } else {
+              console.log(`[COMPUTE] Hydration failed: ${hydrateResponse.status}`)
+            }
+          } catch (hydrateErr) {
+            console.error(`[COMPUTE] Hydration error:`, hydrateErr)
+          }
         }
 
         let isVisible = false
