@@ -7,6 +7,7 @@ const navItems = [
   { href: "/week", label: "Week" },
   { href: "/parlay", label: "Parlay" },
   { href: "/teams", label: "Teams" },
+  { href: "/compare", label: "Compare" },
   { href: "/stats", label: "Stats" },
   { href: "/status", label: "Status" },
 ];

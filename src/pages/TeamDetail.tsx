@@ -37,6 +37,7 @@ interface SeasonStats {
   losses: number;
   ppg_avg: number;
   opp_ppg_avg: number;
+  playoff_result: string | null;
 }
 
 const sportLabels: Record<SportId, string> = {
@@ -69,7 +70,7 @@ export default function TeamDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('team_seasons')
-        .select('id, season_year, wins, losses, ppg_avg, opp_ppg_avg')
+        .select('id, season_year, wins, losses, ppg_avg, opp_ppg_avg, playoff_result')
         .eq('team_id', teamId!)
         .order('season_year', { ascending: true });
 
@@ -312,6 +313,7 @@ export default function TeamDetail() {
                             <th className="px-4 py-3 font-medium text-right">PPG</th>
                             <th className="px-4 py-3 font-medium text-right">Opp PPG</th>
                             <th className="px-4 py-3 font-medium text-right">Diff</th>
+                            <th className="px-4 py-3 font-medium">Playoffs</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -360,6 +362,16 @@ export default function TeamDetail() {
                                   isPositive ? "text-status-over" : "text-status-under"
                                 )}>
                                   {isPositive ? '+' : ''}{diff}
+                                </td>
+                                <td className="px-4 py-3">
+                                  {s.playoff_result ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-amber-500/10 text-amber-500">
+                                      <Trophy className="h-3 w-3" />
+                                      {s.playoff_result}
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground text-sm">-</span>
+                                  )}
                                 </td>
                               </tr>
                             );
