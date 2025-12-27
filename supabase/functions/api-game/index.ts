@@ -7,11 +7,20 @@ const corsHeaders = {
 
 // Segment time windows in years
 const SEGMENT_YEARS: Record<string, number | null> = {
+  h2h_1y: 1,
   h2h_3y: 3,
   h2h_5y: 5,
   h2h_10y: 10,
   h2h_20y: 20,
   h2h_all: null, // no filter
+}
+
+// Decade ranges
+const DECADE_RANGES: Record<string, { start: number; end: number }> = {
+  decade_2020s: { start: 2020, end: 2029 },
+  decade_2010s: { start: 2010, end: 2019 },
+  decade_2000s: { start: 2000, end: 2009 },
+  decade_1990s: { start: 1990, end: 1999 },
 }
 
 Deno.serve(async (req) => {
@@ -95,9 +104,16 @@ Deno.serve(async (req) => {
     
     // Calculate date filter based on segment
     const yearsBack = SEGMENT_YEARS[segment] ?? null
-    const cutoffDate = yearsBack
-      ? new Date(Date.now() - yearsBack * 365 * 24 * 60 * 60 * 1000).toISOString()
-      : null
+    const decadeRange = DECADE_RANGES[segment] ?? null
+    
+    let cutoffDate: string | null = null
+    let decadeFilter: { start: number; end: number } | null = null
+    
+    if (yearsBack) {
+      cutoffDate = new Date(Date.now() - yearsBack * 365 * 24 * 60 * 60 * 1000).toISOString()
+    } else if (decadeRange) {
+      decadeFilter = decadeRange
+    }
 
     // Build query for historical games with optional date filter
     let historyQuery = supabase
@@ -106,6 +122,7 @@ Deno.serve(async (req) => {
         id,
         played_at_utc,
         total,
+        season_year,
         game:games!matchup_games_game_id_fkey(
           home_score,
           away_score,
@@ -115,7 +132,7 @@ Deno.serve(async (req) => {
       `)
       .eq('sport_id', game.sport_id)
       .order('played_at_utc', { ascending: false })
-      .limit(50)
+      .limit(100)
 
     // Use franchise matchup if available, otherwise team matchup
     if (franchiseLowId && franchiseHighId) {
@@ -130,6 +147,12 @@ Deno.serve(async (req) => {
 
     if (cutoffDate) {
       historyQuery = historyQuery.gte('played_at_utc', cutoffDate)
+    }
+    
+    if (decadeFilter) {
+      historyQuery = historyQuery
+        .gte('season_year', decadeFilter.start)
+        .lte('season_year', decadeFilter.end)
     }
 
     const { data: historicalGames } = await historyQuery

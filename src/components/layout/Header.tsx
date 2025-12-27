@@ -20,6 +20,7 @@ import {
   Menu,
   X,
   LayoutDashboard,
+  Building2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -76,6 +77,7 @@ const analyticsGroup: NavGroup = {
     { href: "/league-stats", label: "League Stats", icon: LineChart },
     { href: "/simulator", label: "Bet Simulator", icon: DollarSign },
     { href: "/stats", label: "System Stats", icon: BarChart3 },
+    { href: "/franchises", label: "Franchises", icon: Building2 },
   ],
 };
 
