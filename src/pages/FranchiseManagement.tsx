@@ -7,14 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { Building2, GitBranch, MapPin, Calendar, Edit2, Plus, Search, RefreshCw } from "lucide-react";
+import { Building2, GitBranch, MapPin, Calendar, Edit2, Plus, Search, RefreshCw, Link2, Unlink } from "lucide-react";
 import type { SportId } from "@/types";
 
 const sportOptions: { value: SportId; label: string }[] = [
@@ -53,12 +53,23 @@ interface Team {
   provider_team_key: string;
 }
 
+interface VersionMapping {
+  id: string;
+  sport_id: string;
+  provider_team_key: string;
+  team_version_id: string;
+  franchise_id: string;
+  team_id: string | null;
+}
+
 export default function FranchiseManagement() {
   const [activeSport, setActiveSport] = useState<SportId>("nba");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFranchise, setSelectedFranchise] = useState<Franchise | null>(null);
   const [editingVersion, setEditingVersion] = useState<TeamVersion | null>(null);
   const [isAddVersionOpen, setIsAddVersionOpen] = useState(false);
+  const [isAddFranchiseOpen, setIsAddFranchiseOpen] = useState(false);
+  const [mappingTeam, setMappingTeam] = useState<Team | null>(null);
   const queryClient = useQueryClient();
 
   // Fetch franchises
@@ -91,6 +102,20 @@ export default function FranchiseManagement() {
     enabled: !!selectedFranchise,
   });
 
+  // Fetch all team versions for mapping dropdown
+  const { data: allTeamVersions } = useQuery({
+    queryKey: ["all_team_versions", activeSport],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("team_versions")
+        .select("*, franchise:franchises(canonical_name)")
+        .eq("sport_id", activeSport)
+        .order("display_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   // Fetch teams (provider mappings)
   const { data: teams, isLoading: teamsLoading } = useQuery({
     queryKey: ["teams", activeSport],
@@ -114,7 +139,25 @@ export default function FranchiseManagement() {
         .select("*")
         .eq("sport_id", activeSport);
       if (error) throw error;
+      return data as VersionMapping[];
+    },
+  });
+
+  // Create franchise mutation
+  const createFranchiseMutation = useMutation({
+    mutationFn: async (franchise: Omit<Franchise, "id">) => {
+      const { data, error } = await supabase.from("franchises").insert(franchise).select().single();
+      if (error) throw error;
       return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["franchises"] });
+      toast.success("Franchise created");
+      setIsAddFranchiseOpen(false);
+      setSelectedFranchise(data);
+    },
+    onError: (error) => {
+      toast.error(`Failed to create: ${error.message}`);
     },
   });
 
@@ -152,11 +195,49 @@ export default function FranchiseManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team_versions"] });
+      queryClient.invalidateQueries({ queryKey: ["all_team_versions"] });
       toast.success("Team version added");
       setIsAddVersionOpen(false);
     },
     onError: (error) => {
       toast.error(`Failed to add: ${error.message}`);
+    },
+  });
+
+  // Map team to version mutation
+  const mapTeamMutation = useMutation({
+    mutationFn: async ({ team, versionId, franchiseId }: { team: Team; versionId: string; franchiseId: string }) => {
+      const { error } = await supabase.from("team_version_map").insert({
+        sport_id: team.sport_id,
+        provider_team_key: team.provider_team_key,
+        team_version_id: versionId,
+        franchise_id: franchiseId,
+        team_id: team.id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team_version_map"] });
+      toast.success("Team mapped to franchise");
+      setMappingTeam(null);
+    },
+    onError: (error) => {
+      toast.error(`Failed to map: ${error.message}`);
+    },
+  });
+
+  // Unmap team mutation
+  const unmapTeamMutation = useMutation({
+    mutationFn: async (mappingId: string) => {
+      const { error } = await supabase.from("team_version_map").delete().eq("id", mappingId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team_version_map"] });
+      toast.success("Mapping removed");
+    },
+    onError: (error) => {
+      toast.error(`Failed to unmap: ${error.message}`);
     },
   });
 
@@ -168,6 +249,14 @@ export default function FranchiseManagement() {
     return versionMappings?.filter((m) => m.team_version_id === versionId) || [];
   };
 
+  const getUnmappedTeams = () => {
+    return teams?.filter((t) => !versionMappings?.some((m) => m.provider_team_key === t.provider_team_key)) || [];
+  };
+
+  const getMappedTeams = () => {
+    return teams?.filter((t) => versionMappings?.some((m) => m.provider_team_key === t.provider_team_key)) || [];
+  };
+
   return (
     <>
       <Helmet>
@@ -177,7 +266,7 @@ export default function FranchiseManagement() {
 
       <Layout>
         <div className="max-w-6xl mx-auto space-y-6 px-4 py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 <Building2 className="h-6 w-6" />
@@ -187,17 +276,38 @@ export default function FranchiseManagement() {
                 Manage team identities, versions, and handle rebrands/relocations
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => queryClient.invalidateQueries({ queryKey: ["franchises"] })}
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
+            <div className="flex gap-2">
+              <Dialog open={isAddFranchiseOpen} onOpenChange={setIsAddFranchiseOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm">
+                    <Plus className="h-4 w-4 mr-1" />
+                    New Franchise
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-card">
+                  <AddFranchiseForm
+                    sportId={activeSport}
+                    onSubmit={(f) => createFranchiseMutation.mutate(f)}
+                    isLoading={createFranchiseMutation.isPending}
+                  />
+                </DialogContent>
+              </Dialog>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  queryClient.invalidateQueries({ queryKey: ["franchises"] });
+                  queryClient.invalidateQueries({ queryKey: ["teams"] });
+                  queryClient.invalidateQueries({ queryKey: ["team_version_map"] });
+                }}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
           </div>
 
-          <Tabs value={activeSport} onValueChange={(v) => setActiveSport(v as SportId)}>
+          <Tabs value={activeSport} onValueChange={(v) => { setActiveSport(v as SportId); setSelectedFranchise(null); }}>
             <TabsList className="bg-muted/50">
               {sportOptions.map((sport) => (
                 <TabsTrigger key={sport.value} value={sport.value} className="uppercase text-xs">
@@ -211,7 +321,12 @@ export default function FranchiseManagement() {
                 {/* Franchises List */}
                 <Card className="lg:col-span-1">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Franchises</CardTitle>
+                    <CardTitle className="text-base flex items-center justify-between">
+                      Franchises
+                      <Badge variant="secondary" className="text-2xs">
+                        {franchises?.length || 0}
+                      </Badge>
+                    </CardTitle>
                     <div className="relative">
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -250,6 +365,11 @@ export default function FranchiseManagement() {
                               )}
                             </button>
                           ))}
+                          {filteredFranchises?.length === 0 && (
+                            <div className="text-center py-8 text-muted-foreground text-sm">
+                              No franchises found. Create one to get started.
+                            </div>
+                          )}
                         </div>
                       )}
                     </ScrollArea>
@@ -367,8 +487,14 @@ export default function FranchiseManagement() {
                                         </div>
                                         <div className="flex flex-wrap gap-1">
                                           {mappedTeams.map((m) => (
-                                            <Badge key={m.id} variant="secondary" className="text-2xs">
+                                            <Badge key={m.id} variant="secondary" className="text-2xs flex items-center gap-1">
                                               {m.provider_team_key}
+                                              <button
+                                                onClick={() => unmapTeamMutation.mutate(m.id)}
+                                                className="hover:text-destructive ml-1"
+                                              >
+                                                <Unlink className="h-3 w-3" />
+                                              </button>
                                             </Badge>
                                           ))}
                                         </div>
@@ -392,50 +518,96 @@ export default function FranchiseManagement() {
                 </Card>
               </div>
 
-              {/* Unmapped Teams */}
+              {/* Provider Team Mappings */}
               <Card className="mt-6">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Provider Team Mappings</CardTitle>
-                  <CardDescription>
-                    Teams from the data provider that need to be mapped to franchise versions
-                  </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">Provider Team Mappings</CardTitle>
+                      <CardDescription>
+                        Map data provider teams to franchise versions for accurate historical tracking
+                      </CardDescription>
+                    </div>
+                    <div className="flex gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        {getMappedTeams().length} mapped
+                      </Badge>
+                      <Badge variant="secondary" className="text-xs">
+                        {getUnmappedTeams().length} unmapped
+                      </Badge>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {teamsLoading ? (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {[...Array(8)].map((_, i) => (
-                        <Skeleton key={i} className="h-16 w-full" />
+                        <Skeleton key={i} className="h-20 w-full" />
                       ))}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                       {teams?.map((team) => {
                         const mapping = versionMappings?.find(
                           (m) => m.provider_team_key === team.provider_team_key
                         );
                         const isMapped = !!mapping;
+                        const mappedVersion = isMapped
+                          ? allTeamVersions?.find((v) => v.id === mapping.team_version_id)
+                          : null;
 
                         return (
                           <div
                             key={team.id}
-                            className={`p-3 rounded-lg border text-sm ${
+                            className={`p-3 rounded-lg border text-sm transition-colors ${
                               isMapped
                                 ? "border-primary/30 bg-primary/5"
-                                : "border-border/60 bg-muted/30"
+                                : "border-status-over/30 bg-status-over/5"
                             }`}
                           >
                             <div className="font-medium truncate">{team.name}</div>
                             <div className="text-xs text-muted-foreground truncate">
-                              {team.abbrev || team.provider_team_key}
+                              {team.abbrev} • {team.provider_team_key}
                             </div>
                             {isMapped ? (
-                              <Badge variant="outline" className="mt-1 text-2xs">
-                                Mapped
-                              </Badge>
+                              <div className="mt-2 flex items-center justify-between">
+                                <Badge variant="outline" className="text-2xs truncate max-w-[120px]">
+                                  {mappedVersion?.display_name || "Mapped"}
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => unmapTeamMutation.mutate(mapping.id)}
+                                >
+                                  <Unlink className="h-3 w-3" />
+                                </Button>
+                              </div>
                             ) : (
-                              <Badge variant="secondary" className="mt-1 text-2xs">
-                                Unmapped
-                              </Badge>
+                              <Dialog open={mappingTeam?.id === team.id} onOpenChange={(open) => !open && setMappingTeam(null)}>
+                                <DialogTrigger asChild>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="mt-2 w-full text-xs"
+                                    onClick={() => setMappingTeam(team)}
+                                  >
+                                    <Link2 className="h-3 w-3 mr-1" />
+                                    Map to Franchise
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="bg-card">
+                                  <MapTeamForm
+                                    team={team}
+                                    teamVersions={allTeamVersions || []}
+                                    onSubmit={(versionId, franchiseId) => 
+                                      mapTeamMutation.mutate({ team, versionId, franchiseId })
+                                    }
+                                    isLoading={mapTeamMutation.isPending}
+                                    onCancel={() => setMappingTeam(null)}
+                                  />
+                                </DialogContent>
+                              </Dialog>
                             )}
                           </div>
                         );
@@ -448,6 +620,148 @@ export default function FranchiseManagement() {
           </Tabs>
         </div>
       </Layout>
+    </>
+  );
+}
+
+// Add Franchise Form
+function AddFranchiseForm({
+  sportId,
+  onSubmit,
+  isLoading,
+}: {
+  sportId: SportId;
+  onSubmit: (franchise: Omit<Franchise, "id">) => void;
+  isLoading: boolean;
+}) {
+  const [formData, setFormData] = useState({
+    canonical_name: "",
+    founded_year: "",
+    notes: "",
+  });
+
+  const handleSubmit = () => {
+    onSubmit({
+      sport_id: sportId,
+      canonical_name: formData.canonical_name,
+      founded_year: formData.founded_year ? parseInt(formData.founded_year) : null,
+      notes: formData.notes || null,
+    });
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Create New Franchise</DialogTitle>
+        <DialogDescription>
+          Add a new franchise to track team history across rebrands and relocations.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-4 py-4">
+        <div>
+          <Label>Canonical Name</Label>
+          <Input
+            value={formData.canonical_name}
+            onChange={(e) => setFormData({ ...formData, canonical_name: e.target.value })}
+            placeholder="e.g., Lakers, Patriots, Yankees"
+          />
+        </div>
+        <div>
+          <Label>Founded Year (optional)</Label>
+          <Input
+            type="number"
+            value={formData.founded_year}
+            onChange={(e) => setFormData({ ...formData, founded_year: e.target.value })}
+            placeholder="e.g., 1946"
+          />
+        </div>
+        <div>
+          <Label>Notes (optional)</Label>
+          <Input
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            placeholder="e.g., Originally Minneapolis Lakers"
+          />
+        </div>
+      </div>
+      <DialogFooter>
+        <Button onClick={handleSubmit} disabled={isLoading || !formData.canonical_name}>
+          {isLoading ? "Creating..." : "Create Franchise"}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+// Map Team Form
+function MapTeamForm({
+  team,
+  teamVersions,
+  onSubmit,
+  isLoading,
+  onCancel,
+}: {
+  team: Team;
+  teamVersions: any[];
+  onSubmit: (versionId: string, franchiseId: string) => void;
+  isLoading: boolean;
+  onCancel: () => void;
+}) {
+  const [selectedVersionId, setSelectedVersionId] = useState("");
+
+  const selectedVersion = teamVersions.find((v) => v.id === selectedVersionId);
+
+  const handleSubmit = () => {
+    if (selectedVersion) {
+      onSubmit(selectedVersionId, selectedVersion.franchise_id);
+    }
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Map Team to Franchise</DialogTitle>
+        <DialogDescription>
+          Connect "{team.name}" ({team.abbrev}) to a franchise version for historical tracking.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-4 py-4">
+        <div>
+          <Label>Select Team Version</Label>
+          <Select value={selectedVersionId} onValueChange={setSelectedVersionId}>
+            <SelectTrigger className="bg-background">
+              <SelectValue placeholder="Choose a team version..." />
+            </SelectTrigger>
+            <SelectContent className="bg-popover">
+              {teamVersions.map((version) => (
+                <SelectItem key={version.id} value={version.id}>
+                  {version.display_name} ({version.franchise?.canonical_name})
+                  {version.city && ` - ${version.city}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {selectedVersion && (
+          <div className="p-3 rounded-lg bg-secondary/50 text-sm">
+            <div className="font-medium">{selectedVersion.display_name}</div>
+            <div className="text-xs text-muted-foreground">
+              Franchise: {selectedVersion.franchise?.canonical_name}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Period: {selectedVersion.effective_from} → {selectedVersion.effective_to || "Present"}
+            </div>
+          </div>
+        )}
+      </div>
+      <DialogFooter className="gap-2">
+        <Button variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button onClick={handleSubmit} disabled={isLoading || !selectedVersionId}>
+          {isLoading ? "Mapping..." : "Map Team"}
+        </Button>
+      </DialogFooter>
     </>
   );
 }
@@ -571,6 +885,9 @@ function AddVersionForm({
     <>
       <DialogHeader>
         <DialogTitle>Add Team Version</DialogTitle>
+        <DialogDescription>
+          Add a new version for {franchise.canonical_name} to track rebrands or relocations.
+        </DialogDescription>
       </DialogHeader>
       <div className="space-y-4 py-4">
         <div className="grid grid-cols-2 gap-4">

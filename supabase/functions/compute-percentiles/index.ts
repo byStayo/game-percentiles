@@ -6,7 +6,9 @@ const corsHeaders = {
 }
 
 // Segment selection ladder - try in order until n >= MIN_SAMPLE
+// PRIORITIZE recent data as it's most relevant (team composition similarity)
 const SEGMENT_LADDER = [
+  { key: 'h2h_1y', yearsBack: 1 },
   { key: 'h2h_3y', yearsBack: 3 },
   { key: 'h2h_5y', yearsBack: 5 },
   { key: 'h2h_10y', yearsBack: 10 },
@@ -163,6 +165,7 @@ Deno.serve(async (req) => {
   let jobRunId: number | null = null
   const counters = { 
     computed: 0, 
+    h2h_1y: 0,
     h2h_3y: 0, 
     h2h_5y: 0, 
     h2h_10y: 0, 
