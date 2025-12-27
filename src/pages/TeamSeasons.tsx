@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Trophy, TrendingUp, Search, Users, Calendar, ChevronRight } from "lucide-react";
+import { Trophy, TrendingUp, Search, Users, Calendar, ChevronRight, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { SportId } from "@/types";
 
@@ -22,6 +22,8 @@ interface TeamSeason {
   losses: number;
   ppg_avg: number;
   opp_ppg_avg: number;
+  conference: string | null;
+  division: string | null;
 }
 
 const sportLabels: Record<SportId, string> = {
@@ -41,6 +43,8 @@ const sportColors: Record<SportId, string> = {
 export default function TeamSeasons() {
   const [sportFilter, setSportFilter] = useState<SportId | 'all'>('nba');
   const [yearFilter, setYearFilter] = useState<number | 'all'>('all');
+  const [conferenceFilter, setConferenceFilter] = useState<string | 'all'>('all');
+  const [divisionFilter, setDivisionFilter] = useState<string | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'wins' | 'winPct' | 'ppg' | 'diff'>('wins');
 
@@ -58,6 +62,8 @@ export default function TeamSeasons() {
           losses,
           ppg_avg,
           opp_ppg_avg,
+          conference,
+          division,
           teams!inner(name, abbrev)
         `)
         .order('season_year', { ascending: false })
@@ -76,6 +82,8 @@ export default function TeamSeasons() {
         losses: row.losses,
         ppg_avg: row.ppg_avg,
         opp_ppg_avg: row.opp_ppg_avg,
+        conference: row.conference,
+        division: row.division,
       })) as TeamSeason[];
     },
     staleTime: 60000,
@@ -87,6 +95,24 @@ export default function TeamSeasons() {
     const years = [...new Set(teamSeasons.map(ts => ts.season_year))];
     return years.sort((a, b) => b - a);
   }, [teamSeasons]);
+
+  // Get unique conferences and divisions based on current sport filter
+  const { conferences, divisions } = useMemo(() => {
+    if (!teamSeasons) return { conferences: [], divisions: [] };
+    
+    let filtered = teamSeasons;
+    if (sportFilter !== 'all') {
+      filtered = filtered.filter(ts => ts.sport_id === sportFilter);
+    }
+    
+    const confs = [...new Set(filtered.map(ts => ts.conference).filter(Boolean))] as string[];
+    const divs = [...new Set(filtered.map(ts => ts.division).filter(Boolean))] as string[];
+    
+    return {
+      conferences: confs.sort(),
+      divisions: divs.sort(),
+    };
+  }, [teamSeasons, sportFilter]);
 
   // Filter and sort data
   const filteredData = useMemo(() => {
@@ -102,6 +128,16 @@ export default function TeamSeasons() {
     // Year filter
     if (yearFilter !== 'all') {
       filtered = filtered.filter(ts => ts.season_year === yearFilter);
+    }
+
+    // Conference filter
+    if (conferenceFilter !== 'all') {
+      filtered = filtered.filter(ts => ts.conference === conferenceFilter);
+    }
+
+    // Division filter
+    if (divisionFilter !== 'all') {
+      filtered = filtered.filter(ts => ts.division === divisionFilter);
     }
 
     // Search filter
@@ -133,7 +169,7 @@ export default function TeamSeasons() {
           return 0;
       }
     });
-  }, [teamSeasons, sportFilter, yearFilter, searchQuery, sortBy]);
+  }, [teamSeasons, sportFilter, yearFilter, conferenceFilter, divisionFilter, searchQuery, sortBy]);
 
   // Summary stats
   const summaryStats = useMemo(() => {
@@ -218,6 +254,55 @@ export default function TeamSeasons() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Conference Filter */}
+          {conferences.length > 0 && (
+            <div className="flex items-center gap-2 bg-card rounded-xl p-1.5 border border-border/60">
+              <Building2 className="h-4 w-4 text-muted-foreground ml-2" />
+              <Select
+                value={conferenceFilter}
+                onValueChange={(v) => {
+                  setConferenceFilter(v);
+                  if (v !== 'all') setDivisionFilter('all');
+                }}
+              >
+                <SelectTrigger className="w-32 h-8 border-0 bg-transparent">
+                  <SelectValue placeholder="Conference" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Conf</SelectItem>
+                  {conferences.map(conf => (
+                    <SelectItem key={conf} value={conf}>
+                      {conf}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Division Filter */}
+          {divisions.length > 0 && (
+            <div className="flex items-center gap-2 bg-card rounded-xl p-1.5 border border-border/60">
+              <Users className="h-4 w-4 text-muted-foreground ml-2" />
+              <Select
+                value={divisionFilter}
+                onValueChange={setDivisionFilter}
+              >
+                <SelectTrigger className="w-32 h-8 border-0 bg-transparent">
+                  <SelectValue placeholder="Division" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Div</SelectItem>
+                  {divisions.map(div => (
+                    <SelectItem key={div} value={div}>
+                      {div}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Sort */}
           <div className="flex items-center gap-2 bg-card rounded-xl p-1.5 border border-border/60">

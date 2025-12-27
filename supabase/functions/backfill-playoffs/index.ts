@@ -11,7 +11,7 @@ interface PlayoffEntry {
   playoff_result: string;
 }
 
-// Known playoff results by sport - can be extended or fetched from API
+// Known playoff results by sport - Historical data going back to 2015
 const NBA_PLAYOFFS: PlayoffEntry[] = [
   // 2024 Playoffs
   { team_abbrev: 'BOS', season_year: 2024, playoff_result: 'Champion' },
@@ -39,32 +39,107 @@ const NBA_PLAYOFFS: PlayoffEntry[] = [
   { team_abbrev: 'GSW', season_year: 2023, playoff_result: 'Conf Semis' },
   { team_abbrev: 'PHI', season_year: 2023, playoff_result: 'Conf Semis' },
   { team_abbrev: 'NYK', season_year: 2023, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'MEM', season_year: 2023, playoff_result: 'First Round' },
+  { team_abbrev: 'SAC', season_year: 2023, playoff_result: 'First Round' },
+  { team_abbrev: 'MIN', season_year: 2023, playoff_result: 'First Round' },
+  { team_abbrev: 'CLE', season_year: 2023, playoff_result: 'First Round' },
+  { team_abbrev: 'BKN', season_year: 2023, playoff_result: 'First Round' },
+  { team_abbrev: 'MIL', season_year: 2023, playoff_result: 'First Round' },
+  { team_abbrev: 'ATL', season_year: 2023, playoff_result: 'First Round' },
   // 2022 Playoffs
   { team_abbrev: 'GSW', season_year: 2022, playoff_result: 'Champion' },
   { team_abbrev: 'BOS', season_year: 2022, playoff_result: 'Finals' },
   { team_abbrev: 'DAL', season_year: 2022, playoff_result: 'Conf Finals' },
   { team_abbrev: 'MIA', season_year: 2022, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'PHX', season_year: 2022, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'MEM', season_year: 2022, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'PHI', season_year: 2022, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'MIL', season_year: 2022, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'UTA', season_year: 2022, playoff_result: 'First Round' },
+  { team_abbrev: 'DEN', season_year: 2022, playoff_result: 'First Round' },
+  { team_abbrev: 'MIN', season_year: 2022, playoff_result: 'First Round' },
+  { team_abbrev: 'NOP', season_year: 2022, playoff_result: 'First Round' },
+  { team_abbrev: 'TOR', season_year: 2022, playoff_result: 'First Round' },
+  { team_abbrev: 'CHI', season_year: 2022, playoff_result: 'First Round' },
+  { team_abbrev: 'BKN', season_year: 2022, playoff_result: 'First Round' },
+  { team_abbrev: 'ATL', season_year: 2022, playoff_result: 'First Round' },
   // 2021 Playoffs
   { team_abbrev: 'MIL', season_year: 2021, playoff_result: 'Champion' },
   { team_abbrev: 'PHX', season_year: 2021, playoff_result: 'Finals' },
   { team_abbrev: 'LAC', season_year: 2021, playoff_result: 'Conf Finals' },
   { team_abbrev: 'ATL', season_year: 2021, playoff_result: 'Conf Finals' },
-  // 2020 Playoffs
+  { team_abbrev: 'UTA', season_year: 2021, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'DEN', season_year: 2021, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'PHI', season_year: 2021, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'BKN', season_year: 2021, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'LAL', season_year: 2021, playoff_result: 'First Round' },
+  { team_abbrev: 'DAL', season_year: 2021, playoff_result: 'First Round' },
+  { team_abbrev: 'POR', season_year: 2021, playoff_result: 'First Round' },
+  { team_abbrev: 'MEM', season_year: 2021, playoff_result: 'First Round' },
+  { team_abbrev: 'NYK', season_year: 2021, playoff_result: 'First Round' },
+  { team_abbrev: 'BOS', season_year: 2021, playoff_result: 'First Round' },
+  { team_abbrev: 'MIA', season_year: 2021, playoff_result: 'First Round' },
+  { team_abbrev: 'WAS', season_year: 2021, playoff_result: 'First Round' },
+  // 2020 Playoffs (Bubble)
   { team_abbrev: 'LAL', season_year: 2020, playoff_result: 'Champion' },
   { team_abbrev: 'MIA', season_year: 2020, playoff_result: 'Finals' },
   { team_abbrev: 'DEN', season_year: 2020, playoff_result: 'Conf Finals' },
   { team_abbrev: 'BOS', season_year: 2020, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'LAC', season_year: 2020, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'HOU', season_year: 2020, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'TOR', season_year: 2020, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'MIL', season_year: 2020, playoff_result: 'Conf Semis' },
   // 2019 Playoffs
   { team_abbrev: 'TOR', season_year: 2019, playoff_result: 'Champion' },
   { team_abbrev: 'GSW', season_year: 2019, playoff_result: 'Finals' },
   { team_abbrev: 'POR', season_year: 2019, playoff_result: 'Conf Finals' },
   { team_abbrev: 'MIL', season_year: 2019, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'DEN', season_year: 2019, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'HOU', season_year: 2019, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'PHI', season_year: 2019, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'BOS', season_year: 2019, playoff_result: 'Conf Semis' },
+  // 2018 Playoffs
+  { team_abbrev: 'GSW', season_year: 2018, playoff_result: 'Champion' },
+  { team_abbrev: 'CLE', season_year: 2018, playoff_result: 'Finals' },
+  { team_abbrev: 'HOU', season_year: 2018, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'BOS', season_year: 2018, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'NOP', season_year: 2018, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'UTA', season_year: 2018, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'PHI', season_year: 2018, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'TOR', season_year: 2018, playoff_result: 'Conf Semis' },
+  // 2017 Playoffs
+  { team_abbrev: 'GSW', season_year: 2017, playoff_result: 'Champion' },
+  { team_abbrev: 'CLE', season_year: 2017, playoff_result: 'Finals' },
+  { team_abbrev: 'SAS', season_year: 2017, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'BOS', season_year: 2017, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'HOU', season_year: 2017, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'UTA', season_year: 2017, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'TOR', season_year: 2017, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'WAS', season_year: 2017, playoff_result: 'Conf Semis' },
+  // 2016 Playoffs
+  { team_abbrev: 'CLE', season_year: 2016, playoff_result: 'Champion' },
+  { team_abbrev: 'GSW', season_year: 2016, playoff_result: 'Finals' },
+  { team_abbrev: 'OKC', season_year: 2016, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'TOR', season_year: 2016, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'SAS', season_year: 2016, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'POR', season_year: 2016, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'MIA', season_year: 2016, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'ATL', season_year: 2016, playoff_result: 'Conf Semis' },
+  // 2015 Playoffs
+  { team_abbrev: 'GSW', season_year: 2015, playoff_result: 'Champion' },
+  { team_abbrev: 'CLE', season_year: 2015, playoff_result: 'Finals' },
+  { team_abbrev: 'HOU', season_year: 2015, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'ATL', season_year: 2015, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'MEM', season_year: 2015, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'LAC', season_year: 2015, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'CHI', season_year: 2015, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'WAS', season_year: 2015, playoff_result: 'Conf Semis' },
 ];
 
 const NFL_PLAYOFFS: PlayoffEntry[] = [
   // 2024 Season (Super Bowl LIX)
-  { team_abbrev: 'PHI', season_year: 2025, playoff_result: 'Super Bowl' },
   { team_abbrev: 'KC', season_year: 2025, playoff_result: 'Champion' },
+  { team_abbrev: 'PHI', season_year: 2025, playoff_result: 'Super Bowl' },
   { team_abbrev: 'BUF', season_year: 2025, playoff_result: 'Conf Champ' },
   { team_abbrev: 'WAS', season_year: 2025, playoff_result: 'Conf Champ' },
   // 2023 Season (Super Bowl LVIII)
@@ -87,6 +162,36 @@ const NFL_PLAYOFFS: PlayoffEntry[] = [
   { team_abbrev: 'KC', season_year: 2021, playoff_result: 'Super Bowl' },
   { team_abbrev: 'BUF', season_year: 2021, playoff_result: 'Conf Champ' },
   { team_abbrev: 'GB', season_year: 2021, playoff_result: 'Conf Champ' },
+  // 2019 Season (Super Bowl LIV)
+  { team_abbrev: 'KC', season_year: 2020, playoff_result: 'Champion' },
+  { team_abbrev: 'SF', season_year: 2020, playoff_result: 'Super Bowl' },
+  { team_abbrev: 'TEN', season_year: 2020, playoff_result: 'Conf Champ' },
+  { team_abbrev: 'GB', season_year: 2020, playoff_result: 'Conf Champ' },
+  // 2018 Season (Super Bowl LIII)
+  { team_abbrev: 'NE', season_year: 2019, playoff_result: 'Champion' },
+  { team_abbrev: 'LAR', season_year: 2019, playoff_result: 'Super Bowl' },
+  { team_abbrev: 'KC', season_year: 2019, playoff_result: 'Conf Champ' },
+  { team_abbrev: 'NO', season_year: 2019, playoff_result: 'Conf Champ' },
+  // 2017 Season (Super Bowl LII)
+  { team_abbrev: 'PHI', season_year: 2018, playoff_result: 'Champion' },
+  { team_abbrev: 'NE', season_year: 2018, playoff_result: 'Super Bowl' },
+  { team_abbrev: 'JAX', season_year: 2018, playoff_result: 'Conf Champ' },
+  { team_abbrev: 'MIN', season_year: 2018, playoff_result: 'Conf Champ' },
+  // 2016 Season (Super Bowl LI)
+  { team_abbrev: 'NE', season_year: 2017, playoff_result: 'Champion' },
+  { team_abbrev: 'ATL', season_year: 2017, playoff_result: 'Super Bowl' },
+  { team_abbrev: 'PIT', season_year: 2017, playoff_result: 'Conf Champ' },
+  { team_abbrev: 'GB', season_year: 2017, playoff_result: 'Conf Champ' },
+  // 2015 Season (Super Bowl 50)
+  { team_abbrev: 'DEN', season_year: 2016, playoff_result: 'Champion' },
+  { team_abbrev: 'CAR', season_year: 2016, playoff_result: 'Super Bowl' },
+  { team_abbrev: 'NE', season_year: 2016, playoff_result: 'Conf Champ' },
+  { team_abbrev: 'ARI', season_year: 2016, playoff_result: 'Conf Champ' },
+  // 2014 Season (Super Bowl XLIX)
+  { team_abbrev: 'NE', season_year: 2015, playoff_result: 'Champion' },
+  { team_abbrev: 'SEA', season_year: 2015, playoff_result: 'Super Bowl' },
+  { team_abbrev: 'IND', season_year: 2015, playoff_result: 'Conf Champ' },
+  { team_abbrev: 'GB', season_year: 2015, playoff_result: 'Conf Champ' },
 ];
 
 const MLB_PLAYOFFS: PlayoffEntry[] = [
@@ -105,6 +210,41 @@ const MLB_PLAYOFFS: PlayoffEntry[] = [
   { team_abbrev: 'PHI', season_year: 2022, playoff_result: 'World Series' },
   { team_abbrev: 'NYY', season_year: 2022, playoff_result: 'ALCS' },
   { team_abbrev: 'SD', season_year: 2022, playoff_result: 'NLCS' },
+  // 2021 World Series
+  { team_abbrev: 'ATL', season_year: 2021, playoff_result: 'Champion' },
+  { team_abbrev: 'HOU', season_year: 2021, playoff_result: 'World Series' },
+  { team_abbrev: 'BOS', season_year: 2021, playoff_result: 'ALCS' },
+  { team_abbrev: 'LAD', season_year: 2021, playoff_result: 'NLCS' },
+  // 2020 World Series (Shortened)
+  { team_abbrev: 'LAD', season_year: 2020, playoff_result: 'Champion' },
+  { team_abbrev: 'TB', season_year: 2020, playoff_result: 'World Series' },
+  { team_abbrev: 'HOU', season_year: 2020, playoff_result: 'ALCS' },
+  { team_abbrev: 'ATL', season_year: 2020, playoff_result: 'NLCS' },
+  // 2019 World Series
+  { team_abbrev: 'WAS', season_year: 2019, playoff_result: 'Champion' },
+  { team_abbrev: 'HOU', season_year: 2019, playoff_result: 'World Series' },
+  { team_abbrev: 'NYY', season_year: 2019, playoff_result: 'ALCS' },
+  { team_abbrev: 'STL', season_year: 2019, playoff_result: 'NLCS' },
+  // 2018 World Series
+  { team_abbrev: 'BOS', season_year: 2018, playoff_result: 'Champion' },
+  { team_abbrev: 'LAD', season_year: 2018, playoff_result: 'World Series' },
+  { team_abbrev: 'HOU', season_year: 2018, playoff_result: 'ALCS' },
+  { team_abbrev: 'MIL', season_year: 2018, playoff_result: 'NLCS' },
+  // 2017 World Series
+  { team_abbrev: 'HOU', season_year: 2017, playoff_result: 'Champion' },
+  { team_abbrev: 'LAD', season_year: 2017, playoff_result: 'World Series' },
+  { team_abbrev: 'NYY', season_year: 2017, playoff_result: 'ALCS' },
+  { team_abbrev: 'CHC', season_year: 2017, playoff_result: 'NLCS' },
+  // 2016 World Series
+  { team_abbrev: 'CHC', season_year: 2016, playoff_result: 'Champion' },
+  { team_abbrev: 'CLE', season_year: 2016, playoff_result: 'World Series' },
+  { team_abbrev: 'TOR', season_year: 2016, playoff_result: 'ALCS' },
+  { team_abbrev: 'LAD', season_year: 2016, playoff_result: 'NLCS' },
+  // 2015 World Series
+  { team_abbrev: 'KC', season_year: 2015, playoff_result: 'Champion' },
+  { team_abbrev: 'NYM', season_year: 2015, playoff_result: 'World Series' },
+  { team_abbrev: 'TOR', season_year: 2015, playoff_result: 'ALCS' },
+  { team_abbrev: 'CHC', season_year: 2015, playoff_result: 'NLCS' },
 ];
 
 const NHL_PLAYOFFS: PlayoffEntry[] = [
@@ -123,6 +263,41 @@ const NHL_PLAYOFFS: PlayoffEntry[] = [
   { team_abbrev: 'TB', season_year: 2022, playoff_result: 'Finals' },
   { team_abbrev: 'EDM', season_year: 2022, playoff_result: 'Conf Finals' },
   { team_abbrev: 'NYR', season_year: 2022, playoff_result: 'Conf Finals' },
+  // 2021 Stanley Cup
+  { team_abbrev: 'TB', season_year: 2021, playoff_result: 'Champion' },
+  { team_abbrev: 'MTL', season_year: 2021, playoff_result: 'Finals' },
+  { team_abbrev: 'VGK', season_year: 2021, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'NYI', season_year: 2021, playoff_result: 'Conf Finals' },
+  // 2020 Stanley Cup (Bubble)
+  { team_abbrev: 'TB', season_year: 2020, playoff_result: 'Champion' },
+  { team_abbrev: 'DAL', season_year: 2020, playoff_result: 'Finals' },
+  { team_abbrev: 'VGK', season_year: 2020, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'NYI', season_year: 2020, playoff_result: 'Conf Finals' },
+  // 2019 Stanley Cup
+  { team_abbrev: 'STL', season_year: 2019, playoff_result: 'Champion' },
+  { team_abbrev: 'BOS', season_year: 2019, playoff_result: 'Finals' },
+  { team_abbrev: 'SJS', season_year: 2019, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'CAR', season_year: 2019, playoff_result: 'Conf Finals' },
+  // 2018 Stanley Cup
+  { team_abbrev: 'WSH', season_year: 2018, playoff_result: 'Champion' },
+  { team_abbrev: 'VGK', season_year: 2018, playoff_result: 'Finals' },
+  { team_abbrev: 'TB', season_year: 2018, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'WPG', season_year: 2018, playoff_result: 'Conf Finals' },
+  // 2017 Stanley Cup
+  { team_abbrev: 'PIT', season_year: 2017, playoff_result: 'Champion' },
+  { team_abbrev: 'NSH', season_year: 2017, playoff_result: 'Finals' },
+  { team_abbrev: 'ANA', season_year: 2017, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'OTT', season_year: 2017, playoff_result: 'Conf Finals' },
+  // 2016 Stanley Cup
+  { team_abbrev: 'PIT', season_year: 2016, playoff_result: 'Champion' },
+  { team_abbrev: 'SJS', season_year: 2016, playoff_result: 'Finals' },
+  { team_abbrev: 'STL', season_year: 2016, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'TB', season_year: 2016, playoff_result: 'Conf Finals' },
+  // 2015 Stanley Cup
+  { team_abbrev: 'CHI', season_year: 2015, playoff_result: 'Champion' },
+  { team_abbrev: 'TB', season_year: 2015, playoff_result: 'Finals' },
+  { team_abbrev: 'ANA', season_year: 2015, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'NYR', season_year: 2015, playoff_result: 'Conf Finals' },
 ];
 
 async function backfillPlayoffs(
