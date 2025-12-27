@@ -645,6 +645,126 @@ async function computeSegmentedStats(supabase: any, sport: string) {
   return statsUpdated;
 }
 
+// Validation: check for data integrity issues
+async function validateGameData(supabase: any, sport: string): Promise<{
+  nullTotals: number;
+  mismatchedTotals: number;
+  nullFranchises: number;
+  issues: string[];
+}> {
+  console.log(`[VALIDATION] Checking ${sport} data integrity...`);
+  const issues: string[] = [];
+
+  // Check for null final_total
+  const { count: nullTotals } = await supabase
+    .from("games")
+    .select("*", { count: "exact", head: true })
+    .eq("sport_id", sport)
+    .is("final_total", null)
+    .eq("status", "final");
+
+  if (nullTotals && nullTotals > 0) {
+    issues.push(`${nullTotals} games with null final_total`);
+    console.log(`[VALIDATION] ${sport}: ${nullTotals} games with null final_total`);
+  }
+
+  // Check for mismatched totals (final_total != home_score + away_score)
+  const { data: mismatchedGames } = await supabase
+    .from("games")
+    .select("id, home_score, away_score, final_total")
+    .eq("sport_id", sport)
+    .eq("status", "final")
+    .not("home_score", "is", null)
+    .not("away_score", "is", null)
+    .limit(1000);
+
+  let mismatchedTotals = 0;
+  if (mismatchedGames) {
+    for (const g of mismatchedGames) {
+      const expected = Number(g.home_score) + Number(g.away_score);
+      if (g.final_total !== expected) {
+        mismatchedTotals++;
+        if (mismatchedTotals <= 5) {
+          console.log(`[VALIDATION] Mismatch game ${g.id}: ${g.home_score}+${g.away_score}=${expected}, stored=${g.final_total}`);
+        }
+      }
+    }
+    if (mismatchedTotals > 0) {
+      issues.push(`${mismatchedTotals} games with mismatched final_total`);
+    }
+  }
+
+  // Check for null franchise IDs
+  const { count: nullFranchises } = await supabase
+    .from("games")
+    .select("*", { count: "exact", head: true })
+    .eq("sport_id", sport)
+    .or("home_franchise_id.is.null,away_franchise_id.is.null");
+
+  if (nullFranchises && nullFranchises > 0) {
+    issues.push(`${nullFranchises} games missing franchise IDs`);
+    console.log(`[VALIDATION] ${sport}: ${nullFranchises} games missing franchise IDs`);
+  }
+
+  console.log(`[VALIDATION] ${sport} complete: ${issues.length} issue types found`);
+  return {
+    nullTotals: nullTotals || 0,
+    mismatchedTotals,
+    nullFranchises: nullFranchises || 0,
+    issues,
+  };
+}
+
+// Mapping audit: find unmatched abbreviations
+async function auditMappings(supabase: any, sport: string): Promise<{
+  unmappedTeams: string[];
+  teamsWithoutFranchise: string[];
+}> {
+  console.log(`[AUDIT] Checking ${sport} team/franchise mappings...`);
+
+  // Get teams without matching franchise
+  const { data: teams } = await supabase
+    .from("teams")
+    .select("id, abbrev, name")
+    .eq("sport_id", sport);
+
+  const mapping = FRANCHISE_MAPPINGS[sport] || {};
+  const unmappedTeams: string[] = [];
+  
+  if (teams) {
+    for (const team of teams) {
+      if (team.abbrev && !mapping[team.abbrev]) {
+        unmappedTeams.push(`${team.abbrev} (${team.name})`);
+      }
+    }
+  }
+
+  if (unmappedTeams.length > 0) {
+    console.log(`[AUDIT] ${sport} unmapped abbreviations: ${unmappedTeams.slice(0, 10).join(", ")}${unmappedTeams.length > 10 ? "..." : ""}`);
+  }
+
+  // Check matchup_games with null franchise IDs
+  const { data: orphanMatchups } = await supabase
+    .from("matchup_games")
+    .select("team_low_id, team_high_id")
+    .eq("sport_id", sport)
+    .or("franchise_low_id.is.null,franchise_high_id.is.null")
+    .limit(100);
+
+  const teamsWithoutFranchise: string[] = [];
+  if (orphanMatchups && orphanMatchups.length > 0) {
+    const uniqueTeamIds = new Set<string>();
+    orphanMatchups.forEach((m: any) => {
+      uniqueTeamIds.add(m.team_low_id);
+      uniqueTeamIds.add(m.team_high_id);
+    });
+    teamsWithoutFranchise.push(...Array.from(uniqueTeamIds).slice(0, 20));
+    console.log(`[AUDIT] ${sport}: ${teamsWithoutFranchise.length} team IDs in matchups without franchise mapping`);
+  }
+
+  return { unmappedTeams, teamsWithoutFranchise };
+}
+
 async function runFullBackfill(supabase: any, sports: string[], jobRunId: number, storeRaw: boolean) {
   const results: Record<string, any> = {};
 
@@ -662,10 +782,28 @@ async function runFullBackfill(supabase: any, sports: string[], jobRunId: number
     const statsCount = await computeSegmentedStats(supabase, sport);
     results[sport].statsComputed = statsCount;
 
+    // Run validation and audit
+    const validation = await validateGameData(supabase, sport);
+    results[sport].validation = validation;
+
+    const audit = await auditMappings(supabase, sport);
+    results[sport].audit = audit;
+
     console.log(`[BACKFILL] ${sport} complete:`, results[sport]);
   }
 
-  // Mark job as complete
+  // Summary logging
+  console.log(`[BACKFILL] ========== VALIDATION SUMMARY ==========`);
+  for (const sport of sports) {
+    const v = results[sport]?.validation;
+    if (v && v.issues.length > 0) {
+      console.log(`[BACKFILL] ${sport} issues: ${v.issues.join("; ")}`);
+    } else {
+      console.log(`[BACKFILL] ${sport}: ✓ No validation issues`);
+    }
+  }
+
+  // Mark job as complete with validation results
   await supabase.from("job_runs").update({
     finished_at: new Date().toISOString(),
     status: "success",
