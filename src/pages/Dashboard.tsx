@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -156,9 +157,13 @@ export default function Dashboard() {
     },
   });
 
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
+
   return (
     <Layout>
-      <div className="container py-8 space-y-8">
+      <div className="container py-8 space-y-8 animate-fade-in">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground mt-1">
