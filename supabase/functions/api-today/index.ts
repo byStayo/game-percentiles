@@ -125,6 +125,8 @@ Deno.serve(async (req) => {
         dk_offered: edge.dk_offered,
         dk_total_line: edge.dk_total_line,
         dk_line_percentile: edge.dk_line_percentile,
+        segment_used: edge.segment_used,
+        n_used: edge.n_used,
         updated_at: edge.updated_at,
       }
     })
