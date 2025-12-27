@@ -150,6 +150,94 @@ function identifyKeyPlayers(players: RosterPlayer[], sport: string): RosterPlaye
   return keyPlayers;
 }
 
+// Detect team era based on multi-year continuity patterns
+async function detectTeamEra(
+  supabase: any,
+  teamId: string,
+  sport: string,
+  currentYear: number,
+  currentContinuity: number
+): Promise<{ era_tag: string; era_start_year: number; era_description: string }> {
+  // Get historical snapshots for this team
+  const { data: history } = await supabase
+    .from("roster_snapshots")
+    .select("season_year, continuity_score, era_tag")
+    .eq("team_id", teamId)
+    .eq("sport_id", sport)
+    .order("season_year", { ascending: false })
+    .limit(10);
+
+  const snapshots = history || [];
+  
+  // Thresholds
+  const REBUILD_THRESHOLD = 30;
+  const STABLE_THRESHOLD = 70;
+  const TRANSITION_THRESHOLD = 50;
+
+  // Determine current era tag
+  let era_tag: string;
+  if (currentContinuity < REBUILD_THRESHOLD) {
+    era_tag = "rebuild";
+  } else if (currentContinuity >= STABLE_THRESHOLD) {
+    era_tag = "stable";
+  } else if (currentContinuity < TRANSITION_THRESHOLD) {
+    era_tag = "retooling";
+  } else {
+    era_tag = "transition";
+  }
+
+  // Find when the current era started by looking at recent changes
+  let era_start_year = currentYear;
+  let previousEraTag = era_tag;
+  
+  for (const snapshot of snapshots) {
+    if (snapshot.season_year >= currentYear) continue;
+    
+    const score = snapshot.continuity_score || 50;
+    let snapEraTag: string;
+    
+    if (score < REBUILD_THRESHOLD) {
+      snapEraTag = "rebuild";
+    } else if (score >= STABLE_THRESHOLD) {
+      snapEraTag = "stable";
+    } else if (score < TRANSITION_THRESHOLD) {
+      snapEraTag = "retooling";
+    } else {
+      snapEraTag = "transition";
+    }
+    
+    // If era category changed, this is where current era started
+    const isStableCategory = (tag: string) => tag === "stable" || tag === "transition";
+    const isRebuildCategory = (tag: string) => tag === "rebuild" || tag === "retooling";
+    
+    if (isStableCategory(era_tag) !== isStableCategory(snapEraTag)) {
+      break;
+    }
+    
+    era_start_year = snapshot.season_year;
+  }
+
+  // Generate description
+  const yearsInEra = currentYear - era_start_year + 1;
+  let era_description: string;
+  
+  if (era_tag === "stable") {
+    era_description = yearsInEra > 3 
+      ? `Core intact since ${era_start_year} (${yearsInEra}yr dynasty)`
+      : `Stable core since ${era_start_year}`;
+  } else if (era_tag === "rebuild") {
+    era_description = yearsInEra > 2
+      ? `Major rebuild underway since ${era_start_year}`
+      : `New era starting ${currentYear}`;
+  } else if (era_tag === "retooling") {
+    era_description = `Retooling roster (${currentContinuity.toFixed(0)}% continuity)`;
+  } else {
+    era_description = `Roster in transition`;
+  }
+
+  return { era_tag, era_start_year, era_description };
+}
+
 async function backfillRosters(
   supabase: any,
   sport: string,
@@ -200,7 +288,10 @@ async function backfillRosters(
       const continuityScore = computeContinuityScore(prevPlayers, players);
       const keyPlayers = identifyKeyPlayers(players, sport);
 
-      // Upsert roster snapshot
+      // Detect team era with multi-year pattern analysis
+      const eraInfo = await detectTeamEra(supabase, teamId as string, sport, seasonYear, continuityScore);
+
+      // Upsert roster snapshot with enhanced era info
       const { error } = await supabase
         .from("roster_snapshots")
         .upsert({
@@ -209,7 +300,8 @@ async function backfillRosters(
           season_year: seasonYear,
           key_players: keyPlayers,
           continuity_score: continuityScore,
-          era_tag: continuityScore < 30 ? "rebuild" : continuityScore > 70 ? "stable" : "transition",
+          era_tag: `${eraInfo.era_tag} (${eraInfo.era_start_year})`,
+          notes: eraInfo.era_description,
         }, { onConflict: "team_id,sport_id,season_year" });
 
       if (error) {
