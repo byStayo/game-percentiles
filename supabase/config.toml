@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.backfill-historical]
 verify_jwt = false
+
+[functions.backfill-playoffs]
+verify_jwt = false
