@@ -138,6 +138,124 @@ function generateDateRange(startDate: string, endDate: string): string[] {
   return dates;
 }
 
+async function runBackfill(
+  supabase: any,
+  sport: string,
+  startDate: string,
+  endDate: string,
+  mode: string
+) {
+  const dates = generateDateRange(startDate, endDate);
+  console.log(`[BACKFILL] Sport: ${sport}, Mode: ${mode}, Dates: ${dates.length} days (${startDate} to ${endDate})`);
+
+  const { data: jobRun } = await supabase
+    .from("job_runs")
+    .insert({ job_name: `backfill-${sport}`, status: "running" })
+    .select("id")
+    .single();
+
+  let correctedCount = 0;
+  let checkedCount = 0;
+  let errorCount = 0;
+
+  for (const dateStr of dates) {
+    try {
+      const espnGames = await fetchESPNGames(sport, dateStr);
+      if (espnGames.length === 0) continue;
+
+      console.log(`[BACKFILL] ${dateStr}: ${espnGames.length} games from ESPN`);
+
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+      const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
+
+      const { data: ourGames } = await supabase
+        .from("games")
+        .select(`
+          id, home_score, away_score, final_total,
+          home_team:teams!games_home_team_id_fkey(id, name),
+          away_team:teams!games_away_team_id_fkey(id, name)
+        `)
+        .eq("sport_id", sport)
+        .eq("status", "final")
+        .gte("start_time_utc", startOfDay.toISOString())
+        .lte("start_time_utc", endOfDay.toISOString());
+
+      for (const ourGame of ourGames || []) {
+        checkedCount++;
+        const homeTeamData = ourGame.home_team as unknown as { id: string; name: string } | null;
+        const awayTeamData = ourGame.away_team as unknown as { id: string; name: string } | null;
+        const homeTeam = homeTeamData?.name;
+        const awayTeam = awayTeamData?.name;
+
+        if (!homeTeam || !awayTeam) continue;
+
+        const mapping = ESPN_TO_DB[sport] || {};
+        for (const espnGame of espnGames) {
+          const espnHomeDb = mapping[espnGame.homeTeamAbbrev] || espnGame.homeTeamAbbrev;
+          const espnAwayDb = mapping[espnGame.awayTeamAbbrev] || espnGame.awayTeamAbbrev;
+
+          if (homeTeam === espnHomeDb && awayTeam === espnAwayDb) {
+            const scoreDiffers =
+              ourGame.home_score !== espnGame.homeScore ||
+              ourGame.away_score !== espnGame.awayScore;
+
+            if (scoreDiffers) {
+              const { error } = await supabase
+                .from("games")
+                .update({
+                  home_score: espnGame.homeScore,
+                  away_score: espnGame.awayScore,
+                })
+                .eq("id", ourGame.id);
+
+              if (!error) {
+                correctedCount++;
+                await supabase
+                  .from("matchup_games")
+                  .update({ total: espnGame.homeScore + espnGame.awayScore })
+                  .eq("game_id", ourGame.id);
+              } else {
+                errorCount++;
+              }
+            }
+            break;
+          }
+        }
+      }
+
+      // Rate limit protection
+      await new Promise((r) => setTimeout(r, 50));
+    } catch (err) {
+      console.error(`[BACKFILL] Error on ${dateStr}:`, err);
+      errorCount++;
+    }
+  }
+
+  if (jobRun) {
+    await supabase
+      .from("job_runs")
+      .update({
+        status: "success",
+        finished_at: new Date().toISOString(),
+        details: {
+          sport,
+          mode,
+          start_date: startDate,
+          end_date: endDate,
+          days_processed: dates.length,
+          games_checked: checkedCount,
+          games_corrected: correctedCount,
+          errors: errorCount,
+        },
+      })
+      .eq("id", jobRun.id);
+  }
+
+  console.log(`[BACKFILL] Complete: ${checkedCount} checked, ${correctedCount} corrected, ${errorCount} errors`);
+  return { checkedCount, correctedCount, errorCount };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -152,7 +270,8 @@ Deno.serve(async (req) => {
     let sport = "nba";
     let startDate = "";
     let endDate = "";
-    let mode = "verify"; // verify = fix existing, backfill = add new
+    let mode = "verify";
+    let async = false;
 
     try {
       const body = await req.json();
@@ -160,8 +279,14 @@ Deno.serve(async (req) => {
       startDate = body.start_date;
       endDate = body.end_date;
       mode = body.mode || "verify";
+      async = body.async === true;
     } catch {
-      // No body
+      // No body - use defaults for cron: last 7 days
+      const today = new Date();
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      endDate = today.toISOString().split("T")[0];
+      startDate = weekAgo.toISOString().split("T")[0];
     }
 
     if (!startDate || !endDate) {
@@ -171,123 +296,29 @@ Deno.serve(async (req) => {
       );
     }
 
+    // For large date ranges or async flag, use background task
     const dates = generateDateRange(startDate, endDate);
-    console.log(`[BACKFILL] Sport: ${sport}, Mode: ${mode}, Dates: ${dates.length} days (${startDate} to ${endDate})`);
-
-    const { data: jobRun } = await supabase
-      .from("job_runs")
-      .insert({ job_name: `backfill-${sport}`, status: "running" })
-      .select("id")
-      .single();
-
-    let correctedCount = 0;
-    let checkedCount = 0;
-    let insertedCount = 0;
-    let errorCount = 0;
-
-    // Process in batches to avoid timeout
-    const batchSize = 7; // 1 week at a time
-    for (let i = 0; i < dates.length; i += batchSize) {
-      const batch = dates.slice(i, i + batchSize);
-      console.log(`[BACKFILL] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(dates.length / batchSize)}`);
-
-      for (const dateStr of batch) {
-        const espnGames = await fetchESPNGames(sport, dateStr);
-        if (espnGames.length === 0) continue;
-
-        console.log(`[BACKFILL] ${dateStr}: ${espnGames.length} games from ESPN`);
-
-        const [year, month, day] = dateStr.split("-").map(Number);
-        const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
-        const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
-
-        // Get our games for this date
-        const { data: ourGames } = await supabase
-          .from("games")
-          .select(`
-            id, home_score, away_score, final_total,
-            home_team:teams!games_home_team_id_fkey(id, name),
-            away_team:teams!games_away_team_id_fkey(id, name)
-          `)
-          .eq("sport_id", sport)
-          .eq("status", "final")
-          .gte("start_time_utc", startOfDay.toISOString())
-          .lte("start_time_utc", endOfDay.toISOString());
-
-        // Match and update
-        for (const ourGame of ourGames || []) {
-          checkedCount++;
-
-          const homeTeamData = ourGame.home_team as unknown as { id: string; name: string } | null;
-          const awayTeamData = ourGame.away_team as unknown as { id: string; name: string } | null;
-          const homeTeam = homeTeamData?.name;
-          const awayTeam = awayTeamData?.name;
-
-          if (!homeTeam || !awayTeam) continue;
-
-          // Find matching ESPN game
-          const mapping = ESPN_TO_DB[sport] || {};
-          for (const espnGame of espnGames) {
-            const espnHomeDb = mapping[espnGame.homeTeamAbbrev] || espnGame.homeTeamAbbrev;
-            const espnAwayDb = mapping[espnGame.awayTeamAbbrev] || espnGame.awayTeamAbbrev;
-
-            if (homeTeam === espnHomeDb && awayTeam === espnAwayDb) {
-              const scoreDiffers =
-                ourGame.home_score !== espnGame.homeScore ||
-                ourGame.away_score !== espnGame.awayScore;
-
-              if (scoreDiffers) {
-                const { error } = await supabase
-                  .from("games")
-                  .update({
-                    home_score: espnGame.homeScore,
-                    away_score: espnGame.awayScore,
-                  })
-                  .eq("id", ourGame.id);
-
-                if (!error) {
-                  correctedCount++;
-                  // Update matchup_games too
-                  await supabase
-                    .from("matchup_games")
-                    .update({ total: espnGame.homeScore + espnGame.awayScore })
-                    .eq("game_id", ourGame.id);
-                } else {
-                  errorCount++;
-                }
-              }
-              break;
-            }
-          }
-        }
-
-        // Add a small delay to avoid rate limiting
-        await new Promise((r) => setTimeout(r, 100));
-      }
+    if (async || dates.length > 14) {
+      console.log(`[BACKFILL] Running in background: ${dates.length} days`);
+      
+      // @ts-ignore - Deno edge runtime API
+      EdgeRuntime.waitUntil(runBackfill(supabase, sport, startDate, endDate, mode));
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Backfill started in background",
+          sport,
+          start_date: startDate,
+          end_date: endDate,
+          days_to_process: dates.length,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    if (jobRun) {
-      await supabase
-        .from("job_runs")
-        .update({
-          status: "success",
-          finished_at: new Date().toISOString(),
-          details: {
-            sport,
-            mode,
-            start_date: startDate,
-            end_date: endDate,
-            days_processed: dates.length,
-            games_checked: checkedCount,
-            games_corrected: correctedCount,
-            games_inserted: insertedCount,
-            errors: errorCount,
-          },
-        })
-        .eq("id", jobRun.id);
-    }
-
-    console.log(`[BACKFILL] Complete: ${checkedCount} checked, ${correctedCount} corrected, ${errorCount} errors`);
+    // For small ranges, run synchronously
+    const result = await runBackfill(supabase, sport, startDate, endDate, mode);
 
     return new Response(
       JSON.stringify({
@@ -297,10 +328,7 @@ Deno.serve(async (req) => {
         start_date: startDate,
         end_date: endDate,
         days_processed: dates.length,
-        games_checked: checkedCount,
-        games_corrected: correctedCount,
-        games_inserted: insertedCount,
-        errors: errorCount,
+        ...result,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
