@@ -106,37 +106,36 @@ const ESPN_ABBREV_MAP: Record<string, Record<string, string>> = {
   mlb: { "CHW": "CWS", "WSH": "WAS" },
 };
 
-// Season date ranges - comprehensive 15 years (2010-2025), sorted MOST RECENT FIRST for reliability
+// Season date ranges - focus on RECENT YEARS (2022-2025) for reliable data, most recent first
+// This ensures we get accurate percentile calculations with high-quality recent data
 const SPORT_SEASONS: Record<string, { year: number; start: string; end: string }[]> = {
-  nba: Array.from({ length: 16 }, (_, i) => {
-    const year = 2025 - i; // Start from 2025, go backwards
-    if (year < 2010) return null;
-    // COVID seasons handled specially
-    if (year === 2020) return { year: 2020, start: "2019-10-22", end: "2020-10-12" };
-    if (year === 2021) return { year: 2021, start: "2020-12-22", end: "2021-07-21" };
-    return { year, start: `${year - 1}-10-15`, end: `${year}-06-30` };
-  }).filter(Boolean) as { year: number; start: string; end: string }[],
+  nba: [
+    { year: 2025, start: "2024-10-22", end: "2025-06-30" },
+    { year: 2024, start: "2023-10-24", end: "2024-06-18" },
+    { year: 2023, start: "2022-10-18", end: "2023-06-13" },
+    { year: 2022, start: "2021-10-19", end: "2022-06-17" },
+  ],
   
-  nfl: Array.from({ length: 16 }, (_, i) => {
-    const year = 2025 - i;
-    if (year < 2010) return null;
-    return { year, start: `${year}-09-01`, end: `${year + 1}-02-15` };
-  }).filter(Boolean) as { year: number; start: string; end: string }[],
+  nfl: [
+    { year: 2025, start: "2025-09-04", end: "2026-02-15" }, // Future season
+    { year: 2024, start: "2024-09-05", end: "2025-02-10" },
+    { year: 2023, start: "2023-09-07", end: "2024-02-12" },
+    { year: 2022, start: "2022-09-08", end: "2023-02-13" },
+  ],
   
-  nhl: Array.from({ length: 16 }, (_, i) => {
-    const year = 2025 - i;
-    if (year < 2010) return null;
-    if (year === 2020) return { year: 2020, start: "2019-10-02", end: "2020-09-29" };
-    if (year === 2021) return { year: 2021, start: "2021-01-13", end: "2021-07-08" };
-    return { year, start: `${year - 1}-10-01`, end: `${year}-06-30` };
-  }).filter(Boolean) as { year: number; start: string; end: string }[],
+  nhl: [
+    { year: 2025, start: "2024-10-04", end: "2025-06-30" },
+    { year: 2024, start: "2023-10-10", end: "2024-06-25" },
+    { year: 2023, start: "2022-10-07", end: "2023-06-14" },
+    { year: 2022, start: "2021-10-12", end: "2022-06-27" },
+  ],
   
-  mlb: Array.from({ length: 16 }, (_, i) => {
-    const year = 2025 - i;
-    if (year < 2010) return null;
-    if (year === 2020) return { year: 2020, start: "2020-07-23", end: "2020-10-28" };
-    return { year, start: `${year}-03-20`, end: `${year}-11-10` };
-  }).filter(Boolean) as { year: number; start: string; end: string }[],
+  mlb: [
+    { year: 2025, start: "2025-03-20", end: "2025-11-05" },
+    { year: 2024, start: "2024-03-20", end: "2024-11-03" },
+    { year: 2023, start: "2023-03-30", end: "2023-11-02" },
+    { year: 2022, start: "2022-04-07", end: "2022-11-06" },
+  ],
 };
 
 interface ESPNEvent {
@@ -579,10 +578,8 @@ async function computeSegmentedStats(supabase: any, sport: string) {
   const currentYear = new Date().getFullYear();
   const segments = [
     { key: "h2h_all", filter: () => true },
-    { key: "h2h_10y", filter: (year: number) => year >= currentYear - 10 },
-    { key: "h2h_5y", filter: (year: number) => year >= currentYear - 5 },
     { key: "h2h_3y", filter: (year: number) => year >= currentYear - 3 },
-    { key: "h2h_1y", filter: (year: number) => year >= currentYear - 1 },
+    { key: "h2h_2y", filter: (year: number) => year >= currentYear - 2 },
   ];
 
   let statsUpdated = 0;
