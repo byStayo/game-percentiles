@@ -192,14 +192,14 @@ export function Header() {
   const isAnalyticsActive = analyticsGroup.items.some(item => location.pathname === item.href);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/40 bg-background/70 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/50">
-      <div className="container flex h-16 items-center justify-between">
-        <Link to="/" className="flex items-center gap-3 group">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 transition-transform duration-300 group-hover:scale-105">
-            <Percent className="h-5 w-5 text-primary-foreground" />
+    <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80">
+      <div className="container flex h-14 sm:h-16 items-center justify-between px-4 sm:px-6">
+        <Link to="/" className="flex items-center gap-2 sm:gap-3 group">
+          <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 transition-transform duration-300 group-hover:scale-105">
+            <Percent className="h-4 w-4 sm:h-5 sm:w-5 text-primary-foreground" />
           </div>
-          <div className="hidden sm:block">
-            <span className="text-lg font-semibold tracking-tight">
+          <div className="hidden xs:block sm:block">
+            <span className="text-base sm:text-lg font-semibold tracking-tight">
               Game Percentiles
             </span>
           </div>
@@ -226,8 +226,10 @@ export function Header() {
           <NavDropdown group={analyticsGroup} isActive={isAnalyticsActive} />
         </nav>
 
-        {/* Mobile Navigation */}
-        <MobileNav />
+        {/* Mobile: Just show the hamburger menu trigger - bottom nav handles main navigation */}
+        <div className="md:hidden">
+          <MobileNav />
+        </div>
       </div>
     </header>
   );

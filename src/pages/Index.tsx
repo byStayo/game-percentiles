@@ -11,7 +11,6 @@ import { ErrorState } from "@/components/game/ErrorState";
 import { WhatIsPPopover } from "@/components/game/WhatIsPPopover";
 import { useTodayGames, TodayGame } from "@/hooks/useApi";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -151,46 +150,48 @@ export default function Index() {
       </Helmet>
 
       <Layout>
-        <div className="space-y-8 animate-fade-in">
+        <div className="space-y-6 animate-fade-in">
           {/* Hero section - minimal */}
-          <div className="text-center space-y-2 pt-4">
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+          <div className="text-center space-y-1 pt-2 sm:pt-4">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight">
               Game Percentiles
             </h1>
-            <p className="text-muted-foreground">
-              {totalGames} games today • {picksCount} with picks
+            <p className="text-sm sm:text-base text-muted-foreground">
+              {totalGames} games today • {picksCount} picks
             </p>
           </div>
 
-          {/* Date picker - centered */}
-          <div className="flex justify-center">
+          {/* Date picker - centered, more compact on mobile */}
+          <div className="flex justify-center -mx-4 sm:mx-0">
             <DatePickerInline
               date={selectedDate}
               onDateChange={setSelectedDate}
             />
           </div>
 
-          {/* Controls row */}
-          <div className="flex flex-col gap-4 p-4 rounded-2xl bg-card border border-border/60">
-            {/* Top: View mode + Sort */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              {/* View mode pills */}
-              <div className="flex items-center gap-1 p-1 rounded-full bg-secondary/50 w-fit">
+          {/* Controls row - mobile optimized */}
+          <div className="flex flex-col gap-3 p-3 sm:p-4 rounded-2xl bg-card border border-border/60">
+            {/* Top row: View mode toggle + Sort */}
+            <div className="flex items-center justify-between gap-3">
+              {/* View mode pills - scrollable on mobile */}
+              <div className="flex items-center gap-1 p-1 rounded-full bg-secondary/50 overflow-x-auto scrollbar-hide">
                 <button
                   onClick={() => setViewMode("all")}
                   className={cn(
-                    "px-4 py-2 text-sm font-medium rounded-full transition-all duration-200",
+                    "px-3 sm:px-4 py-2 text-sm font-medium rounded-full transition-all duration-200 whitespace-nowrap touch-manipulation",
+                    "active:scale-95",
                     viewMode === "all"
                       ? "bg-foreground text-background shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  All Sports
+                  All
                 </button>
                 <button
                   onClick={() => setViewMode("sport")}
                   className={cn(
-                    "px-4 py-2 text-sm font-medium rounded-full transition-all duration-200",
+                    "px-3 sm:px-4 py-2 text-sm font-medium rounded-full transition-all duration-200 whitespace-nowrap touch-manipulation",
+                    "active:scale-95",
                     viewMode === "sport"
                       ? "bg-foreground text-background shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
@@ -201,46 +202,41 @@ export default function Index() {
               </div>
 
               {/* Sort dropdown */}
-              <div className="flex items-center gap-3">
-                <Label className="text-sm text-muted-foreground">Sort by</Label>
-                <Select
-                  value={sortBy}
-                  onValueChange={(v) => setSortBy(v as SortOption)}
-                >
-                  <SelectTrigger className="w-[140px] h-9 bg-background">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="edge">Edge strength</SelectItem>
-                    <SelectItem value="time">Start time</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select
+                value={sortBy}
+                onValueChange={(v) => setSortBy(v as SortOption)}
+              >
+                <SelectTrigger className="w-[120px] sm:w-[140px] h-10 bg-background touch-target">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="edge">Edge</SelectItem>
+                  <SelectItem value="time">Time</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Bottom: Toggles + What is P */}
-            <div className="flex flex-wrap items-center gap-6">
-              <div className="flex items-center gap-2">
+            {/* Bottom row: Toggles - larger touch targets */}
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+              <label className="flex items-center gap-3 cursor-pointer touch-manipulation">
                 <Switch
                   id="only-picks"
                   checked={onlyPicks}
                   onCheckedChange={setOnlyPicks}
+                  className="scale-110"
                 />
-                <Label htmlFor="only-picks" className="text-sm cursor-pointer">
-                  Only show picks
-                </Label>
-              </div>
+                <span className="text-sm font-medium">Picks only</span>
+              </label>
 
-              <div className="flex items-center gap-2">
+              <label className="flex items-center gap-3 cursor-pointer touch-manipulation">
                 <Switch
                   id="hide-low"
                   checked={hideLowSample}
                   onCheckedChange={setHideLowSample}
+                  className="scale-110"
                 />
-                <Label htmlFor="hide-low" className="text-sm cursor-pointer">
-                  Hide low-sample (n&lt;5)
-                </Label>
-              </div>
+                <span className="text-sm font-medium">Hide n&lt;5</span>
+              </label>
 
               <div className="ml-auto">
                 <WhatIsPPopover />
@@ -248,24 +244,25 @@ export default function Index() {
             </div>
           </div>
 
-          {/* Sport tabs (only shown in sport view mode) */}
+          {/* Sport tabs (only shown in sport view mode) - full width scroll on mobile */}
           {viewMode === "sport" && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-2">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
               {sports.map((sport) => (
                 <button
                   key={sport.id}
                   onClick={() => setSelectedSport(sport.id)}
                   className={cn(
-                    "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap",
+                    "flex items-center gap-2 px-4 sm:px-5 py-3 sm:py-2.5 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap touch-manipulation",
+                    "active:scale-95",
                     selectedSport === sport.id
                       ? "bg-foreground text-background shadow-md"
-                      : "bg-card border border-border/60 text-muted-foreground hover:text-foreground hover:border-border"
+                      : "bg-card border border-border/60 text-muted-foreground"
                   )}
                 >
                   {sport.name}
                   <span
                     className={cn(
-                      "px-1.5 py-0.5 rounded-md text-2xs font-semibold tabular-nums",
+                      "px-2 py-0.5 rounded-md text-xs font-semibold tabular-nums",
                       selectedSport === sport.id
                         ? "bg-background/20 text-background"
                         : "bg-muted text-muted-foreground"
@@ -278,9 +275,9 @@ export default function Index() {
             </div>
           )}
 
-          {/* Games grid */}
+          {/* Games grid - single column on mobile for easier scanning */}
           {isLoading ? (
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {[...Array(6)].map((_, i) => (
                 <GameCardSkeleton key={i} />
               ))}
@@ -297,7 +294,7 @@ export default function Index() {
               }}
             />
           ) : filteredAndSortedGames.length > 0 ? (
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {filteredAndSortedGames.map((game) => (
                 <GameCard key={game.id} game={game} />
               ))}
@@ -307,8 +304,8 @@ export default function Index() {
               title={onlyPicks ? "No picks available" : "No games available"}
               description={
                 onlyPicks
-                  ? `No actionable picks for ${format(selectedDate, "MMMM d, yyyy")}. Try disabling "Only show picks" to see all games.`
-                  : `No games found for ${format(selectedDate, "MMMM d, yyyy")}.`
+                  ? `No picks for ${format(selectedDate, "MMM d")}. Try disabling "Picks only".`
+                  : `No games for ${format(selectedDate, "MMM d")}.`
               }
             />
           )}
