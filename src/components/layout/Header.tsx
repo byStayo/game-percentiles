@@ -6,6 +6,7 @@ const navItems = [
   { href: "/", label: "Today" },
   { href: "/week", label: "Week" },
   { href: "/parlay", label: "Parlay" },
+  { href: "/teams", label: "Teams" },
   { href: "/stats", label: "Stats" },
   { href: "/status", label: "Status" },
 ];
