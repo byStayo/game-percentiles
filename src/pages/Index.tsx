@@ -8,16 +8,21 @@ import { GameCard } from "@/components/game/GameCardNew";
 import { GameCardSkeleton } from "@/components/game/GameCardSkeleton";
 import { EmptyState } from "@/components/game/EmptyState";
 import { ErrorState } from "@/components/game/ErrorState";
-import { TopPicks } from "@/components/game/TopPicks";
-import { FavoritesSection } from "@/components/game/FavoritesSection";
+import { WhatIsPPopover } from "@/components/game/WhatIsPPopover";
 import { useTodayGames, TodayGame } from "@/hooks/useApi";
-import { useFavorites } from "@/hooks/useFavorites";
-import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Clock, TrendingUp, Filter, ChevronDown } from "lucide-react";
 import type { SportId } from "@/types";
 
-const ET_TIMEZONE = 'America/New_York';
+const ET_TIMEZONE = "America/New_York";
 
 function getTodayInET(): Date {
   const now = new Date();
@@ -26,30 +31,36 @@ function getTodayInET(): Date {
 }
 
 const sports: { id: SportId; name: string }[] = [
-  { id: 'nfl', name: 'NFL' },
-  { id: 'nba', name: 'NBA' },
-  { id: 'nhl', name: 'NHL' },
-  { id: 'mlb', name: 'MLB' },
+  { id: "nfl", name: "NFL" },
+  { id: "nba", name: "NBA" },
+  { id: "nhl", name: "NHL" },
+  { id: "mlb", name: "MLB" },
 ];
 
-type ViewMode = 'all' | 'sport';
-type SortOption = 'time' | 'confidence' | 'edge';
+type ViewMode = "all" | "sport";
+type SortOption = "edge" | "time";
 
 export default function Index() {
   const [selectedDate, setSelectedDate] = useState(getTodayInET);
-  const [selectedSport, setSelectedSport] = useState<SportId>('nba');
-  const [viewMode, setViewMode] = useState<ViewMode>('all');
-  const [sortBy, setSortBy] = useState<SortOption>('time');
-  const { favorites, removeFavorite } = useFavorites();
-  
+  const [selectedSport, setSelectedSport] = useState<SportId>("nba");
+  const [viewMode, setViewMode] = useState<ViewMode>("all");
+  const [sortBy, setSortBy] = useState<SortOption>("edge");
+  const [onlyPicks, setOnlyPicks] = useState(true);
+  const [hideLowSample, setHideLowSample] = useState(true);
+
   // Fetch all sports data
-  const nflQuery = useTodayGames(selectedDate, 'nfl');
-  const nbaQuery = useTodayGames(selectedDate, 'nba');
-  const nhlQuery = useTodayGames(selectedDate, 'nhl');
-  const mlbQuery = useTodayGames(selectedDate, 'mlb');
-  
-  const isLoading = nflQuery.isLoading || nbaQuery.isLoading || nhlQuery.isLoading || mlbQuery.isLoading;
-  const hasError = nflQuery.error || nbaQuery.error || nhlQuery.error || mlbQuery.error;
+  const nflQuery = useTodayGames(selectedDate, "nfl");
+  const nbaQuery = useTodayGames(selectedDate, "nba");
+  const nhlQuery = useTodayGames(selectedDate, "nhl");
+  const mlbQuery = useTodayGames(selectedDate, "mlb");
+
+  const isLoading =
+    nflQuery.isLoading ||
+    nbaQuery.isLoading ||
+    nhlQuery.isLoading ||
+    mlbQuery.isLoading;
+  const hasError =
+    nflQuery.error || nbaQuery.error || nhlQuery.error || mlbQuery.error;
 
   // Combine all games
   const allGames = useMemo(() => {
@@ -74,51 +85,80 @@ export default function Index() {
   }, [selectedSport, nflQuery, nbaQuery, nhlQuery, mlbQuery]);
 
   // Games to display based on view mode
-  const displayGames = viewMode === 'all' ? allGames : sportGames;
+  const displayGames = viewMode === "all" ? allGames : sportGames;
 
-  // Sort games
-  const sortedGames = useMemo(() => {
-    const games = [...displayGames];
-    
-    if (sortBy === 'time') {
-      games.sort((a, b) => new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime());
-    } else if (sortBy === 'confidence') {
-      games.sort((a, b) => b.n_h2h - a.n_h2h);
-    } else if (sortBy === 'edge') {
-      games.sort((a, b) => {
-        const aEdge = a.dk_line_percentile !== null ? Math.abs(50 - a.dk_line_percentile) : 0;
-        const bEdge = b.dk_line_percentile !== null ? Math.abs(50 - b.dk_line_percentile) : 0;
-        return bEdge - aEdge;
+  // Filter and sort games
+  const filteredAndSortedGames = useMemo(() => {
+    let games = [...displayGames];
+
+    // Filter: hide low sample games
+    if (hideLowSample) {
+      games = games.filter((g) => g.n_h2h >= 5);
+    }
+
+    // Filter: only show picks (games with actionable edges)
+    if (onlyPicks) {
+      games = games.filter((g) => {
+        if (g.n_h2h < 5) return false;
+        if (!g.dk_offered || g.dk_total_line === null) return false;
+        const P = g.dk_line_percentile ?? 50;
+        return P >= 70 || P <= 30;
       });
     }
-    
+
+    // Sort
+    if (sortBy === "edge") {
+      games.sort((a, b) => {
+        const aEdge =
+          a.dk_line_percentile !== null ? Math.abs(50 - a.dk_line_percentile) : 0;
+        const bEdge =
+          b.dk_line_percentile !== null ? Math.abs(50 - b.dk_line_percentile) : 0;
+        return bEdge - aEdge;
+      });
+    } else if (sortBy === "time") {
+      games.sort(
+        (a, b) =>
+          new Date(a.start_time_utc).getTime() -
+          new Date(b.start_time_utc).getTime()
+      );
+    }
+
     return games;
-  }, [displayGames, sortBy]);
+  }, [displayGames, sortBy, onlyPicks, hideLowSample]);
 
   // Sport counts
-  const sportCounts = useMemo(() => ({
-    nfl: nflQuery.data?.games?.length || 0,
-    nba: nbaQuery.data?.games?.length || 0,
-    nhl: nhlQuery.data?.games?.length || 0,
-    mlb: mlbQuery.data?.games?.length || 0,
-  }), [nflQuery.data, nbaQuery.data, nhlQuery.data, mlbQuery.data]);
+  const sportCounts = useMemo(
+    () => ({
+      nfl: nflQuery.data?.games?.length || 0,
+      nba: nbaQuery.data?.games?.length || 0,
+      nhl: nhlQuery.data?.games?.length || 0,
+      mlb: mlbQuery.data?.games?.length || 0,
+    }),
+    [nflQuery.data, nbaQuery.data, nhlQuery.data, mlbQuery.data]
+  );
+
+  const totalGames = allGames.length;
+  const picksCount = filteredAndSortedGames.length;
 
   return (
     <>
       <Helmet>
         <title>Game Percentiles | Historical H2H Analysis</title>
-        <meta name="description" content="Analyze head-to-head historical totals for NFL, NBA, MLB, and NHL. View P05/P95 percentile bounds and line analysis." />
+        <meta
+          name="description"
+          content="Analyze head-to-head historical totals for NFL, NBA, MLB, and NHL. View P05/P95 percentile bounds and line analysis."
+        />
       </Helmet>
 
       <Layout>
-        <div className="space-y-10 animate-fade-in">
-          {/* Hero section */}
-          <div className="text-center space-y-4 py-4">
-            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
+        <div className="space-y-8 animate-fade-in">
+          {/* Hero section - minimal */}
+          <div className="text-center space-y-2 pt-4">
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
               Game Percentiles
             </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Historical head-to-head analysis with statistical bounds
+            <p className="text-muted-foreground">
+              {totalGames} games today • {picksCount} with picks
             </p>
           </div>
 
@@ -130,63 +170,86 @@ export default function Index() {
             />
           </div>
 
-          {/* View mode toggle & controls */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            {/* View mode pills */}
-            <div className="flex items-center gap-1 p-1 rounded-full bg-secondary/50 w-fit">
-              <button
-                onClick={() => setViewMode('all')}
-                className={cn(
-                  "px-4 py-2 text-sm font-medium rounded-full transition-all duration-200",
-                  viewMode === 'all'
-                    ? "bg-foreground text-background shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                All Games
-              </button>
-              <button
-                onClick={() => setViewMode('sport')}
-                className={cn(
-                  "px-4 py-2 text-sm font-medium rounded-full transition-all duration-200",
-                  viewMode === 'sport'
-                    ? "bg-foreground text-background shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                By Sport
-              </button>
+          {/* Controls row */}
+          <div className="flex flex-col gap-4 p-4 rounded-2xl bg-card border border-border/60">
+            {/* Top: View mode + Sort */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              {/* View mode pills */}
+              <div className="flex items-center gap-1 p-1 rounded-full bg-secondary/50 w-fit">
+                <button
+                  onClick={() => setViewMode("all")}
+                  className={cn(
+                    "px-4 py-2 text-sm font-medium rounded-full transition-all duration-200",
+                    viewMode === "all"
+                      ? "bg-foreground text-background shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  All Sports
+                </button>
+                <button
+                  onClick={() => setViewMode("sport")}
+                  className={cn(
+                    "px-4 py-2 text-sm font-medium rounded-full transition-all duration-200",
+                    viewMode === "sport"
+                      ? "bg-foreground text-background shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  By Sport
+                </button>
+              </div>
+
+              {/* Sort dropdown */}
+              <div className="flex items-center gap-3">
+                <Label className="text-sm text-muted-foreground">Sort by</Label>
+                <Select
+                  value={sortBy}
+                  onValueChange={(v) => setSortBy(v as SortOption)}
+                >
+                  <SelectTrigger className="w-[140px] h-9 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="edge">Edge strength</SelectItem>
+                    <SelectItem value="time">Start time</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            {/* Sort controls */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground hidden sm:inline">Sort by</span>
-              <div className="flex items-center gap-1 p-1 rounded-xl bg-secondary/50">
-                {[
-                  { value: 'time', label: 'Time', icon: Clock },
-                  { value: 'confidence', label: 'Data', icon: TrendingUp },
-                  { value: 'edge', label: 'Edge', icon: Filter },
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => setSortBy(option.value as SortOption)}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200",
-                      sortBy === option.value
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <option.icon className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">{option.label}</span>
-                  </button>
-                ))}
+            {/* Bottom: Toggles + What is P */}
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="only-picks"
+                  checked={onlyPicks}
+                  onCheckedChange={setOnlyPicks}
+                />
+                <Label htmlFor="only-picks" className="text-sm cursor-pointer">
+                  Only show picks
+                </Label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="hide-low"
+                  checked={hideLowSample}
+                  onCheckedChange={setHideLowSample}
+                />
+                <Label htmlFor="hide-low" className="text-sm cursor-pointer">
+                  Hide low-sample (n&lt;5)
+                </Label>
+              </div>
+
+              <div className="ml-auto">
+                <WhatIsPPopover />
               </div>
             </div>
           </div>
 
           {/* Sport tabs (only shown in sport view mode) */}
-          {viewMode === 'sport' && (
+          {viewMode === "sport" && (
             <div className="flex items-center gap-2 overflow-x-auto pb-2">
               {sports.map((sport) => (
                 <button
@@ -200,44 +263,17 @@ export default function Index() {
                   )}
                 >
                   {sport.name}
-                  <span className={cn(
-                    "px-1.5 py-0.5 rounded-md text-2xs font-semibold tabular-nums",
-                    selectedSport === sport.id
-                      ? "bg-background/20 text-background"
-                      : "bg-muted text-muted-foreground"
-                  )}>
+                  <span
+                    className={cn(
+                      "px-1.5 py-0.5 rounded-md text-2xs font-semibold tabular-nums",
+                      selectedSport === sport.id
+                        ? "bg-background/20 text-background"
+                        : "bg-muted text-muted-foreground"
+                    )}
+                  >
                     {sportCounts[sport.id]}
                   </span>
                 </button>
-              ))}
-            </div>
-          )}
-
-          {/* Top Picks & Favorites - only in all view */}
-          {viewMode === 'all' && !isLoading && allGames.length > 0 && (
-            <div className="grid gap-5 lg:grid-cols-2">
-              <TopPicks games={allGames} isLoading={isLoading} />
-              {favorites.length > 0 && (
-                <FavoritesSection
-                  favorites={favorites}
-                  games={allGames}
-                  onRemove={removeFavorite}
-                />
-              )}
-            </div>
-          )}
-
-          {/* Stats summary for all games view */}
-          {viewMode === 'all' && !isLoading && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {sports.map((sport) => (
-                <div
-                  key={sport.id}
-                  className="p-4 rounded-2xl bg-card border border-border/60 text-center"
-                >
-                  <div className="text-2xl font-bold tabular-nums">{sportCounts[sport.id]}</div>
-                  <div className="text-sm text-muted-foreground">{sport.name} games</div>
-                </div>
               ))}
             </div>
           )}
@@ -260,34 +296,22 @@ export default function Index() {
                 mlbQuery.refetch();
               }}
             />
-          ) : sortedGames.length > 0 ? (
+          ) : filteredAndSortedGames.length > 0 ? (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {sortedGames.map((game) => (
+              {filteredAndSortedGames.map((game) => (
                 <GameCard key={game.id} game={game} />
               ))}
             </div>
           ) : (
             <EmptyState
-              title="No games available"
-              description={`No games found for ${format(selectedDate, 'MMMM d, yyyy')}.`}
+              title={onlyPicks ? "No picks available" : "No games available"}
+              description={
+                onlyPicks
+                  ? `No actionable picks for ${format(selectedDate, "MMMM d, yyyy")}. Try disabling "Only show picks" to see all games.`
+                  : `No games found for ${format(selectedDate, "MMMM d, yyyy")}.`
+              }
             />
           )}
-
-          {/* Legend */}
-          <div className="flex flex-wrap items-center justify-center gap-6 pt-6 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-status-under" />
-              <span>Take UNDER (P≥70)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-status-edge" />
-              <span>No edge (P 30-70)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-status-over" />
-              <span>Take OVER (P≤30)</span>
-            </div>
-          </div>
         </div>
       </Layout>
     </>
