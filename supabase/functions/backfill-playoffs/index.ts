@@ -11,6 +11,34 @@ interface PlayoffEntry {
   playoff_result: string;
 }
 
+// Mapping from common abbreviations to actual database team names
+const ABBREV_TO_DB: Record<string, Record<string, string>> = {
+  nba: {
+    'GSW': 'GS',
+    'NOP': 'NO',
+    'NYK': 'NY',
+    'PHX': 'PHO',
+    'SAS': 'SA',
+  },
+  nfl: {
+    // NFL names match
+  },
+  mlb: {
+    'WAS': 'WSH',
+  },
+  nhl: {
+    'VGK': 'VEG',
+    'MTL': 'MON',
+    'NSH': 'NAS',
+    'SJS': 'SJ',
+    'WSH': 'WAS',
+  },
+};
+
+function getDbTeamName(abbrev: string, sport: string): string {
+  return ABBREV_TO_DB[sport]?.[abbrev] || abbrev;
+}
+
 // Known playoff results by sport - Historical data going back to 2015
 const NBA_PLAYOFFS: PlayoffEntry[] = [
   // 2024 Playoffs
@@ -325,10 +353,10 @@ async function backfillPlayoffs(
 
   console.log(`[backfill-playoffs] Processing ${playoffData.length} playoff entries for ${sport}`);
 
-  // Get all teams for this sport
+  // Get all teams for this sport - match by name since that's where abbreviations are stored
   const { data: teams, error: teamsError } = await supabase
     .from('teams')
-    .select('id, abbrev')
+    .select('id, name, abbrev')
     .eq('sport_id', sport);
 
   if (teamsError) {
@@ -336,15 +364,22 @@ async function backfillPlayoffs(
     return { updated: 0, errors: [teamsError.message] };
   }
 
-  const teamMap = new Map((teams || []).map((t: any) => [t.abbrev, t.id]));
+  // Create map using both name and abbrev as keys (name is the primary storage)
+  const teamMap = new Map<string, string>();
+  (teams || []).forEach((t: any) => {
+    if (t.name) teamMap.set(t.name, t.id);
+    if (t.abbrev) teamMap.set(t.abbrev, t.id);
+  });
   let updated = 0;
   const errors: string[] = [];
 
   for (const entry of playoffData) {
-    const teamId = teamMap.get(entry.team_abbrev);
+    // Convert common abbreviation to DB team name
+    const dbTeamName = getDbTeamName(entry.team_abbrev, sport);
+    const teamId = teamMap.get(dbTeamName);
     
     if (!teamId) {
-      errors.push(`Team not found: ${entry.team_abbrev}`);
+      errors.push(`Team not found: ${entry.team_abbrev} (tried: ${dbTeamName})`);
       continue;
     }
 
