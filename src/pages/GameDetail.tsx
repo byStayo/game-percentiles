@@ -17,6 +17,7 @@ import { RecencyIndicator } from "@/components/game/RecencyIndicator";
 import { GameDetailSkeleton } from "@/components/game/GameDetailSkeleton";
 import { RosterContinuityCard } from "@/components/game/RosterContinuityCard";
 import { SegmentComparison } from "@/components/game/SegmentComparison";
+import { SegmentTimeline } from "@/components/game/SegmentTimeline";
 import { Button } from "@/components/ui/button";
 import { HistoricalDistributionChart } from "@/components/game/HistoricalDistributionChart";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
@@ -185,7 +186,8 @@ export default function GameDetail() {
                 showRecommendation={true}
               />
             </div>
-            <div className="flex gap-2 flex-wrap">
+            {/* Year-based segments */}
+            <div className="flex gap-2 flex-wrap mb-3">
               {(["h2h_1y", "h2h_3y", "h2h_5y", "h2h_10y", "h2h_all"] as const).map((seg) => {
                 const avail = segmentAvailability?.find(a => a.segment === seg);
                 const nGames = avail?.nGames ?? 0;
@@ -221,6 +223,42 @@ export default function GameDetail() {
                       )}>
                         ({nGames})
                       </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Decade segments */}
+            <div className="flex gap-2 flex-wrap">
+              {(["decade_2020s", "decade_2010s", "decade_2000s", "decade_1990s"] as const).map((seg) => {
+                const avail = segmentAvailability?.find(a => a.segment === seg);
+                const nGames = avail?.nGames ?? 0;
+                const isActive = selectedSegment === seg;
+                const isDisabled = nGames === 0;
+                const labels: Record<string, string> = {
+                  decade_2020s: "2020s",
+                  decade_2010s: "2010s",
+                  decade_2000s: "2000s",
+                  decade_1990s: "1990s",
+                };
+                return (
+                  <button
+                    key={seg}
+                    onClick={() => !isDisabled && setSelectedSegment(seg)}
+                    disabled={isDisabled}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md text-xs font-medium transition-all",
+                      isActive 
+                        ? "bg-accent text-accent-foreground" 
+                        : isDisabled
+                          ? "bg-muted/20 text-muted-foreground/40 cursor-not-allowed"
+                          : "bg-muted/50 hover:bg-muted text-muted-foreground",
+                      nGames > 0 && nGames < 5 && !isActive && "border border-status-over/20"
+                    )}
+                  >
+                    <span>{labels[seg]}</span>
+                    {nGames > 0 && (
+                      <span className="ml-1 opacity-70">({nGames})</span>
                     )}
                   </button>
                 );
@@ -413,6 +451,15 @@ export default function GameDetail() {
               awayContinuity={rosterData.awayContinuity}
               homeEra={rosterData.homeEra}
               awayEra={rosterData.awayEra}
+            />
+          )}
+
+          {/* Segment Timeline Chart */}
+          {game.home_team?.id && game.away_team?.id && (
+            <SegmentTimeline
+              homeTeamId={game.home_team.id}
+              awayTeamId={game.away_team.id}
+              dkLine={edge?.dk_total_line}
             />
           )}
 
