@@ -171,13 +171,61 @@ export default function GameDetail() {
               <ArrowLeft className="h-4 w-4" />
               Back
             </Link>
-            <SegmentSelector
-              value={selectedSegment}
-              onChange={setSelectedSegment}
-              disabled={isLoading}
-              availability={segmentAvailability}
-              showRecommendation={true}
-            />
+          </div>
+
+          {/* Segment Quick Selector */}
+          <div className="bg-card rounded-xl border border-border/60 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Time Window</span>
+              <SegmentSelector
+                value={selectedSegment}
+                onChange={setSelectedSegment}
+                disabled={isLoading}
+                availability={segmentAvailability}
+                showRecommendation={true}
+              />
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {(["h2h_1y", "h2h_3y", "h2h_5y", "h2h_10y", "h2h_all"] as const).map((seg) => {
+                const avail = segmentAvailability?.find(a => a.segment === seg);
+                const nGames = avail?.nGames ?? 0;
+                const isActive = selectedSegment === seg;
+                const isDisabled = nGames === 0;
+                const labels: Record<string, string> = {
+                  h2h_1y: "1Y",
+                  h2h_3y: "3Y",
+                  h2h_5y: "5Y",
+                  h2h_10y: "10Y",
+                  h2h_all: "All",
+                };
+                return (
+                  <button
+                    key={seg}
+                    onClick={() => !isDisabled && setSelectedSegment(seg)}
+                    disabled={isDisabled}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                      isActive 
+                        ? "bg-primary text-primary-foreground" 
+                        : isDisabled
+                          ? "bg-muted/30 text-muted-foreground/50 cursor-not-allowed"
+                          : "bg-secondary hover:bg-secondary/80 text-foreground",
+                      nGames > 0 && nGames < 5 && !isActive && "border border-status-over/30"
+                    )}
+                  >
+                    <span>{labels[seg]}</span>
+                    {nGames > 0 && (
+                      <span className={cn(
+                        "ml-1 text-2xs",
+                        isActive ? "opacity-80" : "text-muted-foreground"
+                      )}>
+                        ({nGames})
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Main card - Hero pick first */}

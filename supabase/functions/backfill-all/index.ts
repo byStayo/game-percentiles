@@ -556,10 +556,11 @@ async function computeSegmentedStats(supabase: any, sport: string) {
   const currentYear = new Date().getFullYear();
   const segments = [
     { key: "h2h_all", filter: () => true },
-    { key: "h2h_10y", filter: (year: number) => year >= currentYear - 10 },
     { key: "h2h_20y", filter: (year: number) => year >= currentYear - 20 },
+    { key: "h2h_10y", filter: (year: number) => year >= currentYear - 10 },
     { key: "h2h_5y", filter: (year: number) => year >= currentYear - 5 },
     { key: "h2h_3y", filter: (year: number) => year >= currentYear - 3 },
+    { key: "h2h_1y", filter: (year: number) => year >= currentYear - 1 },
   ];
 
   let statsUpdated = 0;

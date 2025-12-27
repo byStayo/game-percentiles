@@ -25,6 +25,7 @@ interface SegmentStats {
 }
 
 const COMPARISON_SEGMENTS: SegmentKey[] = [
+  "h2h_1y",
   "h2h_3y",
   "h2h_5y",
   "h2h_10y",
