@@ -78,6 +78,7 @@ export interface GameDetailResponse {
     min_total: number | null;
     max_total: number | null;
   } | null;
+  segment: string;
   history: Array<{
     id: number;
     played_at: string;
@@ -186,10 +187,10 @@ export function useTodayGames(date: Date, sportId: SportId) {
   });
 }
 
-export function useGameDetail(gameId: string) {
+export function useGameDetail(gameId: string, segment: string = 'h2h_all') {
   return useQuery<GameDetailResponse>({
-    queryKey: ['api-game', gameId],
-    queryFn: () => fetchApi<GameDetailResponse>(`api-game?id=${gameId}`),
+    queryKey: ['api-game', gameId, segment],
+    queryFn: () => fetchApi<GameDetailResponse>(`api-game?id=${gameId}&segment=${segment}`),
     enabled: !!gameId,
     staleTime: 30000,
     retry: 2,
