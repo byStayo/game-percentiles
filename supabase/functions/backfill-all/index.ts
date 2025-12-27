@@ -1,5 +1,17 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Simple hash function for params
+function hashParams(params: Record<string, string>): string {
+  const sorted = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join("&");
+  let hash = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    const char = sorted.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(16);
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -13,108 +25,126 @@ const ESPN_API_URLS: Record<string, string> = {
   mlb: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
 };
 
-// Team name mappings (ESPN abbreviation -> our DB abbreviation)
-const ESPN_TO_DB: Record<string, Record<string, string>> = {
+// Franchise mappings - canonical names for team continuity across rebrands/relocations
+const FRANCHISE_MAPPINGS: Record<string, Record<string, string>> = {
   nba: {
-    "ATL": "ATL", "BOS": "BOS", "BKN": "BKN", "CHA": "CHA", "CHI": "CHI",
-    "CLE": "CLE", "DAL": "DAL", "DEN": "DEN", "DET": "DET", "GS": "GSW",
-    "HOU": "HOU", "IND": "IND", "LAC": "LAC", "LAL": "LAL", "MEM": "MEM",
-    "MIA": "MIA", "MIL": "MIL", "MIN": "MIN", "NO": "NOP", "NY": "NYK",
-    "OKC": "OKC", "ORL": "ORL", "PHI": "PHI", "PHX": "PHX", "POR": "POR",
-    "SAC": "SAC", "SA": "SAS", "TOR": "TOR", "UTAH": "UTA", "WSH": "WAS",
-    "UTA": "UTA", "NOP": "NOP", "NYK": "NYK", "GSW": "GSW", "SAS": "SAS",
+    // Current teams
+    "ATL": "Atlanta Hawks", "BOS": "Boston Celtics", "BKN": "Brooklyn Nets", 
+    "CHA": "Charlotte Hornets", "CHI": "Chicago Bulls", "CLE": "Cleveland Cavaliers",
+    "DAL": "Dallas Mavericks", "DEN": "Denver Nuggets", "DET": "Detroit Pistons",
+    "GSW": "Golden State Warriors", "GS": "Golden State Warriors",
+    "HOU": "Houston Rockets", "IND": "Indiana Pacers", "LAC": "LA Clippers",
+    "LAL": "Los Angeles Lakers", "MEM": "Memphis Grizzlies", "MIA": "Miami Heat",
+    "MIL": "Milwaukee Bucks", "MIN": "Minnesota Timberwolves",
+    "NOP": "New Orleans Pelicans", "NO": "New Orleans Pelicans",
+    "NYK": "New York Knicks", "NY": "New York Knicks",
+    "OKC": "Oklahoma City Thunder", "ORL": "Orlando Magic", "PHI": "Philadelphia 76ers",
+    "PHX": "Phoenix Suns", "POR": "Portland Trail Blazers",
+    "SAC": "Sacramento Kings", "SAS": "San Antonio Spurs", "SA": "San Antonio Spurs",
+    "TOR": "Toronto Raptors", "UTA": "Utah Jazz", "UTAH": "Utah Jazz",
+    "WAS": "Washington Wizards", "WSH": "Washington Wizards",
+    // Historical
+    "NJN": "Brooklyn Nets", "SEA": "Oklahoma City Thunder", "VAN": "Memphis Grizzlies",
+    "NOH": "New Orleans Pelicans", "NOK": "New Orleans Pelicans",
+    "CHA_OLD": "Charlotte Hornets", "CHH": "Charlotte Hornets",
   },
   nfl: {
-    "ARI": "ARI", "ATL": "ATL", "BAL": "BAL", "BUF": "BUF", "CAR": "CAR",
-    "CHI": "CHI", "CIN": "CIN", "CLE": "CLE", "DAL": "DAL", "DEN": "DEN",
-    "DET": "DET", "GB": "GB", "HOU": "HOU", "IND": "IND", "JAX": "JAC",
-    "KC": "KC", "LV": "LV", "LAC": "LAC", "LAR": "LAR", "MIA": "MIA",
-    "MIN": "MIN", "NE": "NE", "NO": "NO", "NYG": "NYG", "NYJ": "NYJ",
-    "PHI": "PHI", "PIT": "PIT", "SF": "SF", "SEA": "SEA", "TB": "TB",
-    "TEN": "TEN", "WSH": "WAS", "OAK": "LV", "STL": "LAR", "SD": "LAC",
-    "JAC": "JAC", "WAS": "WAS",
+    "ARI": "Arizona Cardinals", "ATL": "Atlanta Falcons", "BAL": "Baltimore Ravens",
+    "BUF": "Buffalo Bills", "CAR": "Carolina Panthers", "CHI": "Chicago Bears",
+    "CIN": "Cincinnati Bengals", "CLE": "Cleveland Browns", "DAL": "Dallas Cowboys",
+    "DEN": "Denver Broncos", "DET": "Detroit Lions", "GB": "Green Bay Packers",
+    "HOU": "Houston Texans", "IND": "Indianapolis Colts", "JAC": "Jacksonville Jaguars",
+    "JAX": "Jacksonville Jaguars", "KC": "Kansas City Chiefs",
+    "LV": "Las Vegas Raiders", "LAC": "Los Angeles Chargers", "LAR": "Los Angeles Rams",
+    "MIA": "Miami Dolphins", "MIN": "Minnesota Vikings", "NE": "New England Patriots",
+    "NO": "New Orleans Saints", "NYG": "New York Giants", "NYJ": "New York Jets",
+    "PHI": "Philadelphia Eagles", "PIT": "Pittsburgh Steelers", "SF": "San Francisco 49ers",
+    "SEA": "Seattle Seahawks", "TB": "Tampa Bay Buccaneers", "TEN": "Tennessee Titans",
+    "WAS": "Washington Commanders", "WSH": "Washington Commanders",
+    // Historical
+    "OAK": "Las Vegas Raiders", "SD": "Los Angeles Chargers", "STL": "Los Angeles Rams",
   },
   nhl: {
-    "ANA": "ANA", "ARI": "ARI", "BOS": "BOS", "BUF": "BUF", "CGY": "CGY",
-    "CAR": "CAR", "CHI": "CHI", "COL": "COL", "CBJ": "CBJ", "DAL": "DAL",
-    "DET": "DET", "EDM": "EDM", "FLA": "FLA", "LA": "LA", "MIN": "MIN",
-    "MTL": "MTL", "NSH": "NSH", "NJ": "NJ", "NYI": "NYI", "NYR": "NYR",
-    "OTT": "OTT", "PHI": "PHI", "PIT": "PIT", "SJ": "SJ", "SEA": "SEA",
-    "STL": "STL", "TB": "TB", "TOR": "TOR", "VAN": "VAN", "VGK": "VGK",
-    "WPG": "WPG", "WSH": "WSH", "UTAH": "UTA", "PHX": "ARI", "ATL": "WPG",
+    "ANA": "Anaheim Ducks", "ARI": "Arizona Coyotes", "BOS": "Boston Bruins",
+    "BUF": "Buffalo Sabres", "CGY": "Calgary Flames", "CAR": "Carolina Hurricanes",
+    "CHI": "Chicago Blackhawks", "COL": "Colorado Avalanche", "CBJ": "Columbus Blue Jackets",
+    "DAL": "Dallas Stars", "DET": "Detroit Red Wings", "EDM": "Edmonton Oilers",
+    "FLA": "Florida Panthers", "LA": "Los Angeles Kings", "MIN": "Minnesota Wild",
+    "MTL": "Montreal Canadiens", "NSH": "Nashville Predators", "NJ": "New Jersey Devils",
+    "NYI": "New York Islanders", "NYR": "New York Rangers", "OTT": "Ottawa Senators",
+    "PHI": "Philadelphia Flyers", "PIT": "Pittsburgh Penguins", "SJ": "San Jose Sharks",
+    "SEA": "Seattle Kraken", "STL": "St. Louis Blues", "TB": "Tampa Bay Lightning",
+    "TOR": "Toronto Maple Leafs", "VAN": "Vancouver Canucks", "VGK": "Vegas Golden Knights",
+    "WPG": "Winnipeg Jets", "WSH": "Washington Capitals",
+    // Historical
+    "PHX": "Arizona Coyotes", "ATL": "Winnipeg Jets", "UTAH": "Utah Hockey Club",
+    "HFD": "Carolina Hurricanes", "QUE": "Colorado Avalanche",
   },
   mlb: {
-    "ARI": "ARI", "ATL": "ATL", "BAL": "BAL", "BOS": "BOS", "CHC": "CHC",
-    "CHW": "CWS", "CIN": "CIN", "CLE": "CLE", "COL": "COL", "DET": "DET",
-    "HOU": "HOU", "KC": "KC", "LAA": "LAA", "LAD": "LAD", "MIA": "MIA",
-    "MIL": "MIL", "MIN": "MIN", "NYM": "NYM", "NYY": "NYY", "OAK": "OAK",
-    "PHI": "PHI", "PIT": "PIT", "SD": "SD", "SF": "SF", "SEA": "SEA",
-    "STL": "STL", "TB": "TB", "TEX": "TEX", "TOR": "TOR", "WSH": "WAS",
-    "CWS": "CWS", "WAS": "WAS", "FLA": "MIA",
+    "ARI": "Arizona Diamondbacks", "ATL": "Atlanta Braves", "BAL": "Baltimore Orioles",
+    "BOS": "Boston Red Sox", "CHC": "Chicago Cubs", "CWS": "Chicago White Sox",
+    "CHW": "Chicago White Sox", "CIN": "Cincinnati Reds", "CLE": "Cleveland Guardians",
+    "COL": "Colorado Rockies", "DET": "Detroit Tigers", "HOU": "Houston Astros",
+    "KC": "Kansas City Royals", "LAA": "Los Angeles Angels", "LAD": "Los Angeles Dodgers",
+    "MIA": "Miami Marlins", "MIL": "Milwaukee Brewers", "MIN": "Minnesota Twins",
+    "NYM": "New York Mets", "NYY": "New York Yankees", "OAK": "Oakland Athletics",
+    "PHI": "Philadelphia Phillies", "PIT": "Pittsburgh Pirates", "SD": "San Diego Padres",
+    "SF": "San Francisco Giants", "SEA": "Seattle Mariners", "STL": "St. Louis Cardinals",
+    "TB": "Tampa Bay Rays", "TEX": "Texas Rangers", "TOR": "Toronto Blue Jays",
+    "WAS": "Washington Nationals", "WSH": "Washington Nationals",
+    // Historical
+    "FLA": "Miami Marlins", "MON": "Washington Nationals", "ANA": "Los Angeles Angels",
+    "CAL": "Los Angeles Angels", "TBD": "Tampa Bay Rays",
   },
 };
 
-// Season date ranges by sport
-const SPORT_SEASONS: Record<string, { start: string; end: string }[]> = {
-  nba: [
-    // 2015-2025 NBA seasons (Oct-Jun)
-    { start: "2015-10-27", end: "2016-06-20" },
-    { start: "2016-10-25", end: "2017-06-13" },
-    { start: "2017-10-17", end: "2018-06-09" },
-    { start: "2018-10-16", end: "2019-06-14" },
-    { start: "2019-10-22", end: "2020-10-12" }, // COVID extended
-    { start: "2020-12-22", end: "2021-07-21" }, // COVID delayed start
-    { start: "2021-10-19", end: "2022-06-17" },
-    { start: "2022-10-18", end: "2023-06-13" },
-    { start: "2023-10-24", end: "2024-06-18" },
-    { start: "2024-10-22", end: "2025-06-30" },
-  ],
-  nfl: [
-    // 2015-2025 NFL seasons (Sep-Feb)
-    { start: "2015-09-10", end: "2016-02-08" },
-    { start: "2016-09-08", end: "2017-02-06" },
-    { start: "2017-09-07", end: "2018-02-05" },
-    { start: "2018-09-06", end: "2019-02-04" },
-    { start: "2019-09-05", end: "2020-02-03" },
-    { start: "2020-09-10", end: "2021-02-08" },
-    { start: "2021-09-09", end: "2022-02-14" },
-    { start: "2022-09-08", end: "2023-02-13" },
-    { start: "2023-09-07", end: "2024-02-12" },
-    { start: "2024-09-05", end: "2025-02-10" },
-  ],
-  nhl: [
-    // 2015-2025 NHL seasons (Oct-Jun)
-    { start: "2015-10-07", end: "2016-06-13" },
-    { start: "2016-10-12", end: "2017-06-12" },
-    { start: "2017-10-04", end: "2018-06-08" },
-    { start: "2018-10-03", end: "2019-06-13" },
-    { start: "2019-10-02", end: "2020-09-29" }, // COVID bubble
-    { start: "2021-01-13", end: "2021-07-08" }, // COVID delayed
-    { start: "2021-10-12", end: "2022-06-27" },
-    { start: "2022-10-07", end: "2023-06-14" },
-    { start: "2023-10-10", end: "2024-06-25" },
-    { start: "2024-10-04", end: "2025-06-30" },
-  ],
-  mlb: [
-    // 2015-2025 MLB seasons (Mar/Apr-Oct/Nov)
-    { start: "2015-04-05", end: "2015-11-02" },
-    { start: "2016-04-03", end: "2016-11-03" },
-    { start: "2017-04-02", end: "2017-11-02" },
-    { start: "2018-03-29", end: "2018-10-29" },
-    { start: "2019-03-28", end: "2019-10-31" },
-    { start: "2020-07-23", end: "2020-10-28" }, // COVID shortened
-    { start: "2021-04-01", end: "2021-11-03" },
-    { start: "2022-04-07", end: "2022-11-06" },
-    { start: "2023-03-30", end: "2023-11-02" },
-    { start: "2024-03-28", end: "2024-11-03" },
-    { start: "2025-03-27", end: "2025-11-05" },
-  ],
+// ESPN abbreviation normalization
+const ESPN_ABBREV_MAP: Record<string, Record<string, string>> = {
+  nba: { "GS": "GSW", "NY": "NYK", "NO": "NOP", "SA": "SAS", "UTAH": "UTA", "WSH": "WAS" },
+  nfl: { "JAX": "JAC", "WSH": "WAS" },
+  nhl: { "LA": "LAK", "UTAH": "UTA", "WSH": "WAS" },
+  mlb: { "CHW": "CWS", "WSH": "WAS" },
+};
+
+// Season date ranges - comprehensive 25+ years
+const SPORT_SEASONS: Record<string, { year: number; start: string; end: string }[]> = {
+  nba: Array.from({ length: 30 }, (_, i) => {
+    const year = 1995 + i;
+    if (year > 2025) return null;
+    // COVID seasons handled specially
+    if (year === 2020) return { year: 2020, start: "2019-10-22", end: "2020-10-12" };
+    if (year === 2021) return { year: 2021, start: "2020-12-22", end: "2021-07-21" };
+    return { year, start: `${year - 1}-10-15`, end: `${year}-06-30` };
+  }).filter(Boolean) as { year: number; start: string; end: string }[],
+  
+  nfl: Array.from({ length: 30 }, (_, i) => {
+    const year = 1995 + i;
+    if (year > 2025) return null;
+    return { year, start: `${year}-09-01`, end: `${year + 1}-02-15` };
+  }).filter(Boolean) as { year: number; start: string; end: string }[],
+  
+  nhl: Array.from({ length: 30 }, (_, i) => {
+    const year = 1995 + i;
+    if (year > 2025) return null;
+    if (year === 2005) return null; // Lockout
+    if (year === 2020) return { year: 2020, start: "2019-10-02", end: "2020-09-29" };
+    if (year === 2021) return { year: 2021, start: "2021-01-13", end: "2021-07-08" };
+    return { year, start: `${year - 1}-10-01`, end: `${year}-06-30` };
+  }).filter(Boolean) as { year: number; start: string; end: string }[],
+  
+  mlb: Array.from({ length: 30 }, (_, i) => {
+    const year = 1995 + i;
+    if (year > 2025) return null;
+    if (year === 2020) return { year: 2020, start: "2020-07-23", end: "2020-10-28" };
+    return { year, start: `${year}-03-20`, end: `${year}-11-10` };
+  }).filter(Boolean) as { year: number; start: string; end: string }[],
 };
 
 interface ESPNEvent {
   id: string;
   date: string;
   status: { type: { completed: boolean } };
+  season?: { year: number; type: number }; // type 2 = regular, 3 = playoff
   competitions: Array<{
     competitors: Array<{
       team: { abbreviation: string; displayName: string };
@@ -126,14 +156,28 @@ interface ESPNEvent {
 
 interface ParsedGame {
   espnId: string;
-  homeTeamAbbrev: string;
-  awayTeamAbbrev: string;
+  homeAbbrev: string;
+  awayAbbrev: string;
   homeScore: number;
   awayScore: number;
   startTimeUtc: string;
+  seasonYear: number;
+  isPlayoff: boolean;
 }
 
-async function fetchESPNGamesForDate(sport: string, dateStr: string): Promise<ParsedGame[]> {
+function computeDecade(year: number): string {
+  const decadeStart = Math.floor(year / 10) * 10;
+  return `${decadeStart}s`;
+}
+
+
+async function fetchESPNGamesForDate(
+  supabase: any,
+  sport: string, 
+  dateStr: string,
+  seasonYear: number,
+  storeRaw: boolean
+): Promise<ParsedGame[]> {
   const baseUrl = ESPN_API_URLS[sport];
   if (!baseUrl) return [];
 
@@ -145,7 +189,22 @@ async function fetchESPNGamesForDate(sport: string, dateStr: string): Promise<Pa
     if (!response.ok) return [];
 
     const data = await response.json();
+    
+    // Store raw payload if requested
+    if (storeRaw && data.events?.length > 0) {
+      const params = { dates: espnDate };
+      await supabase.from("provider_raw").insert({
+        provider: "espn",
+        endpoint: `${sport}/scoreboard`,
+        params_hash: hashParams(params),
+        sport_id: sport,
+        season_year: seasonYear,
+        payload_json: data,
+      }).onConflict("provider,endpoint,params_hash,fetched_at").ignore();
+    }
+
     const games: ParsedGame[] = [];
+    const abbrevMap = ESPN_ABBREV_MAP[sport] || {};
 
     for (const event of (data.events || []) as ESPNEvent[]) {
       const competition = event.competitions?.[0];
@@ -159,19 +218,24 @@ async function fetchESPNGamesForDate(sport: string, dateStr: string): Promise<Pa
       const awayScore = parseInt(awayTeam.score, 10);
       if (isNaN(homeScore) || isNaN(awayScore)) continue;
 
+      const rawHomeAbbrev = homeTeam.team.abbreviation;
+      const rawAwayAbbrev = awayTeam.team.abbreviation;
+      
       games.push({
         espnId: event.id,
-        homeTeamAbbrev: homeTeam.team.abbreviation,
-        awayTeamAbbrev: awayTeam.team.abbreviation,
+        homeAbbrev: abbrevMap[rawHomeAbbrev] || rawHomeAbbrev,
+        awayAbbrev: abbrevMap[rawAwayAbbrev] || rawAwayAbbrev,
         homeScore,
         awayScore,
         startTimeUtc: event.date,
+        seasonYear: event.season?.year || seasonYear,
+        isPlayoff: event.season?.type === 3,
       });
     }
 
     return games;
   } catch (err) {
-    console.log(`[ESPN] Error fetching ${sport} for ${dateStr}:`, err);
+    console.log(`[BACKFILL] Error fetching ${sport} ${dateStr}:`, err);
     return [];
   }
 }
@@ -183,33 +247,138 @@ function generateDateRange(startDate: string, endDate: string): string[] {
   const today = new Date();
 
   for (let d = new Date(start); d <= end && d <= today; d.setDate(d.getDate() + 1)) {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    dates.push(`${year}-${month}-${day}`);
+    dates.push(d.toISOString().split("T")[0]);
   }
 
   return dates;
 }
 
+// Franchise cache
+const franchiseCache = new Map<string, string>();
+
+async function getOrCreateFranchise(
+  supabase: any,
+  sport: string,
+  abbrev: string
+): Promise<string | null> {
+  const cacheKey = `${sport}:${abbrev}`;
+  if (franchiseCache.has(cacheKey)) {
+    return franchiseCache.get(cacheKey)!;
+  }
+
+  const mapping = FRANCHISE_MAPPINGS[sport] || {};
+  const canonicalName = mapping[abbrev];
+  
+  if (!canonicalName) {
+    console.log(`[BACKFILL] No franchise mapping for ${sport}:${abbrev}`);
+    return null;
+  }
+
+  // Check if exists
+  const { data: existing } = await supabase
+    .from("franchises")
+    .select("id")
+    .eq("sport_id", sport)
+    .eq("canonical_name", canonicalName)
+    .maybeSingle();
+
+  if (existing) {
+    franchiseCache.set(cacheKey, existing.id);
+    return existing.id;
+  }
+
+  // Create new
+  const { data: created, error } = await supabase
+    .from("franchises")
+    .insert({ sport_id: sport, canonical_name: canonicalName })
+    .select("id")
+    .single();
+
+  if (error) {
+    // Might be race condition, try again
+    const { data: retry } = await supabase
+      .from("franchises")
+      .select("id")
+      .eq("sport_id", sport)
+      .eq("canonical_name", canonicalName)
+      .maybeSingle();
+    if (retry) {
+      franchiseCache.set(cacheKey, retry.id);
+      return retry.id;
+    }
+    return null;
+  }
+
+  franchiseCache.set(cacheKey, created.id);
+  return created.id;
+}
+
+// Team cache
+const teamCache = new Map<string, string>();
+
+async function getOrCreateTeam(
+  supabase: any,
+  sport: string,
+  abbrev: string,
+  franchiseId: string | null
+): Promise<string | null> {
+  const cacheKey = `${sport}:${abbrev}`;
+  if (teamCache.has(cacheKey)) {
+    return teamCache.get(cacheKey)!;
+  }
+
+  const { data: existing } = await supabase
+    .from("teams")
+    .select("id")
+    .eq("sport_id", sport)
+    .eq("abbrev", abbrev)
+    .maybeSingle();
+
+  if (existing) {
+    teamCache.set(cacheKey, existing.id);
+    return existing.id;
+  }
+
+  const mapping = FRANCHISE_MAPPINGS[sport] || {};
+  const name = mapping[abbrev] || abbrev;
+
+  const { data: created, error } = await supabase
+    .from("teams")
+    .insert({
+      sport_id: sport,
+      provider_team_key: `espn-${sport}-${abbrev}`,
+      name,
+      abbrev,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    const { data: retry } = await supabase
+      .from("teams")
+      .select("id")
+      .eq("sport_id", sport)
+      .eq("abbrev", abbrev)
+      .maybeSingle();
+    if (retry) {
+      teamCache.set(cacheKey, retry.id);
+      return retry.id;
+    }
+    return null;
+  }
+
+  teamCache.set(cacheKey, created.id);
+  return created.id;
+}
+
 async function backfillSport(
   supabase: any,
   sport: string,
-  jobRunId: number
+  jobRunId: number,
+  storeRaw: boolean = false
 ) {
   const seasons = SPORT_SEASONS[sport] || [];
-  const mapping = ESPN_TO_DB[sport] || {};
-  
-  // Get team lookup
-  const { data: teams } = await supabase
-    .from("teams")
-    .select("id, abbrev, name, city")
-    .eq("sport_id", sport);
-
-  const teamByAbbrev: Record<string, { id: string; name: string; city: string | null }> = {};
-  for (const team of teams || []) {
-    if (team.abbrev) teamByAbbrev[team.abbrev] = { id: team.id, name: team.name, city: team.city };
-  }
+  console.log(`[BACKFILL] Starting ${sport} with ${seasons.length} seasons`);
 
   let totalInserted = 0;
   let totalSkipped = 0;
@@ -218,64 +387,39 @@ async function backfillSport(
 
   for (const season of seasons) {
     const dates = generateDateRange(season.start, season.end);
-    console.log(`[BACKFILL-ALL] ${sport} season ${season.start} to ${season.end}: ${dates.length} days`);
+    console.log(`[BACKFILL] ${sport} ${season.year}: ${dates.length} days`);
 
     let seasonInserted = 0;
-    let batchCount = 0;
+
+    // Upsert season record
+    await supabase.from("seasons").upsert({
+      sport_id: sport,
+      season_year: season.year,
+      start_date: season.start,
+      end_date: season.end,
+    }, { onConflict: "sport_id,league_id,season_year" });
 
     for (const dateStr of dates) {
       try {
-        const games = await fetchESPNGamesForDate(sport, dateStr);
-        
+        const games = await fetchESPNGamesForDate(supabase, sport, dateStr, season.year, storeRaw);
+
         for (const game of games) {
-          const homeAbbrev = mapping[game.homeTeamAbbrev] || game.homeTeamAbbrev;
-          const awayAbbrev = mapping[game.awayTeamAbbrev] || game.awayTeamAbbrev;
+          // Get/create franchises
+          const homeFranchiseId = await getOrCreateFranchise(supabase, sport, game.homeAbbrev);
+          const awayFranchiseId = await getOrCreateFranchise(supabase, sport, game.awayAbbrev);
 
-          let homeTeam = teamByAbbrev[homeAbbrev];
-          let awayTeam = teamByAbbrev[awayAbbrev];
+          // Get/create teams
+          const homeTeamId = await getOrCreateTeam(supabase, sport, game.homeAbbrev, homeFranchiseId);
+          const awayTeamId = await getOrCreateTeam(supabase, sport, game.awayAbbrev, awayFranchiseId);
 
-          // Create team if not exists
-          if (!homeTeam) {
-            const { data: newTeam } = await supabase
-              .from("teams")
-              .insert({
-                sport_id: sport,
-                provider_team_key: `espn-${sport}-${homeAbbrev}`,
-                name: game.homeTeamAbbrev,
-                abbrev: homeAbbrev,
-              })
-              .select("id, name, city")
-              .single();
-            if (newTeam) {
-              homeTeam = { id: newTeam.id, name: newTeam.name, city: newTeam.city };
-              teamByAbbrev[homeAbbrev] = homeTeam;
-            }
-          }
-
-          if (!awayTeam) {
-            const { data: newTeam } = await supabase
-              .from("teams")
-              .insert({
-                sport_id: sport,
-                provider_team_key: `espn-${sport}-${awayAbbrev}`,
-                name: game.awayTeamAbbrev,
-                abbrev: awayAbbrev,
-              })
-              .select("id, name, city")
-              .single();
-            if (newTeam) {
-              awayTeam = { id: newTeam.id, name: newTeam.name, city: newTeam.city };
-              teamByAbbrev[awayAbbrev] = awayTeam;
-            }
-          }
-
-          if (!homeTeam || !awayTeam) {
+          if (!homeTeamId || !awayTeamId) {
             totalSkipped++;
             continue;
           }
 
           const providerGameKey = `espn-${sport}-${game.espnId}`;
           const finalTotal = game.homeScore + game.awayScore;
+          const decade = computeDecade(game.seasonYear);
 
           // Check if game exists
           const { data: existing } = await supabase
@@ -285,6 +429,14 @@ async function backfillSport(
             .maybeSingle();
 
           if (existing) {
+            // Update with new fields
+            await supabase.from("games").update({
+              season_year: game.seasonYear,
+              decade,
+              is_playoff: game.isPlayoff,
+              home_franchise_id: homeFranchiseId,
+              away_franchise_id: awayFranchiseId,
+            }).eq("id", existing.id);
             totalSkipped++;
             continue;
           }
@@ -295,13 +447,18 @@ async function backfillSport(
             .insert({
               sport_id: sport,
               provider_game_key: providerGameKey,
-              home_team_id: homeTeam.id,
-              away_team_id: awayTeam.id,
+              home_team_id: homeTeamId,
+              away_team_id: awayTeamId,
               home_score: game.homeScore,
               away_score: game.awayScore,
               final_total: finalTotal,
               start_time_utc: game.startTimeUtc,
               status: "final",
+              season_year: game.seasonYear,
+              decade,
+              is_playoff: game.isPlayoff,
+              home_franchise_id: homeFranchiseId,
+              away_franchise_id: awayFranchiseId,
             })
             .select("id")
             .single();
@@ -315,153 +472,175 @@ async function backfillSport(
             continue;
           }
 
-          // Insert matchup_games entry
-          const [teamLowId, teamHighId] = [homeTeam.id, awayTeam.id].sort();
+          // Insert matchup_games entry with franchise IDs
+          const [teamLowId, teamHighId] = [homeTeamId, awayTeamId].sort();
+          const [franchiseLowId, franchiseHighId] = homeFranchiseId && awayFranchiseId
+            ? [homeFranchiseId, awayFranchiseId].sort()
+            : [null, null];
+
           await supabase.from("matchup_games").insert({
             game_id: newGame.id,
             sport_id: sport,
             team_low_id: teamLowId,
             team_high_id: teamHighId,
+            franchise_low_id: franchiseLowId,
+            franchise_high_id: franchiseHighId,
             total: finalTotal,
             played_at_utc: game.startTimeUtc,
+            season_year: game.seasonYear,
+            decade,
           });
 
           totalInserted++;
           seasonInserted++;
         }
 
-        batchCount++;
-        // Rate limiting - be nice to ESPN API
-        if (batchCount % 10 === 0) {
-          await new Promise((r) => setTimeout(r, 200));
-        }
+        // Rate limiting
+        await new Promise((r) => setTimeout(r, 50));
       } catch (err) {
-        console.log(`[BACKFILL-ALL] Error on ${dateStr}:`, err);
+        console.log(`[BACKFILL] Error on ${dateStr}:`, err);
         totalErrors++;
       }
     }
 
     seasonsProcessed++;
-    console.log(`[BACKFILL-ALL] ${sport} season complete: ${seasonInserted} new games`);
+    
+    // Update season games count
+    await supabase.from("seasons").update({
+      games_count: seasonInserted,
+      is_complete: true,
+      updated_at: new Date().toISOString(),
+    }).eq("sport_id", sport).eq("season_year", season.year);
+
+    console.log(`[BACKFILL] ${sport} ${season.year}: +${seasonInserted} games`);
 
     // Update job progress
-    await supabase
-      .from("job_runs")
-      .update({
-        details: {
-          sport,
-          seasons_processed: seasonsProcessed,
-          total_seasons: seasons.length,
-          games_inserted: totalInserted,
-          games_skipped: totalSkipped,
-          errors: totalErrors,
-          status: "running",
-        },
-      })
-      .eq("id", jobRunId);
+    await supabase.from("job_runs").update({
+      details: {
+        sport,
+        seasons_processed: seasonsProcessed,
+        total_seasons: seasons.length,
+        current_season: season.year,
+        games_inserted: totalInserted,
+        games_skipped: totalSkipped,
+        errors: totalErrors,
+        status: "running",
+      },
+    }).eq("id", jobRunId);
   }
 
   return { totalInserted, totalSkipped, totalErrors, seasonsProcessed };
 }
 
-async function recomputeAllMatchupStats(supabase: any, sport: string) {
-  console.log(`[BACKFILL-ALL] Recomputing matchup stats for ${sport}...`);
+async function computeSegmentedStats(supabase: any, sport: string) {
+  console.log(`[BACKFILL] Computing segmented stats for ${sport}...`);
 
+  // Get all unique franchise matchups
   const { data: matchups } = await supabase
     .from("matchup_games")
-    .select("sport_id, team_low_id, team_high_id")
-    .eq("sport_id", sport);
+    .select("franchise_low_id, franchise_high_id")
+    .eq("sport_id", sport)
+    .not("franchise_low_id", "is", null)
+    .not("franchise_high_id", "is", null);
 
-  const uniqueMatchups = new Set<string>();
+  const uniqueMatchups = new Map<string, { lowId: string; highId: string }>();
   matchups?.forEach((m: any) => {
-    uniqueMatchups.add(`${m.team_low_id}|${m.team_high_id}`);
+    const key = `${m.franchise_low_id}|${m.franchise_high_id}`;
+    if (!uniqueMatchups.has(key)) {
+      uniqueMatchups.set(key, { lowId: m.franchise_low_id, highId: m.franchise_high_id });
+    }
   });
 
-  console.log(`[BACKFILL-ALL] Found ${uniqueMatchups.size} unique matchups for ${sport}`);
+  console.log(`[BACKFILL] Found ${uniqueMatchups.size} unique franchise matchups`);
+
+  const currentYear = new Date().getFullYear();
+  const segments = [
+    { key: "h2h_all", filter: () => true },
+    { key: "h2h_10y", filter: (year: number) => year >= currentYear - 10 },
+    { key: "h2h_20y", filter: (year: number) => year >= currentYear - 20 },
+    { key: "h2h_5y", filter: (year: number) => year >= currentYear - 5 },
+    { key: "h2h_3y", filter: (year: number) => year >= currentYear - 3 },
+  ];
 
   let statsUpdated = 0;
 
-  for (const key of uniqueMatchups) {
-    const [teamLowId, teamHighId] = key.split("|");
-
-    const { data: matchupGames } = await supabase
+  for (const [key, matchup] of uniqueMatchups) {
+    const { data: games } = await supabase
       .from("matchup_games")
-      .select("total")
+      .select("total, season_year")
       .eq("sport_id", sport)
-      .eq("team_low_id", teamLowId)
-      .eq("team_high_id", teamHighId);
+      .eq("franchise_low_id", matchup.lowId)
+      .eq("franchise_high_id", matchup.highId);
 
-    if (!matchupGames || matchupGames.length === 0) continue;
+    if (!games || games.length === 0) continue;
 
-    const totals = matchupGames.map((m: any) => Number(m.total)).sort((a: number, b: number) => a - b);
-    const n = totals.length;
+    for (const segment of segments) {
+      const filtered = games.filter((g: any) => segment.filter(g.season_year));
+      if (filtered.length === 0) continue;
 
-    const p05Index = Math.max(0, Math.ceil(0.05 * n) - 1);
-    const p95Index = Math.min(n - 1, Math.ceil(0.95 * n) - 1);
-    const medianIndex = Math.floor(n / 2);
+      const totals = filtered.map((m: any) => Number(m.total)).sort((a: number, b: number) => a - b);
+      const n = totals.length;
 
-    const statsData = {
-      sport_id: sport,
-      team_low_id: teamLowId,
-      team_high_id: teamHighId,
-      n_games: n,
-      p05: totals[p05Index],
-      p95: totals[p95Index],
-      median: n % 2 === 0 ? (totals[medianIndex - 1] + totals[medianIndex]) / 2 : totals[medianIndex],
-      min_total: totals[0],
-      max_total: totals[n - 1],
-      updated_at: new Date().toISOString(),
-    };
+      const p05Index = Math.max(0, Math.ceil(0.05 * n) - 1);
+      const p95Index = Math.min(n - 1, Math.ceil(0.95 * n) - 1);
+      const medianIndex = Math.floor(n / 2);
 
-    // Upsert stats
-    const { data: existing } = await supabase
-      .from("matchup_stats")
-      .select("id")
-      .eq("sport_id", sport)
-      .eq("team_low_id", teamLowId)
-      .eq("team_high_id", teamHighId)
-      .maybeSingle();
+      // Upsert stats
+      await supabase.from("matchup_stats").upsert({
+        sport_id: sport,
+        franchise_low_id: matchup.lowId,
+        franchise_high_id: matchup.highId,
+        team_low_id: matchup.lowId, // For backwards compatibility
+        team_high_id: matchup.highId,
+        segment_key: segment.key,
+        n_games: n,
+        p05: totals[p05Index],
+        p95: totals[p95Index],
+        median: n % 2 === 0 ? (totals[medianIndex - 1] + totals[medianIndex]) / 2 : totals[medianIndex],
+        min_total: totals[0],
+        max_total: totals[n - 1],
+        updated_at: new Date().toISOString(),
+      }, { 
+        onConflict: "sport_id,franchise_low_id,franchise_high_id,segment_key",
+        ignoreDuplicates: false 
+      });
 
-    if (existing) {
-      await supabase.from("matchup_stats").update(statsData).eq("id", existing.id);
-    } else {
-      await supabase.from("matchup_stats").insert(statsData);
+      statsUpdated++;
     }
-
-    statsUpdated++;
   }
 
-  console.log(`[BACKFILL-ALL] Updated ${statsUpdated} matchup stats for ${sport}`);
+  console.log(`[BACKFILL] Updated ${statsUpdated} matchup stats for ${sport}`);
   return statsUpdated;
 }
 
-async function runFullBackfill(supabase: any, sports: string[], jobRunId: number) {
+async function runFullBackfill(supabase: any, sports: string[], jobRunId: number, storeRaw: boolean) {
   const results: Record<string, any> = {};
 
   for (const sport of sports) {
-    console.log(`[BACKFILL-ALL] Starting ${sport}...`);
+    console.log(`[BACKFILL] ========== Starting ${sport} ==========`);
     
-    const sportResult = await backfillSport(supabase, sport, jobRunId);
+    // Clear caches
+    franchiseCache.clear();
+    teamCache.clear();
+
+    const sportResult = await backfillSport(supabase, sport, jobRunId, storeRaw);
     results[sport] = sportResult;
 
-    // Recompute stats after each sport
-    const statsCount = await recomputeAllMatchupStats(supabase, sport);
-    results[sport].statsUpdated = statsCount;
+    // Compute segmented stats after each sport
+    const statsCount = await computeSegmentedStats(supabase, sport);
+    results[sport].statsComputed = statsCount;
 
-    console.log(`[BACKFILL-ALL] ${sport} complete:`, results[sport]);
+    console.log(`[BACKFILL] ${sport} complete:`, results[sport]);
   }
 
   // Mark job as complete
-  await supabase
-    .from("job_runs")
-    .update({
-      finished_at: new Date().toISOString(),
-      status: "success",
-      details: results,
-    })
-    .eq("id", jobRunId);
+  await supabase.from("job_runs").update({
+    finished_at: new Date().toISOString(),
+    status: "success",
+    details: results,
+  }).eq("id", jobRunId);
 
-  console.log(`[BACKFILL-ALL] All sports complete!`, results);
+  console.log(`[BACKFILL] ========== ALL COMPLETE ==========`, results);
   return results;
 }
 
@@ -478,6 +657,7 @@ Deno.serve(async (req) => {
   try {
     let sports = ["nba", "nfl", "nhl", "mlb"];
     let recomputeOnly = false;
+    let storeRaw = false;
 
     try {
       const body = await req.json();
@@ -485,6 +665,7 @@ Deno.serve(async (req) => {
         sports = body.sports;
       }
       recomputeOnly = body.recompute_only === true;
+      storeRaw = body.store_raw === true;
     } catch {
       // Use defaults
     }
@@ -495,7 +676,7 @@ Deno.serve(async (req) => {
       .insert({
         job_name: "backfill-all",
         status: "running",
-        details: { sports, recompute_only: recomputeOnly },
+        details: { sports, recompute_only: recomputeOnly, store_raw: storeRaw },
       })
       .select("id")
       .single();
@@ -503,12 +684,11 @@ Deno.serve(async (req) => {
     const jobRunId = jobRun?.id;
 
     if (recomputeOnly) {
-      // Just recompute stats
       // @ts-ignore
       EdgeRuntime.waitUntil((async () => {
         const results: Record<string, number> = {};
         for (const sport of sports) {
-          results[sport] = await recomputeAllMatchupStats(supabase, sport);
+          results[sport] = await computeSegmentedStats(supabase, sport);
         }
         await supabase.from("job_runs").update({
           finished_at: new Date().toISOString(),
@@ -520,9 +700,10 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          message: "Recomputing matchup stats in background",
+          message: "Recomputing segmented matchup stats in background",
           job_id: jobRunId,
           sports,
+          segments: ["h2h_all", "h2h_20y", "h2h_10y", "h2h_5y", "h2h_3y"],
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -530,20 +711,21 @@ Deno.serve(async (req) => {
 
     // Run full backfill in background
     // @ts-ignore
-    EdgeRuntime.waitUntil(runFullBackfill(supabase, sports, jobRunId));
+    EdgeRuntime.waitUntil(runFullBackfill(supabase, sports, jobRunId, storeRaw));
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Full historical backfill started (10 years, all sports)",
+        message: "Full historical backfill started (25+ years, all sports)",
         job_id: jobRunId,
         sports,
         note: "This will take several hours. Check job_runs table for progress.",
+        segments: ["h2h_all", "h2h_20y", "h2h_10y", "h2h_5y", "h2h_3y"],
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("[BACKFILL-ALL] Error:", error);
+    console.error("[BACKFILL] Error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(
       JSON.stringify({ success: false, error: message }),

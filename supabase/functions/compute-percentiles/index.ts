@@ -5,7 +5,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Get today's date in America/New_York timezone
+// Segment selection ladder - try in order until n >= MIN_SAMPLE
+const SEGMENT_LADDER = [
+  { key: 'h2h_3y', yearsBack: 3 },
+  { key: 'h2h_5y', yearsBack: 5 },
+  { key: 'h2h_10y', yearsBack: 10 },
+  { key: 'h2h_20y', yearsBack: 20 },
+  { key: 'h2h_all', yearsBack: null },
+]
+
+const MIN_SAMPLE = 5
+const HYBRID_MIN_GAMES = 10 // Each team needs at least this many recent games for hybrid
+
 function getTodayET(): string {
   const now = new Date()
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -15,6 +26,128 @@ function getTodayET(): string {
     day: '2-digit',
   })
   return formatter.format(now)
+}
+
+interface SegmentResult {
+  segment_used: string
+  n_used: number
+  p05: number
+  p95: number
+  median: number
+  totals: number[]
+}
+
+async function selectBestSegment(
+  supabase: any,
+  sportId: string,
+  franchiseLowId: string | null,
+  franchiseHighId: string | null,
+  teamLowId: string,
+  teamHighId: string
+): Promise<SegmentResult | null> {
+  const currentYear = new Date().getFullYear()
+
+  // If we have franchise IDs, use them; otherwise fall back to team IDs
+  const usesFranchise = franchiseLowId && franchiseHighId
+
+  for (const segment of SEGMENT_LADDER) {
+    let query = supabase
+      .from('matchup_games')
+      .select('total, season_year')
+      .eq('sport_id', sportId)
+
+    if (usesFranchise) {
+      query = query
+        .eq('franchise_low_id', franchiseLowId)
+        .eq('franchise_high_id', franchiseHighId)
+    } else {
+      query = query
+        .eq('team_low_id', teamLowId)
+        .eq('team_high_id', teamHighId)
+    }
+
+    if (segment.yearsBack !== null) {
+      query = query.gte('season_year', currentYear - segment.yearsBack)
+    }
+
+    const { data: games } = await query
+
+    if (games && games.length >= MIN_SAMPLE) {
+      const totals = games.map((g: any) => Number(g.total)).sort((a: number, b: number) => a - b)
+      const n = totals.length
+
+      const p05Index = Math.max(0, Math.ceil(0.05 * n) - 1)
+      const p95Index = Math.min(n - 1, Math.ceil(0.95 * n) - 1)
+      const medianIndex = Math.floor(n / 2)
+
+      return {
+        segment_used: segment.key,
+        n_used: n,
+        p05: totals[p05Index],
+        p95: totals[p95Index],
+        median: n % 2 === 0 ? (totals[medianIndex - 1] + totals[medianIndex]) / 2 : totals[medianIndex],
+        totals,
+      }
+    }
+  }
+
+  return null
+}
+
+async function computeHybridForm(
+  supabase: any,
+  sportId: string,
+  homeTeamId: string,
+  awayTeamId: string
+): Promise<SegmentResult | null> {
+  // Get last N games for each team (regardless of opponent)
+  const { data: homeGames } = await supabase
+    .from('games')
+    .select('final_total')
+    .eq('sport_id', sportId)
+    .eq('status', 'final')
+    .not('final_total', 'is', null)
+    .or(`home_team_id.eq.${homeTeamId},away_team_id.eq.${homeTeamId}`)
+    .order('start_time_utc', { ascending: false })
+    .limit(20)
+
+  const { data: awayGames } = await supabase
+    .from('games')
+    .select('final_total')
+    .eq('sport_id', sportId)
+    .eq('status', 'final')
+    .not('final_total', 'is', null)
+    .or(`home_team_id.eq.${awayTeamId},away_team_id.eq.${awayTeamId}`)
+    .order('start_time_utc', { ascending: false })
+    .limit(20)
+
+  const homeCount = homeGames?.length || 0
+  const awayCount = awayGames?.length || 0
+
+  if (homeCount < HYBRID_MIN_GAMES || awayCount < HYBRID_MIN_GAMES) {
+    return null
+  }
+
+  // Combine totals from both teams' recent games
+  const allTotals = [
+    ...(homeGames?.map((g: any) => Number(g.final_total)) || []),
+    ...(awayGames?.map((g: any) => Number(g.final_total)) || []),
+  ].sort((a, b) => a - b)
+
+  const n = allTotals.length
+
+  const p05Index = Math.max(0, Math.ceil(0.05 * n) - 1)
+  const p95Index = Math.min(n - 1, Math.ceil(0.95 * n) - 1)
+  const medianIndex = Math.floor(n / 2)
+
+  return {
+    segment_used: 'hybrid_form',
+    n_used: n,
+    p05: allTotals[p05Index],
+    p95: allTotals[p95Index],
+    median: n % 2 === 0 ? (allTotals[medianIndex - 1] + allTotals[medianIndex]) / 2 : allTotals[medianIndex],
+    totals: allTotals,
+  }
 }
 
 Deno.serve(async (req) => {
@@ -28,7 +161,17 @@ Deno.serve(async (req) => {
   )
 
   let jobRunId: number | null = null
-  const counters = { computed: 0, visible: 0, hidden: 0, errors: 0 }
+  const counters = { 
+    computed: 0, 
+    h2h_3y: 0, 
+    h2h_5y: 0, 
+    h2h_10y: 0, 
+    h2h_20y: 0, 
+    h2h_all: 0, 
+    hybrid_form: 0, 
+    insufficient: 0, 
+    errors: 0 
+  }
 
   try {
     let requestBody: { date?: string } = {}
@@ -41,109 +184,109 @@ Deno.serve(async (req) => {
     const { date } = requestBody
     const targetDate = date || getTodayET()
 
-    console.log(`[COMPUTE] Computing percentiles for ${targetDate}`)
+    console.log(`[COMPUTE] Computing percentiles for ${targetDate} with segment ladder`)
 
-    // Create job run
     const { data: jobRun } = await supabase
       .from('job_runs')
-      .insert({ job_name: 'compute', details: { date: targetDate } })
+      .insert({ job_name: 'compute', details: { date: targetDate, mode: 'segment_ladder' } })
       .select()
       .single()
 
     jobRunId = jobRun?.id || null
 
-    // Get all games for the target date (using ET date range)
-    // Convert ET date to UTC range
+    // Get all games for the target date
     const startOfDayET = new Date(`${targetDate}T00:00:00-05:00`)
     const endOfDayET = new Date(`${targetDate}T23:59:59-05:00`)
 
     const { data: games, error: gamesError } = await supabase
       .from('games')
-      .select('*')
+      .select('*, home_team:teams!games_home_team_id_fkey(id, abbrev), away_team:teams!games_away_team_id_fkey(id, abbrev)')
       .gte('start_time_utc', startOfDayET.toISOString())
       .lte('start_time_utc', endOfDayET.toISOString())
 
-    if (gamesError) {
-      throw gamesError
-    }
+    if (gamesError) throw gamesError
 
     console.log(`[COMPUTE] Found ${games?.length || 0} games for ${targetDate}`)
 
     for (const game of games || []) {
       try {
-        // Canonical team ordering for matchup lookup
         const [teamLowId, teamHighId] = [game.home_team_id, game.away_team_id].sort()
+        const [franchiseLowId, franchiseHighId] = game.home_franchise_id && game.away_franchise_id
+          ? [game.home_franchise_id, game.away_franchise_id].sort()
+          : [null, null]
 
-        // Get H2H totals from matchup_games
-        const { data: matchupGames } = await supabase
-          .from('matchup_games')
-          .select('total')
-          .eq('sport_id', game.sport_id)
-          .eq('team_low_id', teamLowId)
-          .eq('team_high_id', teamHighId)
-          .is('league_id', null)
+        // Try segment ladder first
+        let result = await selectBestSegment(
+          supabase, 
+          game.sport_id, 
+          franchiseLowId, 
+          franchiseHighId,
+          teamLowId, 
+          teamHighId
+        )
 
-        console.log(`[COMPUTE] Game ${game.id}: team_low=${teamLowId}, team_high=${teamHighId}, n=${matchupGames?.length || 0}`)
+        // If no segment has enough data, try hybrid form
+        if (!result) {
+          result = await computeHybridForm(
+            supabase,
+            game.sport_id,
+            game.home_team_id,
+            game.away_team_id
+          )
+        }
 
-        const n = matchupGames?.length || 0
+        let isVisible = false
+        let segmentUsed = 'insufficient'
+        let nUsed = 0
         let p05: number | null = null
         let p95: number | null = null
-        let isVisible = false
 
-        if (n >= 1) { // Show all games with any H2H data
-          // Sort totals and compute nearest-rank quantiles
-          const totals = matchupGames!.map(mg => Number(mg.total)).sort((a, b) => a - b)
-          
-          // P05 = totals[ceil(0.05*n) - 1]
-          const p05Index = Math.max(1, Math.ceil(0.05 * n)) - 1
-          // P95 = totals[ceil(0.95*n) - 1]
-          const p95Index = Math.max(1, Math.ceil(0.95 * n)) - 1
-          const medianIndex = Math.floor(n / 2)
-
-          p05 = totals[p05Index]
-          p95 = totals[p95Index]
+        if (result) {
           isVisible = true
+          segmentUsed = result.segment_used
+          nUsed = result.n_used
+          p05 = result.p05
+          p95 = result.p95
 
-          // Also update/create matchup_stats cache
-          // Find existing matchup_stats
+          // Track which segment was used
+          if (segmentUsed in counters) {
+            (counters as any)[segmentUsed]++
+          }
+
+          // Update matchup_stats for the segment used
+          const statsData = {
+            sport_id: game.sport_id,
+            team_low_id: teamLowId,
+            team_high_id: teamHighId,
+            franchise_low_id: franchiseLowId,
+            franchise_high_id: franchiseHighId,
+            segment_key: segmentUsed,
+            n_games: nUsed,
+            p05,
+            p95,
+            median: result.median,
+            min_total: result.totals[0],
+            max_total: result.totals[result.totals.length - 1],
+            updated_at: new Date().toISOString(),
+          }
+
+          // Upsert
           const { data: existingStats } = await supabase
             .from('matchup_stats')
             .select('id')
             .eq('sport_id', game.sport_id)
             .eq('team_low_id', teamLowId)
             .eq('team_high_id', teamHighId)
-            .is('league_id', null)
+            .eq('segment_key', segmentUsed)
             .maybeSingle()
 
-          const statsData = {
-            n_games: n,
-            p05: totals[p05Index],
-            p95: totals[p95Index],
-            median: n % 2 === 0 ? (totals[medianIndex - 1] + totals[medianIndex]) / 2 : totals[medianIndex],
-            min_total: totals[0],
-            max_total: totals[n - 1],
-            updated_at: new Date().toISOString(),
-          }
-
           if (existingStats) {
-            await supabase
-              .from('matchup_stats')
-              .update(statsData)
-              .eq('id', existingStats.id)
+            await supabase.from('matchup_stats').update(statsData).eq('id', existingStats.id)
           } else {
-            await supabase
-              .from('matchup_stats')
-              .insert({
-                sport_id: game.sport_id,
-                team_low_id: teamLowId,
-                team_high_id: teamHighId,
-                ...statsData,
-              })
+            await supabase.from('matchup_stats').insert(statsData)
           }
-
-          counters.visible++
         } else {
-          counters.hidden++
+          counters.insufficient++
         }
 
         // Find or update daily_edge
@@ -154,28 +297,30 @@ Deno.serve(async (req) => {
           .eq('game_id', game.id)
           .maybeSingle()
 
+        const franchiseMatchupId = franchiseLowId && franchiseHighId 
+          ? `${franchiseLowId}|${franchiseHighId}` 
+          : null
+
         const edgeData = {
           sport_id: game.sport_id,
-          n_h2h: n,
+          n_h2h: nUsed,
           p05,
           p95,
           is_visible: isVisible,
+          segment_used: segmentUsed,
+          n_used: nUsed,
+          franchise_matchup_id: franchiseMatchupId,
           updated_at: new Date().toISOString(),
         }
 
         if (existingEdge) {
-          await supabase
-            .from('daily_edges')
-            .update(edgeData)
-            .eq('id', existingEdge.id)
+          await supabase.from('daily_edges').update(edgeData).eq('id', existingEdge.id)
         } else {
-          await supabase
-            .from('daily_edges')
-            .insert({
-              date_local: targetDate,
-              game_id: game.id,
-              ...edgeData,
-            })
+          await supabase.from('daily_edges').insert({
+            date_local: targetDate,
+            game_id: game.id,
+            ...edgeData,
+          })
         }
 
         counters.computed++
@@ -185,7 +330,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update job run as success
     if (jobRunId) {
       await supabase
         .from('job_runs')
@@ -203,7 +347,9 @@ Deno.serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         date: targetDate,
-        counters
+        counters,
+        segment_ladder: SEGMENT_LADDER.map(s => s.key),
+        min_sample: MIN_SAMPLE,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

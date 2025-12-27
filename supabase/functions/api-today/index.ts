@@ -51,10 +51,12 @@ Deno.serve(async (req) => {
         dk_offered,
         dk_total_line,
         dk_line_percentile,
+        segment_used,
+        n_used,
         updated_at
       `)
       .eq('date_local', date)
-      .eq('is_visible', true) // Only return visible (n >= 3) games
+      .eq('is_visible', true)
 
     if (sportId) {
       query = query.eq('sport_id', sportId)
