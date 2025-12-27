@@ -115,6 +115,47 @@ export interface StatusResponse {
   error?: string;
 }
 
+export interface CronJob {
+  id: number;
+  name: string;
+  function: string;
+  schedule: string;
+  schedule_human: string;
+  active: boolean;
+  next_run: string | null;
+  last_run: {
+    status: string;
+    started_at: string;
+    ended_at: string;
+    duration_ms: number | null;
+  } | null;
+  stats_24h: {
+    success: number;
+    failed: number;
+    total: number;
+  };
+}
+
+export interface CronStatusResponse {
+  success: boolean;
+  timestamp: string;
+  jobs: CronJob[];
+  recent_runs: Array<{
+    job_name: string;
+    function: string;
+    status: string;
+    started_at: string;
+    duration_ms: number | null;
+  }>;
+  summary: {
+    total_jobs: number;
+    active_jobs: number;
+    runs_24h: number;
+    success_rate: number;
+  };
+  error?: string;
+}
+
 async function fetchApi<T>(endpoint: string): Promise<T> {
   const response = await fetch(`${API_BASE}/${endpoint}`, {
     headers: {
@@ -155,6 +196,16 @@ export function useSystemStatus() {
   return useQuery<StatusResponse>({
     queryKey: ['api-status'],
     queryFn: () => fetchApi<StatusResponse>('api-status'),
+    staleTime: 60000,
+    refetchInterval: 60000,
+    retry: 2,
+  });
+}
+
+export function useCronStatus() {
+  return useQuery<CronStatusResponse>({
+    queryKey: ['api-cron-status'],
+    queryFn: () => fetchApi<CronStatusResponse>('api-cron-status'),
     staleTime: 60000,
     refetchInterval: 60000,
     retry: 2,
