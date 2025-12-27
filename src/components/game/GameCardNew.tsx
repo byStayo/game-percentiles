@@ -54,9 +54,10 @@ export function GameCard({ game }: GameCardProps) {
     <Link
       to={`/game/${game.game_id}`}
       className={cn(
-        "group block p-5 bg-card rounded-2xl border border-border/60",
-        "shadow-sm transition-all duration-200 ease-out",
-        "hover:shadow-md hover:-translate-y-0.5 hover:border-border"
+        "group block p-4 sm:p-5 bg-card rounded-2xl border border-border/60",
+        "shadow-sm transition-all duration-200 ease-out touch-manipulation",
+        "active:scale-[0.98] active:bg-muted/30",
+        "md:hover:shadow-md md:hover:-translate-y-0.5 md:hover:border-border"
       )}
     >
       {/* Top row: time + league | n badge + favorite */}
@@ -90,7 +91,7 @@ export function GameCard({ game }: GameCardProps) {
         <div className="flex items-center gap-2">
           <span
             className={cn(
-              "px-2 py-0.5 rounded-md text-2xs font-semibold tabular-nums",
+              "px-2 py-1 rounded-md text-xs font-semibold tabular-nums",
               game.n_h2h >= 5
                 ? "bg-muted text-muted-foreground"
                 : "bg-status-over/10 text-status-over"
@@ -102,7 +103,7 @@ export function GameCard({ game }: GameCardProps) {
             variant="ghost"
             size="icon"
             className={cn(
-              "h-7 w-7 transition-colors",
+              "h-9 w-9 touch-target transition-colors",
               isFav && "text-yellow-500 hover:text-yellow-600"
             )}
             onClick={(e) => {
@@ -112,30 +113,30 @@ export function GameCard({ game }: GameCardProps) {
             }}
           >
             <Star
-              className={cn("h-4 w-4", isFav && "fill-current")}
+              className={cn("h-5 w-5", isFav && "fill-current")}
             />
           </Button>
         </div>
       </div>
 
       {/* Teams */}
-      <div className="space-y-1.5 mb-4">
-        <div className="flex items-center justify-between">
-          <span className="text-base font-semibold text-foreground truncate">
+      <div className="space-y-2 mb-4">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-base sm:text-lg font-semibold text-foreground truncate">
             {awayTeamName}
           </span>
           {(isFinal || isLive) && game.away_score !== null && (
-            <span className="text-xl font-bold tabular-nums ml-2">
+            <span className="text-xl sm:text-2xl font-bold tabular-nums flex-shrink-0">
               {game.away_score}
             </span>
           )}
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-base font-semibold text-foreground truncate">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-base sm:text-lg font-semibold text-foreground truncate">
             {homeTeamName}
           </span>
           {(isFinal || isLive) && game.home_score !== null && (
-            <span className="text-xl font-bold tabular-nums ml-2">
+            <span className="text-xl sm:text-2xl font-bold tabular-nums flex-shrink-0">
               {game.home_score}
             </span>
           )}
