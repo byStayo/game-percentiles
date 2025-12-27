@@ -106,35 +106,34 @@ const ESPN_ABBREV_MAP: Record<string, Record<string, string>> = {
   mlb: { "CHW": "CWS", "WSH": "WAS" },
 };
 
-// Season date ranges - comprehensive 25+ years
+// Season date ranges - comprehensive 15 years (2010-2025), sorted MOST RECENT FIRST for reliability
 const SPORT_SEASONS: Record<string, { year: number; start: string; end: string }[]> = {
-  nba: Array.from({ length: 30 }, (_, i) => {
-    const year = 1995 + i;
-    if (year > 2025) return null;
+  nba: Array.from({ length: 16 }, (_, i) => {
+    const year = 2025 - i; // Start from 2025, go backwards
+    if (year < 2010) return null;
     // COVID seasons handled specially
     if (year === 2020) return { year: 2020, start: "2019-10-22", end: "2020-10-12" };
     if (year === 2021) return { year: 2021, start: "2020-12-22", end: "2021-07-21" };
     return { year, start: `${year - 1}-10-15`, end: `${year}-06-30` };
   }).filter(Boolean) as { year: number; start: string; end: string }[],
   
-  nfl: Array.from({ length: 30 }, (_, i) => {
-    const year = 1995 + i;
-    if (year > 2025) return null;
+  nfl: Array.from({ length: 16 }, (_, i) => {
+    const year = 2025 - i;
+    if (year < 2010) return null;
     return { year, start: `${year}-09-01`, end: `${year + 1}-02-15` };
   }).filter(Boolean) as { year: number; start: string; end: string }[],
   
-  nhl: Array.from({ length: 30 }, (_, i) => {
-    const year = 1995 + i;
-    if (year > 2025) return null;
-    if (year === 2005) return null; // Lockout
+  nhl: Array.from({ length: 16 }, (_, i) => {
+    const year = 2025 - i;
+    if (year < 2010) return null;
     if (year === 2020) return { year: 2020, start: "2019-10-02", end: "2020-09-29" };
     if (year === 2021) return { year: 2021, start: "2021-01-13", end: "2021-07-08" };
     return { year, start: `${year - 1}-10-01`, end: `${year}-06-30` };
   }).filter(Boolean) as { year: number; start: string; end: string }[],
   
-  mlb: Array.from({ length: 30 }, (_, i) => {
-    const year = 1995 + i;
-    if (year > 2025) return null;
+  mlb: Array.from({ length: 16 }, (_, i) => {
+    const year = 2025 - i;
+    if (year < 2010) return null;
     if (year === 2020) return { year: 2020, start: "2020-07-23", end: "2020-10-28" };
     return { year, start: `${year}-03-20`, end: `${year}-11-10` };
   }).filter(Boolean) as { year: number; start: string; end: string }[],
@@ -171,6 +170,28 @@ function computeDecade(year: number): string {
 }
 
 
+// Retry helper with exponential backoff
+async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | null> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, { headers: { "Accept": "application/json" } });
+      if (response.ok) return response;
+      if (response.status === 429 || response.status >= 500) {
+        const delay = Math.pow(2, attempt) * 500;
+        console.log(`[BACKFILL] Retry ${attempt + 1}/${maxRetries} after ${delay}ms (status: ${response.status})`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      return null; // Client error, don't retry
+    } catch (err) {
+      const delay = Math.pow(2, attempt) * 500;
+      console.log(`[BACKFILL] Network error, retry ${attempt + 1}/${maxRetries} after ${delay}ms`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  return null;
+}
+
 async function fetchESPNGamesForDate(
   supabase: any,
   sport: string, 
@@ -185,8 +206,8 @@ async function fetchESPNGamesForDate(
   const url = `${baseUrl}?dates=${espnDate}`;
 
   try {
-    const response = await fetch(url, { headers: { "Accept": "application/json" } });
-    if (!response.ok) return [];
+    const response = await fetchWithRetry(url);
+    if (!response) return [];
 
     const data = await response.json();
     
@@ -495,11 +516,13 @@ async function backfillSport(
           seasonInserted++;
         }
 
-        // Rate limiting
-        await new Promise((r) => setTimeout(r, 50));
+        // Throttle: 100ms between dates to avoid rate limits
+        await new Promise((r) => setTimeout(r, 100));
       } catch (err) {
-        console.log(`[BACKFILL] Error on ${dateStr}:`, err);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.log(`[BACKFILL] Error on ${dateStr}: ${errMsg}`);
         totalErrors++;
+        // Continue processing - don't let one date break the whole season
       }
     }
 
@@ -556,7 +579,6 @@ async function computeSegmentedStats(supabase: any, sport: string) {
   const currentYear = new Date().getFullYear();
   const segments = [
     { key: "h2h_all", filter: () => true },
-    { key: "h2h_20y", filter: (year: number) => year >= currentYear - 20 },
     { key: "h2h_10y", filter: (year: number) => year >= currentYear - 10 },
     { key: "h2h_5y", filter: (year: number) => year >= currentYear - 5 },
     { key: "h2h_3y", filter: (year: number) => year >= currentYear - 3 },
