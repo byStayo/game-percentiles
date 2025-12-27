@@ -5,72 +5,148 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ESPN API - Free, no auth required
-const ESPN_API_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard";
+// ESPN API URLs by sport
+const ESPN_API_URLS: Record<string, string> = {
+  nba: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+  nfl: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+  nhl: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
+  mlb: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
+};
 
-// Team name mapping from our DB names to ESPN team abbreviations
-// Our DB stores team abbreviations like "ATL", "MIA", "WAS" etc.
-const TEAM_NAME_TO_ESPN: Record<string, string> = {
-  // Atlanta Hawks
-  "ATL": "ATL", "Hawks": "ATL",
-  // Boston Celtics
-  "BOS": "BOS", "Celtics": "BOS",
-  // Brooklyn Nets
-  "BKN": "BKN", "BRO": "BKN", "Nets": "BKN",
-  // Charlotte Hornets
-  "CHA": "CHA", "CHO": "CHA", "Hornets": "CHA",
-  // Chicago Bulls
-  "CHI": "CHI", "Bulls": "CHI",
-  // Cleveland Cavaliers
-  "CLE": "CLE", "Cavaliers": "CLE",
-  // Dallas Mavericks
-  "DAL": "DAL", "Mavericks": "DAL",
-  // Denver Nuggets
-  "DEN": "DEN", "Nuggets": "DEN",
-  // Detroit Pistons
-  "DET": "DET", "Pistons": "DET",
-  // Golden State Warriors
-  "GSW": "GS", "GS": "GS", "Warriors": "GS",
-  // Houston Rockets
-  "HOU": "HOU", "Rockets": "HOU",
-  // Indiana Pacers
-  "IND": "IND", "Pacers": "IND",
-  // LA Clippers
-  "LAC": "LAC", "Clippers": "LAC",
-  // LA Lakers
-  "LAL": "LAL", "Lakers": "LAL",
-  // Memphis Grizzlies
-  "MEM": "MEM", "Grizzlies": "MEM",
-  // Miami Heat
-  "MIA": "MIA", "Heat": "MIA",
-  // Milwaukee Bucks
-  "MIL": "MIL", "Bucks": "MIL",
-  // Minnesota Timberwolves
-  "MIN": "MIN", "Timberwolves": "MIN",
-  // New Orleans Pelicans
-  "NOP": "NO", "NO": "NO", "Pelicans": "NO",
-  // New York Knicks
-  "NYK": "NY", "NY": "NY", "Knicks": "NY",
-  // Oklahoma City Thunder
-  "OKC": "OKC", "Thunder": "OKC",
-  // Orlando Magic
-  "ORL": "ORL", "Magic": "ORL",
-  // Philadelphia 76ers
-  "PHI": "PHI", "76ers": "PHI",
-  // Phoenix Suns
-  "PHX": "PHX", "PHO": "PHX", "Suns": "PHX",
-  // Portland Trail Blazers
-  "POR": "POR", "Trail Blazers": "POR", "Blazers": "POR",
-  // Sacramento Kings
-  "SAC": "SAC", "Kings": "SAC",
-  // San Antonio Spurs
-  "SAS": "SA", "SA": "SA", "Spurs": "SA",
-  // Toronto Raptors
-  "TOR": "TOR", "Raptors": "TOR",
-  // Utah Jazz
-  "UTA": "UTAH", "UTAH": "UTAH", "Jazz": "UTAH",
-  // Washington Wizards
-  "WAS": "WSH", "WSH": "WSH", "Wizards": "WSH",
+// Team name mappings by sport (our DB name -> ESPN abbreviation)
+const TEAM_MAPPINGS: Record<string, Record<string, string>> = {
+  nba: {
+    "ATL": "ATL", "Hawks": "ATL",
+    "BOS": "BOS", "Celtics": "BOS",
+    "BKN": "BKN", "BRO": "BKN", "Nets": "BKN",
+    "CHA": "CHA", "CHO": "CHA", "Hornets": "CHA",
+    "CHI": "CHI", "Bulls": "CHI",
+    "CLE": "CLE", "Cavaliers": "CLE",
+    "DAL": "DAL", "Mavericks": "DAL",
+    "DEN": "DEN", "Nuggets": "DEN",
+    "DET": "DET", "Pistons": "DET",
+    "GSW": "GS", "GS": "GS", "Warriors": "GS",
+    "HOU": "HOU", "Rockets": "HOU",
+    "IND": "IND", "Pacers": "IND",
+    "LAC": "LAC", "Clippers": "LAC",
+    "LAL": "LAL", "Lakers": "LAL",
+    "MEM": "MEM", "Grizzlies": "MEM",
+    "MIA": "MIA", "Heat": "MIA",
+    "MIL": "MIL", "Bucks": "MIL",
+    "MIN": "MIN", "Timberwolves": "MIN",
+    "NOP": "NO", "NO": "NO", "Pelicans": "NO",
+    "NYK": "NY", "NY": "NY", "Knicks": "NY",
+    "OKC": "OKC", "Thunder": "OKC",
+    "ORL": "ORL", "Magic": "ORL",
+    "PHI": "PHI", "76ers": "PHI",
+    "PHX": "PHX", "PHO": "PHX", "Suns": "PHX",
+    "POR": "POR", "Trail Blazers": "POR", "Blazers": "POR",
+    "SAC": "SAC", "Kings": "SAC",
+    "SAS": "SA", "SA": "SA", "Spurs": "SA",
+    "TOR": "TOR", "Raptors": "TOR",
+    "UTA": "UTAH", "UTAH": "UTAH", "Jazz": "UTAH",
+    "WAS": "WSH", "WSH": "WSH", "Wizards": "WSH",
+  },
+  nfl: {
+    "ARI": "ARI", "Cardinals": "ARI",
+    "ATL": "ATL", "Falcons": "ATL",
+    "BAL": "BAL", "Ravens": "BAL",
+    "BUF": "BUF", "Bills": "BUF",
+    "CAR": "CAR", "Panthers": "CAR",
+    "CHI": "CHI", "Bears": "CHI",
+    "CIN": "CIN", "Bengals": "CIN",
+    "CLE": "CLE", "Browns": "CLE",
+    "DAL": "DAL", "Cowboys": "DAL",
+    "DEN": "DEN", "Broncos": "DEN",
+    "DET": "DET", "Lions": "DET",
+    "GB": "GB", "GNB": "GB", "Packers": "GB",
+    "HOU": "HOU", "Texans": "HOU",
+    "IND": "IND", "Colts": "IND",
+    "JAC": "JAX", "JAX": "JAX", "Jaguars": "JAX",
+    "KC": "KC", "KAN": "KC", "Chiefs": "KC",
+    "LV": "LV", "LVR": "LV", "Raiders": "LV",
+    "LAC": "LAC", "Chargers": "LAC",
+    "LAR": "LAR", "LA": "LAR", "Rams": "LAR",
+    "MIA": "MIA", "Dolphins": "MIA",
+    "MIN": "MIN", "Vikings": "MIN",
+    "NE": "NE", "NEP": "NE", "Patriots": "NE",
+    "NO": "NO", "NOR": "NO", "Saints": "NO",
+    "NYG": "NYG", "Giants": "NYG",
+    "NYJ": "NYJ", "Jets": "NYJ",
+    "PHI": "PHI", "Eagles": "PHI",
+    "PIT": "PIT", "Steelers": "PIT",
+    "SF": "SF", "SFO": "SF", "49ers": "SF",
+    "SEA": "SEA", "Seahawks": "SEA",
+    "TB": "TB", "TAM": "TB", "Buccaneers": "TB",
+    "TEN": "TEN", "Titans": "TEN",
+    "WAS": "WSH", "WSH": "WSH", "Commanders": "WSH",
+  },
+  nhl: {
+    "ANA": "ANA", "Ducks": "ANA",
+    "ARI": "ARI", "UTA": "UTAH", "Coyotes": "ARI", "Utah": "UTAH",
+    "BOS": "BOS", "Bruins": "BOS",
+    "BUF": "BUF", "Sabres": "BUF",
+    "CGY": "CGY", "CAL": "CGY", "Flames": "CGY",
+    "CAR": "CAR", "Hurricanes": "CAR",
+    "CHI": "CHI", "Blackhawks": "CHI",
+    "COL": "COL", "Avalanche": "COL",
+    "CBJ": "CBJ", "CLB": "CBJ", "Blue Jackets": "CBJ",
+    "DAL": "DAL", "Stars": "DAL",
+    "DET": "DET", "Red Wings": "DET",
+    "EDM": "EDM", "Oilers": "EDM",
+    "FLA": "FLA", "Panthers": "FLA",
+    "LA": "LA", "LAK": "LA", "Kings": "LA",
+    "MIN": "MIN", "Wild": "MIN",
+    "MTL": "MTL", "MON": "MTL", "Canadiens": "MTL",
+    "NSH": "NSH", "NAS": "NSH", "Predators": "NSH",
+    "NJ": "NJ", "NJD": "NJ", "Devils": "NJ",
+    "NYI": "NYI", "Islanders": "NYI",
+    "NYR": "NYR", "Rangers": "NYR",
+    "OTT": "OTT", "Senators": "OTT",
+    "PHI": "PHI", "Flyers": "PHI",
+    "PIT": "PIT", "Penguins": "PIT",
+    "SJ": "SJ", "SJS": "SJ", "Sharks": "SJ",
+    "SEA": "SEA", "Kraken": "SEA",
+    "STL": "STL", "Blues": "STL",
+    "TB": "TB", "TBL": "TB", "Lightning": "TB",
+    "TOR": "TOR", "Maple Leafs": "TOR",
+    "VAN": "VAN", "Canucks": "VAN",
+    "VGK": "VGK", "VEG": "VGK", "Golden Knights": "VGK",
+    "WPG": "WPG", "WIN": "WPG", "Jets": "WPG",
+    "WSH": "WSH", "WAS": "WSH", "Capitals": "WSH",
+  },
+  mlb: {
+    "ARI": "ARI", "Diamondbacks": "ARI", "D-backs": "ARI",
+    "ATL": "ATL", "Braves": "ATL",
+    "BAL": "BAL", "Orioles": "BAL",
+    "BOS": "BOS", "Red Sox": "BOS",
+    "CHC": "CHC", "Cubs": "CHC",
+    "CWS": "CHW", "CHW": "CHW", "White Sox": "CHW",
+    "CIN": "CIN", "Reds": "CIN",
+    "CLE": "CLE", "Guardians": "CLE", "Indians": "CLE",
+    "COL": "COL", "Rockies": "COL",
+    "DET": "DET", "Tigers": "DET",
+    "HOU": "HOU", "Astros": "HOU",
+    "KC": "KC", "KAN": "KC", "Royals": "KC",
+    "LAA": "LAA", "Angels": "LAA",
+    "LAD": "LAD", "LA": "LAD", "Dodgers": "LAD",
+    "MIA": "MIA", "Marlins": "MIA",
+    "MIL": "MIL", "Brewers": "MIL",
+    "MIN": "MIN", "Twins": "MIN",
+    "NYM": "NYM", "Mets": "NYM",
+    "NYY": "NYY", "Yankees": "NYY",
+    "OAK": "OAK", "Athletics": "OAK", "A's": "OAK",
+    "PHI": "PHI", "Phillies": "PHI",
+    "PIT": "PIT", "Pirates": "PIT",
+    "SD": "SD", "SDP": "SD", "Padres": "SD",
+    "SF": "SF", "SFG": "SF", "Giants": "SF",
+    "SEA": "SEA", "Mariners": "SEA",
+    "STL": "STL", "Cardinals": "STL",
+    "TB": "TB", "TBR": "TB", "Rays": "TB",
+    "TEX": "TEX", "Rangers": "TEX",
+    "TOR": "TOR", "Blue Jays": "TOR",
+    "WAS": "WSH", "WSH": "WSH", "Nationals": "WSH",
+  },
 };
 
 interface ESPNCompetitor {
@@ -104,25 +180,6 @@ interface ESPNResponse {
   events: ESPNEvent[];
 }
 
-function formatDateForESPN(date: Date): string {
-  // ESPN expects YYYYMMDD
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}${month}${day}`;
-}
-
-function getTeamAbbrev(teamName: string): string | null {
-  if (TEAM_NAME_TO_ESPN[teamName]) {
-    return TEAM_NAME_TO_ESPN[teamName];
-  }
-  const upper = teamName.toUpperCase();
-  if (TEAM_NAME_TO_ESPN[upper]) {
-    return TEAM_NAME_TO_ESPN[upper];
-  }
-  return null;
-}
-
 interface ParsedGame {
   homeTeamAbbrev: string;
   awayTeamAbbrev: string;
@@ -131,26 +188,41 @@ interface ParsedGame {
   isComplete: boolean;
 }
 
-async function fetchESPNGames(dateStr: string): Promise<ParsedGame[]> {
-  // Convert YYYY-MM-DD to YYYYMMDD
+function getTeamAbbrev(teamName: string, sport: string): string | null {
+  const mapping = TEAM_MAPPINGS[sport];
+  if (!mapping) return teamName.toUpperCase();
+  
+  if (mapping[teamName]) return mapping[teamName];
+  const upper = teamName.toUpperCase();
+  if (mapping[upper]) return mapping[upper];
+  
+  // Fallback: return the original name
+  return teamName.toUpperCase();
+}
+
+async function fetchESPNGames(sport: string, dateStr: string): Promise<ParsedGame[]> {
+  const baseUrl = ESPN_API_URLS[sport];
+  if (!baseUrl) {
+    console.log(`[VERIFY-SCORES] No ESPN URL for sport: ${sport}`);
+    return [];
+  }
+
   const espnDate = dateStr.replace(/-/g, "");
-  const url = `${ESPN_API_URL}?dates=${espnDate}`;
-  console.log(`[VERIFY-SCORES] Fetching ESPN games for ${dateStr}: ${url}`);
+  const url = `${baseUrl}?dates=${espnDate}`;
+  console.log(`[VERIFY-SCORES] Fetching ESPN ${sport} games for ${dateStr}`);
 
   const response = await fetch(url, {
     headers: { "Accept": "application/json" },
   });
 
   if (!response.ok) {
-    console.error(`[VERIFY-SCORES] ESPN API error: ${response.status} ${response.statusText}`);
+    console.error(`[VERIFY-SCORES] ESPN API error for ${sport}: ${response.status}`);
     throw new Error(`ESPN API returned ${response.status}`);
   }
 
   const data: ESPNResponse = await response.json();
-  console.log(`[VERIFY-SCORES] ESPN returned ${data.events?.length || 0} games for ${dateStr}`);
-
   const games: ParsedGame[] = [];
-  
+
   for (const event of data.events || []) {
     const competition = event.competitions?.[0];
     if (!competition) continue;
@@ -183,13 +255,13 @@ async function fetchESPNGames(dateStr: string): Promise<ParsedGame[]> {
 function matchGame(
   ourHomeTeam: string,
   ourAwayTeam: string,
+  sport: string,
   espnGames: ParsedGame[]
 ): ParsedGame | null {
-  const ourHomeAbbrev = getTeamAbbrev(ourHomeTeam);
-  const ourAwayAbbrev = getTeamAbbrev(ourAwayTeam);
+  const ourHomeAbbrev = getTeamAbbrev(ourHomeTeam, sport);
+  const ourAwayAbbrev = getTeamAbbrev(ourAwayTeam, sport);
 
   if (!ourHomeAbbrev || !ourAwayAbbrev) {
-    console.log(`[VERIFY-SCORES] Could not map teams: ${ourHomeTeam} vs ${ourAwayTeam}`);
     return null;
   }
 
@@ -202,7 +274,6 @@ function matchGame(
     }
   }
 
-  console.log(`[VERIFY-SCORES] No ESPN match found for ${ourHomeAbbrev} vs ${ourAwayAbbrev}`);
   return null;
 }
 
@@ -218,12 +289,19 @@ Deno.serve(async (req) => {
 
   try {
     let targetDates: string[] = [];
+    let targetSports: string[] = ["nba", "nfl", "nhl", "mlb"];
+    
     try {
       const body = await req.json();
       if (body.date) {
         targetDates = [body.date];
       } else if (body.dates) {
         targetDates = body.dates;
+      }
+      if (body.sport) {
+        targetSports = [body.sport];
+      } else if (body.sports) {
+        targetSports = body.sports;
       }
     } catch {
       // No body
@@ -242,7 +320,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[VERIFY-SCORES] Checking dates: ${targetDates.join(", ")}`);
+    console.log(`[VERIFY-SCORES] Sports: ${targetSports.join(", ")}, Dates: ${targetDates.join(", ")}`);
 
     const { data: jobRun, error: jobError } = await supabase
       .from("job_runs")
@@ -259,147 +337,135 @@ Deno.serve(async (req) => {
     let errorCount = 0;
     const corrections: Array<{
       game_id: string;
+      sport: string;
       teams: string;
       old_scores: { home: number; away: number; total: number };
       new_scores: { home: number; away: number; total: number };
     }> = [];
 
-    for (const dateStr of targetDates) {
-      const [year, month, day] = dateStr.split("-").map(Number);
-      const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
-      const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
+    for (const sport of targetSports) {
+      console.log(`[VERIFY-SCORES] Processing sport: ${sport}`);
+      
+      for (const dateStr of targetDates) {
+        const [year, month, day] = dateStr.split("-").map(Number);
+        const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+        const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
 
-      const { data: ourGames, error: gamesError } = await supabase
-        .from("games")
-        .select(`
-          id,
-          home_score,
-          away_score,
-          final_total,
-          status,
-          start_time_utc,
-          home_team:teams!games_home_team_id_fkey(id, name),
-          away_team:teams!games_away_team_id_fkey(id, name)
-        `)
-        .eq("sport_id", "nba")
-        .eq("status", "final")
-        .gte("start_time_utc", startOfDay.toISOString())
-        .lte("start_time_utc", endOfDay.toISOString());
+        const { data: ourGames, error: gamesError } = await supabase
+          .from("games")
+          .select(`
+            id,
+            home_score,
+            away_score,
+            final_total,
+            status,
+            start_time_utc,
+            home_team:teams!games_home_team_id_fkey(id, name),
+            away_team:teams!games_away_team_id_fkey(id, name)
+          `)
+          .eq("sport_id", sport)
+          .eq("status", "final")
+          .gte("start_time_utc", startOfDay.toISOString())
+          .lte("start_time_utc", endOfDay.toISOString());
 
-      if (gamesError) {
-        console.error(`[VERIFY-SCORES] Error fetching our games for ${dateStr}:`, gamesError);
-        errorCount++;
-        continue;
-      }
-
-      if (!ourGames || ourGames.length === 0) {
-        console.log(`[VERIFY-SCORES] No final NBA games found in our DB for ${dateStr}`);
-        continue;
-      }
-
-      console.log(`[VERIFY-SCORES] Found ${ourGames.length} final NBA games in our DB for ${dateStr}`);
-
-      // Fetch ESPN games for this date AND the previous day
-      // (to handle timezone differences between UTC storage and ET game dates)
-      let espnGames: ParsedGame[] = [];
-      try {
-        const currentGames = await fetchESPNGames(dateStr);
-        espnGames.push(...currentGames);
-        
-        // Also check previous day (games at midnight UTC are often yesterday in ET)
-        const prevDate = new Date(year, month - 1, day);
-        prevDate.setDate(prevDate.getDate() - 1);
-        const prevYear = prevDate.getFullYear();
-        const prevMonth = String(prevDate.getMonth() + 1).padStart(2, "0");
-        const prevDay = String(prevDate.getDate()).padStart(2, "0");
-        const prevDateStr = `${prevYear}-${prevMonth}-${prevDay}`;
-        
-        const prevGames = await fetchESPNGames(prevDateStr);
-        espnGames.push(...prevGames);
-        
-        console.log(`[VERIFY-SCORES] Combined ESPN games (${dateStr} + ${prevDateStr}): ${espnGames.length} final games`);
-      } catch (e) {
-        console.error(`[VERIFY-SCORES] Failed to fetch ESPN games for ${dateStr}:`, e);
-        errorCount++;
-        continue;
-      }
-
-      for (const ourGame of ourGames) {
-        checkedCount++;
-
-        const homeTeamData = ourGame.home_team as unknown as { id: string; name: string } | null;
-        const awayTeamData = ourGame.away_team as unknown as { id: string; name: string } | null;
-        const homeTeam = homeTeamData?.name;
-        const awayTeam = awayTeamData?.name;
-
-        if (!homeTeam || !awayTeam) {
-          console.log(`[VERIFY-SCORES] Missing team names for game ${ourGame.id}`);
+        if (gamesError) {
+          console.error(`[VERIFY-SCORES] Error fetching ${sport} games for ${dateStr}:`, gamesError);
+          errorCount++;
           continue;
         }
 
-        const espnMatch = matchGame(homeTeam, awayTeam, espnGames);
-
-        if (!espnMatch) {
-          console.log(`[VERIFY-SCORES] No ESPN match for ${homeTeam} vs ${awayTeam}`);
+        if (!ourGames || ourGames.length === 0) {
           continue;
         }
 
-        const espnHomeScore = espnMatch.homeScore;
-        const espnAwayScore = espnMatch.awayScore;
-        const espnTotal = espnHomeScore + espnAwayScore;
+        console.log(`[VERIFY-SCORES] Found ${ourGames.length} final ${sport.toUpperCase()} games for ${dateStr}`);
 
-        const scoreDiffers =
-          ourGame.home_score !== espnHomeScore ||
-          ourGame.away_score !== espnAwayScore;
+        // Fetch ESPN games for this date AND the previous day (for timezone handling)
+        let espnGames: ParsedGame[] = [];
+        try {
+          const currentGames = await fetchESPNGames(sport, dateStr);
+          espnGames.push(...currentGames);
 
-        if (scoreDiffers) {
-          console.log(
-            `[VERIFY-SCORES] Score mismatch for ${homeTeam} vs ${awayTeam}: ` +
-            `Our: ${ourGame.home_score}-${ourGame.away_score}=${ourGame.final_total}, ` +
-            `ESPN: ${espnHomeScore}-${espnAwayScore}=${espnTotal}`
-          );
+          // Also check previous day
+          const prevDate = new Date(year, month - 1, day);
+          prevDate.setDate(prevDate.getDate() - 1);
+          const prevYear = prevDate.getFullYear();
+          const prevMonth = String(prevDate.getMonth() + 1).padStart(2, "0");
+          const prevDay = String(prevDate.getDate()).padStart(2, "0");
+          const prevDateStr = `${prevYear}-${prevMonth}-${prevDay}`;
 
-          // Note: final_total is a generated column, so we only update the scores
-          const { error: updateError } = await supabase
-            .from("games")
-            .update({
-              home_score: espnHomeScore,
-              away_score: espnAwayScore,
-            })
-            .eq("id", ourGame.id);
+          const prevGames = await fetchESPNGames(sport, prevDateStr);
+          espnGames.push(...prevGames);
+        } catch (e) {
+          console.error(`[VERIFY-SCORES] Failed to fetch ESPN ${sport} games for ${dateStr}:`, e);
+          errorCount++;
+          continue;
+        }
 
-          if (updateError) {
-            console.error(`[VERIFY-SCORES] Failed to update game ${ourGame.id}:`, updateError);
-            errorCount++;
-          } else {
-            correctedCount++;
-            corrections.push({
-              game_id: ourGame.id,
-              teams: `${homeTeam} vs ${awayTeam}`,
-              old_scores: {
-                home: ourGame.home_score ?? 0,
-                away: ourGame.away_score ?? 0,
-                total: ourGame.final_total ?? 0,
-              },
-              new_scores: {
-                home: espnHomeScore,
-                away: espnAwayScore,
-                total: espnTotal,
-              },
-            });
+        for (const ourGame of ourGames) {
+          checkedCount++;
 
-            // Also update matchup_games if exists
-            const { error: matchupError } = await supabase
-              .from("matchup_games")
-              .update({ total: espnTotal })
-              .eq("game_id", ourGame.id);
+          const homeTeamData = ourGame.home_team as unknown as { id: string; name: string } | null;
+          const awayTeamData = ourGame.away_team as unknown as { id: string; name: string } | null;
+          const homeTeam = homeTeamData?.name;
+          const awayTeam = awayTeamData?.name;
 
-            if (matchupError) {
-              console.error(`[VERIFY-SCORES] Failed to update matchup_games for ${ourGame.id}:`, matchupError);
+          if (!homeTeam || !awayTeam) continue;
+
+          const espnMatch = matchGame(homeTeam, awayTeam, sport, espnGames);
+
+          if (!espnMatch) continue;
+
+          const espnHomeScore = espnMatch.homeScore;
+          const espnAwayScore = espnMatch.awayScore;
+          const espnTotal = espnHomeScore + espnAwayScore;
+
+          const scoreDiffers =
+            ourGame.home_score !== espnHomeScore ||
+            ourGame.away_score !== espnAwayScore;
+
+          if (scoreDiffers) {
+            console.log(
+              `[VERIFY-SCORES] ${sport.toUpperCase()} mismatch ${homeTeam} vs ${awayTeam}: ` +
+              `Our: ${ourGame.home_score}-${ourGame.away_score}, ESPN: ${espnHomeScore}-${espnAwayScore}`
+            );
+
+            const { error: updateError } = await supabase
+              .from("games")
+              .update({
+                home_score: espnHomeScore,
+                away_score: espnAwayScore,
+              })
+              .eq("id", ourGame.id);
+
+            if (updateError) {
+              console.error(`[VERIFY-SCORES] Failed to update game ${ourGame.id}:`, updateError);
+              errorCount++;
+            } else {
+              correctedCount++;
+              corrections.push({
+                game_id: ourGame.id,
+                sport,
+                teams: `${homeTeam} vs ${awayTeam}`,
+                old_scores: {
+                  home: ourGame.home_score ?? 0,
+                  away: ourGame.away_score ?? 0,
+                  total: ourGame.final_total ?? 0,
+                },
+                new_scores: {
+                  home: espnHomeScore,
+                  away: espnAwayScore,
+                  total: espnTotal,
+                },
+              });
+
+              // Update matchup_games
+              await supabase
+                .from("matchup_games")
+                .update({ total: espnTotal })
+                .eq("game_id", ourGame.id);
             }
           }
-        } else {
-          console.log(`[VERIFY-SCORES] Scores match for ${homeTeam} vs ${awayTeam}: ${espnHomeScore}-${espnAwayScore}=${espnTotal}`);
         }
       }
     }
@@ -411,11 +477,12 @@ Deno.serve(async (req) => {
           status: "success",
           finished_at: new Date().toISOString(),
           details: {
+            sports: targetSports,
             dates_checked: targetDates,
             games_checked: checkedCount,
             games_corrected: correctedCount,
             errors: errorCount,
-            corrections: corrections.slice(0, 20),
+            corrections: corrections.slice(0, 50),
           },
         })
         .eq("id", jobRun.id);
@@ -426,6 +493,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
+        sports: targetSports,
         dates_checked: targetDates,
         games_checked: checkedCount,
         games_corrected: correctedCount,
