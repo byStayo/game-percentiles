@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.hydrate-matchup]
 verify_jwt = false
+
+[functions.prewarm-slate]
+verify_jwt = false
