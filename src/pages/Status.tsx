@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { format, formatDistanceToNow } from "date-fns";
-import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Database, Activity, Play, Loader2, Timer, Calendar, Zap, Layers, TrendingUp, History, HeartPulse } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Database, Activity, Play, Loader2, Timer, Calendar, Zap, Layers, TrendingUp, History, HeartPulse, Users } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
 import { useSystemStatus, useCronStatus } from "@/hooks/useApi";
 import type { CronJob } from "@/hooks/useApi";
@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataHealthDashboard } from "@/components/status/DataHealthDashboard";
+import { RosterContinuityTimeline } from "@/components/status/RosterContinuityTimeline";
 
 const API_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
@@ -497,6 +498,10 @@ export default function Status() {
                     <HeartPulse className="h-3 w-3" />
                     Data Health
                   </TabsTrigger>
+                  <TabsTrigger value="roster" className="text-xs gap-1">
+                    <Users className="h-3 w-3" />
+                    Rosters
+                  </TabsTrigger>
                 </TabsList>
                 <Button
                   variant="outline"
@@ -681,6 +686,10 @@ export default function Status() {
 
             <TabsContent value="data-health" className="mt-0">
               <DataHealthDashboard />
+            </TabsContent>
+
+            <TabsContent value="roster" className="mt-0">
+              <RosterContinuityTimeline />
             </TabsContent>
           </Tabs>
         </div>

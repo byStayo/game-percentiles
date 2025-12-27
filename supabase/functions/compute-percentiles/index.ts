@@ -16,8 +16,19 @@ const SEGMENT_LADDER = [
   { key: 'h2h_all', yearsBack: null },
 ]
 
+// Recency weights for the weighted segment
+// More recent games get higher weight
+const RECENCY_WEIGHTS = {
+  0: 1.0,   // Current year
+  1: 0.9,   // 1 year ago
+  2: 0.7,   // 2 years ago
+  3: 0.5,   // 3 years ago
+  4: 0.3,   // 4+ years ago
+}
+
 const MIN_SAMPLE = 5
 const HYBRID_MIN_GAMES = 10 // Each team needs at least this many recent games for hybrid
+const WEIGHTED_MIN_GAMES = 8 // Minimum games needed for recency-weighted segment
 
 function getTodayET(): string {
   const now = new Date()
@@ -37,6 +48,111 @@ interface SegmentResult {
   p95: number
   median: number
   totals: number[]
+}
+
+interface WeightedGame {
+  total: number
+  weight: number
+  yearDiff: number
+}
+
+// Compute weighted percentiles using recency weights
+function computeWeightedPercentiles(games: WeightedGame[]): { p05: number; p95: number; median: number } {
+  // Sort by total
+  const sorted = [...games].sort((a, b) => a.total - b.total)
+  
+  // Calculate total weight
+  const totalWeight = sorted.reduce((sum, g) => sum + g.weight, 0)
+  
+  // Find weighted percentiles
+  let cumWeight = 0
+  let p05 = sorted[0].total
+  let p95 = sorted[sorted.length - 1].total
+  let median = sorted[Math.floor(sorted.length / 2)].total
+  
+  for (let i = 0; i < sorted.length; i++) {
+    cumWeight += sorted[i].weight
+    const percentile = cumWeight / totalWeight
+    
+    if (percentile >= 0.05 && p05 === sorted[0].total) {
+      p05 = sorted[i].total
+    }
+    if (percentile >= 0.5 && median === sorted[Math.floor(sorted.length / 2)].total) {
+      median = sorted[i].total
+    }
+    if (percentile >= 0.95) {
+      p95 = sorted[i].total
+      break
+    }
+  }
+  
+  return { p05, p95, median }
+}
+
+async function computeRecencyWeighted(
+  supabase: any,
+  sportId: string,
+  franchiseLowId: string | null,
+  franchiseHighId: string | null,
+  teamLowId: string,
+  teamHighId: string
+): Promise<SegmentResult | null> {
+  const currentYear = new Date().getFullYear()
+  const usesFranchise = franchiseLowId && franchiseHighId
+
+  // Get games from last 5 years with year info
+  let query = supabase
+    .from('matchup_games')
+    .select('total, season_year')
+    .eq('sport_id', sportId)
+    .gte('season_year', currentYear - 5)
+
+  if (usesFranchise) {
+    query = query
+      .eq('franchise_low_id', franchiseLowId)
+      .eq('franchise_high_id', franchiseHighId)
+  } else {
+    query = query
+      .eq('team_low_id', teamLowId)
+      .eq('team_high_id', teamHighId)
+  }
+
+  const { data: games } = await query
+
+  if (!games || games.length < WEIGHTED_MIN_GAMES) {
+    return null
+  }
+
+  // Apply recency weights
+  const weightedGames: WeightedGame[] = games.map((g: any) => {
+    const yearDiff = currentYear - (g.season_year || currentYear)
+    const weight = RECENCY_WEIGHTS[Math.min(yearDiff, 4) as keyof typeof RECENCY_WEIGHTS]
+    return {
+      total: Number(g.total),
+      weight,
+      yearDiff,
+    }
+  })
+
+  const { p05, p95, median } = computeWeightedPercentiles(weightedGames)
+  const totals = weightedGames.map(g => g.total).sort((a, b) => a - b)
+
+  // Log weight distribution for debugging
+  const weightsByYear = weightedGames.reduce((acc, g) => {
+    acc[g.yearDiff] = (acc[g.yearDiff] || 0) + 1
+    return acc
+  }, {} as Record<number, number>)
+  
+  console.log(`[COMPUTE] Recency weighted: ${games.length} games, distribution: ${JSON.stringify(weightsByYear)}`)
+
+  return {
+    segment_used: 'recency_weighted',
+    n_used: games.length,
+    p05,
+    p95,
+    median,
+    totals,
+  }
 }
 
 async function selectBestSegment(
@@ -171,27 +287,28 @@ Deno.serve(async (req) => {
     h2h_10y: 0, 
     h2h_20y: 0, 
     h2h_all: 0, 
-    hybrid_form: 0, 
+    hybrid_form: 0,
+    recency_weighted: 0,
     insufficient: 0, 
     errors: 0 
   }
 
   try {
-    let requestBody: { date?: string } = {}
+    let requestBody: { date?: string; use_recency_weighted?: boolean } = {}
     try {
       requestBody = await req.json()
     } catch {
       // Empty body is OK
     }
     
-    const { date } = requestBody
+    const { date, use_recency_weighted = true } = requestBody
     const targetDate = date || getTodayET()
 
-    console.log(`[COMPUTE] Computing percentiles for ${targetDate} with segment ladder`)
+    console.log(`[COMPUTE] Computing percentiles for ${targetDate} with segment ladder (recency_weighted: ${use_recency_weighted})`)
 
     const { data: jobRun } = await supabase
       .from('job_runs')
-      .insert({ job_name: 'compute', details: { date: targetDate, mode: 'segment_ladder' } })
+      .insert({ job_name: 'compute', details: { date: targetDate, mode: 'segment_ladder', use_recency_weighted } })
       .select()
       .single()
 
@@ -218,15 +335,31 @@ Deno.serve(async (req) => {
           ? [game.home_franchise_id, game.away_franchise_id].sort()
           : [null, null]
 
-        // Try segment ladder first
-        let result = await selectBestSegment(
-          supabase, 
-          game.sport_id, 
-          franchiseLowId, 
-          franchiseHighId,
-          teamLowId, 
-          teamHighId
-        )
+        let result: SegmentResult | null = null
+
+        // Try recency weighted first if enabled
+        if (use_recency_weighted) {
+          result = await computeRecencyWeighted(
+            supabase,
+            game.sport_id,
+            franchiseLowId,
+            franchiseHighId,
+            teamLowId,
+            teamHighId
+          )
+        }
+
+        // Fall back to segment ladder
+        if (!result) {
+          result = await selectBestSegment(
+            supabase, 
+            game.sport_id, 
+            franchiseLowId, 
+            franchiseHighId,
+            teamLowId, 
+            teamHighId
+          )
+        }
 
         // If no segment has enough data, try hybrid form
         if (!result) {
@@ -352,6 +485,7 @@ Deno.serve(async (req) => {
         date: targetDate,
         counters,
         segment_ladder: SEGMENT_LADDER.map(s => s.key),
+        recency_weighted_enabled: use_recency_weighted,
         min_sample: MIN_SAMPLE,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
