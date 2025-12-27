@@ -5,119 +5,186 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Ball Don't Lie API - Free NBA data
-const BDL_API_URL = "https://api.balldontlie.io/v1";
+// ESPN API - Free, no auth required
+const ESPN_API_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard";
 
-// Team name mapping from our DB names to Ball Don't Lie team abbreviations
-const TEAM_NAME_TO_BDL: Record<string, string> = {
-  // Our DB uses team abbreviations or short names
+// Team name mapping from our DB names to ESPN team abbreviations
+// Our DB stores team abbreviations like "ATL", "MIA", "WAS" etc.
+const TEAM_NAME_TO_ESPN: Record<string, string> = {
+  // Atlanta Hawks
   "ATL": "ATL", "Hawks": "ATL",
+  // Boston Celtics
   "BOS": "BOS", "Celtics": "BOS",
+  // Brooklyn Nets
   "BKN": "BKN", "BRO": "BKN", "Nets": "BKN",
-  "CHA": "CHA", "Hornets": "CHA",
+  // Charlotte Hornets
+  "CHA": "CHA", "CHO": "CHA", "Hornets": "CHA",
+  // Chicago Bulls
   "CHI": "CHI", "Bulls": "CHI",
+  // Cleveland Cavaliers
   "CLE": "CLE", "Cavaliers": "CLE",
+  // Dallas Mavericks
   "DAL": "DAL", "Mavericks": "DAL",
+  // Denver Nuggets
   "DEN": "DEN", "Nuggets": "DEN",
+  // Detroit Pistons
   "DET": "DET", "Pistons": "DET",
-  "GSW": "GSW", "GS": "GSW", "Warriors": "GSW",
+  // Golden State Warriors
+  "GSW": "GS", "GS": "GS", "Warriors": "GS",
+  // Houston Rockets
   "HOU": "HOU", "Rockets": "HOU",
+  // Indiana Pacers
   "IND": "IND", "Pacers": "IND",
+  // LA Clippers
   "LAC": "LAC", "Clippers": "LAC",
+  // LA Lakers
   "LAL": "LAL", "Lakers": "LAL",
+  // Memphis Grizzlies
   "MEM": "MEM", "Grizzlies": "MEM",
+  // Miami Heat
   "MIA": "MIA", "Heat": "MIA",
+  // Milwaukee Bucks
   "MIL": "MIL", "Bucks": "MIL",
+  // Minnesota Timberwolves
   "MIN": "MIN", "Timberwolves": "MIN",
-  "NOP": "NOP", "NO": "NOP", "Pelicans": "NOP",
-  "NYK": "NYK", "NY": "NYK", "Knicks": "NYK",
+  // New Orleans Pelicans
+  "NOP": "NO", "NO": "NO", "Pelicans": "NO",
+  // New York Knicks
+  "NYK": "NY", "NY": "NY", "Knicks": "NY",
+  // Oklahoma City Thunder
   "OKC": "OKC", "Thunder": "OKC",
+  // Orlando Magic
   "ORL": "ORL", "Magic": "ORL",
+  // Philadelphia 76ers
   "PHI": "PHI", "76ers": "PHI",
+  // Phoenix Suns
   "PHX": "PHX", "PHO": "PHX", "Suns": "PHX",
+  // Portland Trail Blazers
   "POR": "POR", "Trail Blazers": "POR", "Blazers": "POR",
+  // Sacramento Kings
   "SAC": "SAC", "Kings": "SAC",
-  "SAS": "SAS", "SA": "SAS", "Spurs": "SAS",
+  // San Antonio Spurs
+  "SAS": "SA", "SA": "SA", "Spurs": "SA",
+  // Toronto Raptors
   "TOR": "TOR", "Raptors": "TOR",
-  "UTA": "UTA", "Jazz": "UTA",
-  "WAS": "WAS", "Wizards": "WAS",
+  // Utah Jazz
+  "UTA": "UTAH", "UTAH": "UTAH", "Jazz": "UTAH",
+  // Washington Wizards
+  "WAS": "WSH", "WSH": "WSH", "Wizards": "WSH",
 };
 
-interface BDLGame {
-  id: number;
+interface ESPNCompetitor {
+  id: string;
+  team: {
+    id: string;
+    abbreviation: string;
+    displayName: string;
+  };
+  score: string;
+  homeAway: "home" | "away";
+}
+
+interface ESPNEvent {
+  id: string;
   date: string;
-  home_team: {
-    id: number;
-    abbreviation: string;
-    full_name: string;
+  status: {
+    type: {
+      name: string;
+      state: string;
+      completed: boolean;
+    };
   };
-  visitor_team: {
-    id: number;
-    abbreviation: string;
-    full_name: string;
-  };
-  home_team_score: number;
-  visitor_team_score: number;
-  status: string;
-  period: number;
-  postseason: boolean;
-  season: number;
+  competitions: Array<{
+    id: string;
+    competitors: ESPNCompetitor[];
+  }>;
 }
 
-interface BDLResponse {
-  data: BDLGame[];
-  meta: {
-    next_cursor: number | null;
-    per_page: number;
-  };
+interface ESPNResponse {
+  events: ESPNEvent[];
 }
 
-function formatDateForBDL(date: Date): string {
-  // Ball Don't Lie expects YYYY-MM-DD
+function formatDateForESPN(date: Date): string {
+  // ESPN expects YYYYMMDD
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return `${year}${month}${day}`;
 }
 
 function getTeamAbbrev(teamName: string): string | null {
-  // Try direct lookup
-  if (TEAM_NAME_TO_BDL[teamName]) {
-    return TEAM_NAME_TO_BDL[teamName];
+  if (TEAM_NAME_TO_ESPN[teamName]) {
+    return TEAM_NAME_TO_ESPN[teamName];
   }
-  // Try uppercase
   const upper = teamName.toUpperCase();
-  if (TEAM_NAME_TO_BDL[upper]) {
-    return TEAM_NAME_TO_BDL[upper];
+  if (TEAM_NAME_TO_ESPN[upper]) {
+    return TEAM_NAME_TO_ESPN[upper];
   }
   return null;
 }
 
-async function fetchBDLGames(date: string): Promise<BDLGame[]> {
-  const url = `${BDL_API_URL}/games?dates[]=${date}`;
-  console.log(`[VERIFY-SCORES] Fetching BDL games for ${date}: ${url}`);
-  
+interface ParsedGame {
+  homeTeamAbbrev: string;
+  awayTeamAbbrev: string;
+  homeScore: number;
+  awayScore: number;
+  isComplete: boolean;
+}
+
+async function fetchESPNGames(dateStr: string): Promise<ParsedGame[]> {
+  // Convert YYYY-MM-DD to YYYYMMDD
+  const espnDate = dateStr.replace(/-/g, "");
+  const url = `${ESPN_API_URL}?dates=${espnDate}`;
+  console.log(`[VERIFY-SCORES] Fetching ESPN games for ${dateStr}: ${url}`);
+
   const response = await fetch(url, {
-    headers: {
-      "Accept": "application/json",
-    },
+    headers: { "Accept": "application/json" },
   });
 
   if (!response.ok) {
-    console.error(`[VERIFY-SCORES] BDL API error: ${response.status} ${response.statusText}`);
-    throw new Error(`Ball Don't Lie API returned ${response.status}`);
+    console.error(`[VERIFY-SCORES] ESPN API error: ${response.status} ${response.statusText}`);
+    throw new Error(`ESPN API returned ${response.status}`);
   }
 
-  const data: BDLResponse = await response.json();
-  console.log(`[VERIFY-SCORES] BDL returned ${data.data.length} games for ${date}`);
-  return data.data;
+  const data: ESPNResponse = await response.json();
+  console.log(`[VERIFY-SCORES] ESPN returned ${data.events?.length || 0} games for ${dateStr}`);
+
+  const games: ParsedGame[] = [];
+  
+  for (const event of data.events || []) {
+    const competition = event.competitions?.[0];
+    if (!competition) continue;
+
+    const isComplete = event.status?.type?.completed === true;
+    if (!isComplete) continue;
+
+    const homeTeam = competition.competitors.find((c) => c.homeAway === "home");
+    const awayTeam = competition.competitors.find((c) => c.homeAway === "away");
+
+    if (!homeTeam || !awayTeam) continue;
+
+    const homeScore = parseInt(homeTeam.score, 10);
+    const awayScore = parseInt(awayTeam.score, 10);
+
+    if (isNaN(homeScore) || isNaN(awayScore)) continue;
+
+    games.push({
+      homeTeamAbbrev: homeTeam.team.abbreviation,
+      awayTeamAbbrev: awayTeam.team.abbreviation,
+      homeScore,
+      awayScore,
+      isComplete,
+    });
+  }
+
+  return games;
 }
 
 function matchGame(
   ourHomeTeam: string,
   ourAwayTeam: string,
-  bdlGames: BDLGame[]
-): BDLGame | null {
+  espnGames: ParsedGame[]
+): ParsedGame | null {
   const ourHomeAbbrev = getTeamAbbrev(ourHomeTeam);
   const ourAwayAbbrev = getTeamAbbrev(ourAwayTeam);
 
@@ -126,17 +193,16 @@ function matchGame(
     return null;
   }
 
-  for (const bdlGame of bdlGames) {
-    // BDL uses home_team and visitor_team (visitor = away)
+  for (const espnGame of espnGames) {
     if (
-      bdlGame.home_team.abbreviation === ourHomeAbbrev &&
-      bdlGame.visitor_team.abbreviation === ourAwayAbbrev
+      espnGame.homeTeamAbbrev === ourHomeAbbrev &&
+      espnGame.awayTeamAbbrev === ourAwayAbbrev
     ) {
-      return bdlGame;
+      return espnGame;
     }
   }
 
-  console.log(`[VERIFY-SCORES] No BDL match found for ${ourHomeAbbrev} vs ${ourAwayAbbrev}`);
+  console.log(`[VERIFY-SCORES] No ESPN match found for ${ourHomeAbbrev} vs ${ourAwayAbbrev}`);
   return null;
 }
 
@@ -151,7 +217,6 @@ Deno.serve(async (req) => {
   );
 
   try {
-    // Parse optional date from request body (defaults to last 3 days)
     let targetDates: string[] = [];
     try {
       const body = await req.json();
@@ -161,7 +226,7 @@ Deno.serve(async (req) => {
         targetDates = body.dates;
       }
     } catch {
-      // No body, use defaults
+      // No body
     }
 
     // If no dates specified, check games from last 3 days
@@ -170,13 +235,15 @@ Deno.serve(async (req) => {
       for (let i = 0; i < 3; i++) {
         const d = new Date(today);
         d.setDate(d.getDate() - i);
-        targetDates.push(formatDateForBDL(d));
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        targetDates.push(`${year}-${month}-${day}`);
       }
     }
 
     console.log(`[VERIFY-SCORES] Checking dates: ${targetDates.join(", ")}`);
 
-    // Create job run record
     const { data: jobRun, error: jobError } = await supabase
       .from("job_runs")
       .insert({ job_name: "verify-scores", status: "running" })
@@ -197,14 +264,11 @@ Deno.serve(async (req) => {
       new_scores: { home: number; away: number; total: number };
     }> = [];
 
-    // Fetch all final NBA games in the date range
     for (const dateStr of targetDates) {
-      // Parse the date string and create UTC range for that day
       const [year, month, day] = dateStr.split("-").map(Number);
       const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
       const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
 
-      // Fetch our games for this date
       const { data: ourGames, error: gamesError } = await supabase
         .from("games")
         .select(`
@@ -229,32 +293,40 @@ Deno.serve(async (req) => {
       }
 
       if (!ourGames || ourGames.length === 0) {
-        console.log(`[VERIFY-SCORES] No final NBA games found for ${dateStr}`);
+        console.log(`[VERIFY-SCORES] No final NBA games found in our DB for ${dateStr}`);
         continue;
       }
 
-      console.log(`[VERIFY-SCORES] Found ${ourGames.length} final NBA games for ${dateStr}`);
+      console.log(`[VERIFY-SCORES] Found ${ourGames.length} final NBA games in our DB for ${dateStr}`);
 
-      // Fetch BDL games for this date
-      let bdlGames: BDLGame[];
+      // Fetch ESPN games for this date AND the previous day
+      // (to handle timezone differences between UTC storage and ET game dates)
+      let espnGames: ParsedGame[] = [];
       try {
-        bdlGames = await fetchBDLGames(dateStr);
+        const currentGames = await fetchESPNGames(dateStr);
+        espnGames.push(...currentGames);
+        
+        // Also check previous day (games at midnight UTC are often yesterday in ET)
+        const prevDate = new Date(year, month - 1, day);
+        prevDate.setDate(prevDate.getDate() - 1);
+        const prevYear = prevDate.getFullYear();
+        const prevMonth = String(prevDate.getMonth() + 1).padStart(2, "0");
+        const prevDay = String(prevDate.getDate()).padStart(2, "0");
+        const prevDateStr = `${prevYear}-${prevMonth}-${prevDay}`;
+        
+        const prevGames = await fetchESPNGames(prevDateStr);
+        espnGames.push(...prevGames);
+        
+        console.log(`[VERIFY-SCORES] Combined ESPN games (${dateStr} + ${prevDateStr}): ${espnGames.length} final games`);
       } catch (e) {
-        console.error(`[VERIFY-SCORES] Failed to fetch BDL games for ${dateStr}:`, e);
+        console.error(`[VERIFY-SCORES] Failed to fetch ESPN games for ${dateStr}:`, e);
         errorCount++;
         continue;
       }
 
-      // Filter to only final games from BDL
-      const finalBdlGames = bdlGames.filter(
-        (g) => g.status === "Final" && g.home_team_score > 0 && g.visitor_team_score > 0
-      );
-      console.log(`[VERIFY-SCORES] BDL has ${finalBdlGames.length} final games for ${dateStr}`);
-
-      // Match and verify each game
       for (const ourGame of ourGames) {
         checkedCount++;
-        
+
         const homeTeamData = ourGame.home_team as unknown as { id: string; name: string } | null;
         const awayTeamData = ourGame.away_team as unknown as { id: string; name: string } | null;
         const homeTeam = homeTeamData?.name;
@@ -265,36 +337,34 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const bdlMatch = matchGame(homeTeam, awayTeam, finalBdlGames);
+        const espnMatch = matchGame(homeTeam, awayTeam, espnGames);
 
-        if (!bdlMatch) {
-          console.log(`[VERIFY-SCORES] No BDL match for ${homeTeam} vs ${awayTeam}`);
+        if (!espnMatch) {
+          console.log(`[VERIFY-SCORES] No ESPN match for ${homeTeam} vs ${awayTeam}`);
           continue;
         }
 
-        const bdlHomeScore = bdlMatch.home_team_score;
-        const bdlAwayScore = bdlMatch.visitor_team_score;
-        const bdlTotal = bdlHomeScore + bdlAwayScore;
+        const espnHomeScore = espnMatch.homeScore;
+        const espnAwayScore = espnMatch.awayScore;
+        const espnTotal = espnHomeScore + espnAwayScore;
 
-        // Check if scores differ
         const scoreDiffers =
-          ourGame.home_score !== bdlHomeScore ||
-          ourGame.away_score !== bdlAwayScore;
+          ourGame.home_score !== espnHomeScore ||
+          ourGame.away_score !== espnAwayScore;
 
         if (scoreDiffers) {
           console.log(
             `[VERIFY-SCORES] Score mismatch for ${homeTeam} vs ${awayTeam}: ` +
             `Our: ${ourGame.home_score}-${ourGame.away_score}=${ourGame.final_total}, ` +
-            `BDL: ${bdlHomeScore}-${bdlAwayScore}=${bdlTotal}`
+            `ESPN: ${espnHomeScore}-${espnAwayScore}=${espnTotal}`
           );
 
-          // Update the game with correct scores
+          // Note: final_total is a generated column, so we only update the scores
           const { error: updateError } = await supabase
             .from("games")
             .update({
-              home_score: bdlHomeScore,
-              away_score: bdlAwayScore,
-              final_total: bdlTotal,
+              home_score: espnHomeScore,
+              away_score: espnAwayScore,
             })
             .eq("id", ourGame.id);
 
@@ -312,16 +382,16 @@ Deno.serve(async (req) => {
                 total: ourGame.final_total ?? 0,
               },
               new_scores: {
-                home: bdlHomeScore,
-                away: bdlAwayScore,
-                total: bdlTotal,
+                home: espnHomeScore,
+                away: espnAwayScore,
+                total: espnTotal,
               },
             });
 
             // Also update matchup_games if exists
             const { error: matchupError } = await supabase
               .from("matchup_games")
-              .update({ total: bdlTotal })
+              .update({ total: espnTotal })
               .eq("game_id", ourGame.id);
 
             if (matchupError) {
@@ -329,12 +399,11 @@ Deno.serve(async (req) => {
             }
           }
         } else {
-          console.log(`[VERIFY-SCORES] Scores match for ${homeTeam} vs ${awayTeam}`);
+          console.log(`[VERIFY-SCORES] Scores match for ${homeTeam} vs ${awayTeam}: ${espnHomeScore}-${espnAwayScore}=${espnTotal}`);
         }
       }
     }
 
-    // Update job run with results
     if (jobRun) {
       await supabase
         .from("job_runs")
@@ -346,7 +415,7 @@ Deno.serve(async (req) => {
             games_checked: checkedCount,
             games_corrected: correctedCount,
             errors: errorCount,
-            corrections: corrections.slice(0, 20), // Limit to first 20 for storage
+            corrections: corrections.slice(0, 20),
           },
         })
         .eq("id", jobRun.id);
