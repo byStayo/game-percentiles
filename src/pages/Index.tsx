@@ -102,7 +102,7 @@ export default function Index() {
   return (
     <>
       <Helmet>
-        <title>Percentile Totals | Historical H2H Analysis</title>
+        <title>Game Percentiles | Historical H2H Analysis</title>
         <meta name="description" content="Analyze head-to-head historical totals for NFL, NBA, MLB, and NHL. View P05/P95 percentile bounds and line analysis." />
       </Helmet>
 
@@ -111,7 +111,7 @@ export default function Index() {
           {/* Hero section */}
           <div className="text-center space-y-4 py-4">
             <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-              Percentile Totals
+              Game Percentiles
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               Historical head-to-head analysis with statistical bounds

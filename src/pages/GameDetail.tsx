@@ -72,7 +72,7 @@ export default function GameDetail() {
   return (
     <>
       <Helmet>
-        <title>{`${awayTeamName} vs ${homeTeamName} | Percentile Totals`}</title>
+        <title>{`${awayTeamName} vs ${homeTeamName} | Game Percentiles`}</title>
         <meta name="description" content={`H2H historical analysis for ${awayTeamName} at ${homeTeamName}. View percentile bounds and DraftKings line analysis.`} />
       </Helmet>
 

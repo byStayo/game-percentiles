@@ -370,7 +370,7 @@ export default function Status() {
   return (
     <>
       <Helmet>
-        <title>System Status | Percentile Totals</title>
+        <title>System Status | Game Percentiles</title>
         <meta name="description" content="View data pipeline status and odds matching results." />
       </Helmet>
 

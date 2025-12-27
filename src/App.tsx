@@ -20,6 +20,8 @@ import MatchupFinder from "./pages/MatchupFinder";
 import OverUnderTrends from "./pages/OverUnderTrends";
 import Rivalries from "./pages/Rivalries";
 import PowerRankings from "./pages/PowerRankings";
+import Streaks from "./pages/Streaks";
+import BetSimulator from "./pages/BetSimulator";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +50,8 @@ const App = () => (
             <Route path="/ou-trends" element={<OverUnderTrends />} />
             <Route path="/rivalries" element={<Rivalries />} />
             <Route path="/rankings" element={<PowerRankings />} />
+            <Route path="/streaks" element={<Streaks />} />
+            <Route path="/simulator" element={<BetSimulator />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
