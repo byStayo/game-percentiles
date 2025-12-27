@@ -205,7 +205,7 @@ export function Header() {
           </div>
         </Link>
 
-        {/* Desktop Navigation */}
+        {/* Desktop Navigation - hidden on mobile, BottomNav handles mobile */}
         <nav className="hidden md:flex items-center gap-1 p-1 rounded-full bg-secondary/50">
           {coreNav.slice(0, 4).map((item) => (
             <Link
@@ -226,10 +226,8 @@ export function Header() {
           <NavDropdown group={analyticsGroup} isActive={isAnalyticsActive} />
         </nav>
 
-        {/* Mobile: Just show the hamburger menu trigger - bottom nav handles main navigation */}
-        <div className="md:hidden">
-          <MobileNav />
-        </div>
+        {/* Mobile: Empty space - BottomNav handles all mobile navigation */}
+        <div className="md:hidden" />
       </div>
     </header>
   );
