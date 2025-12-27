@@ -16,6 +16,7 @@ import TeamCompare from "./pages/TeamCompare";
 import Standings from "./pages/Standings";
 import PlayoffBracket from "./pages/PlayoffBracket";
 import LeagueStats from "./pages/LeagueStats";
+import MatchupFinder from "./pages/MatchupFinder";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +41,7 @@ const App = () => (
             <Route path="/standings" element={<Standings />} />
             <Route path="/playoffs" element={<PlayoffBracket />} />
             <Route path="/league-stats" element={<LeagueStats />} />
+            <Route path="/matchups" element={<MatchupFinder />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
