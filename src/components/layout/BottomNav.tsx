@@ -1,9 +1,9 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { 
-  Calendar, 
-  Trophy, 
-  LayoutDashboard, 
+import {
+  Calendar,
+  Trophy,
+  LayoutDashboard,
   Target,
   MoreHorizontal,
   CalendarDays,
@@ -31,7 +31,15 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command";
 import { useState } from "react";
 
 const mainNavItems = [
@@ -86,9 +94,15 @@ const allMoreItems = moreNavGroups.flatMap(g => g.items);
 
 export function BottomNav() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  
-  const isMoreActive = allMoreItems.some(item => location.pathname === item.href);
+
+  const isMoreActive = allMoreItems.some((item) => location.pathname === item.href);
+
+  const goTo = (href: string) => {
+    setOpen(false);
+    navigate(href);
+  };
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
@@ -98,7 +112,7 @@ export function BottomNav() {
           {mainNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.href;
-            
+
             return (
               <Link
                 key={item.href}
@@ -106,25 +120,17 @@ export function BottomNav() {
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all duration-200 min-w-[64px]",
                   "active:scale-95 touch-manipulation",
-                  isActive
-                    ? "text-primary"
-                    : "text-muted-foreground"
+                  isActive ? "text-primary" : "text-muted-foreground",
                 )}
               >
-                <Icon className={cn(
-                  "h-6 w-6 transition-transform",
-                  isActive && "scale-110"
-                )} />
-                <span className={cn(
-                  "text-[10px] font-medium",
-                  isActive && "font-semibold"
-                )}>
+                <Icon className={cn("h-6 w-6 transition-transform", isActive && "scale-110")} />
+                <span className={cn("text-[10px] font-medium", isActive && "font-semibold")}>
                   {item.label}
                 </span>
               </Link>
             );
           })}
-          
+
           {/* More button */}
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
@@ -132,63 +138,58 @@ export function BottomNav() {
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all duration-200 min-w-[64px]",
                   "active:scale-95 touch-manipulation",
-                  isMoreActive
-                    ? "text-primary"
-                    : "text-muted-foreground"
+                  isMoreActive ? "text-primary" : "text-muted-foreground",
                 )}
               >
-                <MoreHorizontal className={cn(
-                  "h-6 w-6 transition-transform",
-                  isMoreActive && "scale-110"
-                )} />
-                <span className={cn(
-                  "text-[10px] font-medium",
-                  isMoreActive && "font-semibold"
-                )}>
+                <MoreHorizontal className={cn("h-6 w-6 transition-transform", isMoreActive && "scale-110")} />
+                <span className={cn("text-[10px] font-medium", isMoreActive && "font-semibold")}>
                   More
                 </span>
               </button>
             </SheetTrigger>
+
             <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl px-0">
               <SheetHeader className="px-4 pb-2">
                 <SheetTitle>All Pages</SheetTitle>
               </SheetHeader>
-              <ScrollArea className="h-[calc(85vh-4rem)] px-4">
-                <div className="space-y-4 pb-safe">
-                  {moreNavGroups.map((group) => (
-                    <div key={group.label}>
-                      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
-                        {group.label}
-                      </h3>
-                      <div className="grid grid-cols-3 gap-2">
-                        {group.items.map((item) => {
-                          const Icon = item.icon;
-                          const isActive = location.pathname === item.href;
-                          return (
-                            <Link
-                              key={item.href}
-                              to={item.href}
-                              onClick={() => setOpen(false)}
-                              className={cn(
-                                "flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl text-center transition-all",
-                                "active:scale-95 touch-manipulation min-h-[72px]",
-                                isActive
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted/50 text-foreground hover:bg-muted"
-                              )}
-                            >
-                              <Icon className="h-5 w-5" />
-                              <span className="text-[11px] font-medium leading-tight">
-                                {item.label}
-                              </span>
-                            </Link>
-                          );
-                        })}
+
+              <div className="px-4 pb-safe">
+                <Command className="h-[calc(85vh-4rem)] rounded-2xl border border-border/60">
+                  <CommandInput placeholder="Search pages…" />
+
+                  <CommandList className="max-h-[calc(85vh-8rem)]">
+                    <CommandEmpty>No pages found.</CommandEmpty>
+
+                    {moreNavGroups.map((group, groupIndex) => (
+                      <div key={group.label}>
+                        <CommandGroup heading={group.label}>
+                          {group.items.map((item) => {
+                            const Icon = item.icon;
+                            const isActive = location.pathname === item.href;
+
+                            return (
+                              <CommandItem
+                                key={item.href}
+                                value={`${group.label} ${item.label}`}
+                                onSelect={() => goTo(item.href)}
+                                className={cn(
+                                  "py-3",
+                                  isActive && "bg-accent text-accent-foreground",
+                                )}
+                              >
+                                <Icon className="mr-2 h-4 w-4" />
+                                <span className="flex-1">{item.label}</span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+
+                        {groupIndex < moreNavGroups.length - 1 && <CommandSeparator />}
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
+                    ))}
+                  </CommandList>
+                </Command>
+              </div>
             </SheetContent>
           </Sheet>
         </div>
