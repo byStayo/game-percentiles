@@ -1,6 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, ChevronDown, BarChart3, Flame, Trophy, TrendingDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const navItems = [
   { href: "/", label: "Today" },
@@ -10,13 +16,20 @@ const navItems = [
   { href: "/playoffs", label: "Playoffs" },
   { href: "/teams", label: "Teams" },
   { href: "/compare", label: "Compare" },
-  { href: "/matchups", label: "Matchups" },
-  { href: "/league-stats", label: "League" },
-  { href: "/stats", label: "Stats" },
+];
+
+const analyticsItems = [
+  { href: "/matchups", label: "Matchup Finder", icon: BarChart3 },
+  { href: "/rankings", label: "Power Rankings", icon: Trophy },
+  { href: "/rivalries", label: "Rivalries", icon: Flame },
+  { href: "/ou-trends", label: "O/U Trends", icon: TrendingDown },
+  { href: "/league-stats", label: "League Stats", icon: TrendingUp },
+  { href: "/stats", label: "System Stats", icon: BarChart3 },
 ];
 
 export function Header() {
   const location = useLocation();
+  const isAnalyticsActive = analyticsItems.some(item => location.pathname === item.href);
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/40 bg-background/70 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/50">
@@ -47,6 +60,42 @@ export function Header() {
               {item.label}
             </Link>
           ))}
+          
+          {/* Analytics Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  "px-4 py-2 text-sm font-medium rounded-full transition-all duration-200 flex items-center gap-1",
+                  isAnalyticsActive
+                    ? "bg-foreground text-background shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                )}
+              >
+                Analytics
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {analyticsItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <DropdownMenuItem key={item.href} asChild>
+                    <Link
+                      to={item.href}
+                      className={cn(
+                        "flex items-center gap-2 cursor-pointer",
+                        location.pathname === item.href && "bg-muted"
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {item.label}
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </nav>
       </div>
     </header>
