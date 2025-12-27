@@ -1,12 +1,13 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Trophy, TrendingUp, TrendingDown, Search, Users, Calendar } from "lucide-react";
+import { Trophy, TrendingUp, Search, Users, Calendar, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { SportId } from "@/types";
 
@@ -323,16 +324,24 @@ export default function TeamSeasons() {
                         return (
                           <tr 
                             key={ts.id} 
-                            className="border-b border-border/30 hover:bg-muted/30 transition-colors"
+                            className="border-b border-border/30 hover:bg-muted/30 transition-colors group"
                           >
                             <td className="px-4 py-3 text-muted-foreground text-sm">
                               {idx + 1}
                             </td>
                             <td className="px-4 py-3">
-                              <div className="font-medium">{ts.team_name}</div>
-                              {ts.team_abbrev && (
-                                <div className="text-xs text-muted-foreground">{ts.team_abbrev}</div>
-                              )}
+                              <Link 
+                                to={`/team/${ts.team_id}`}
+                                className="flex items-center gap-2 hover:text-primary transition-colors"
+                              >
+                                <div>
+                                  <div className="font-medium">{ts.team_name}</div>
+                                  {ts.team_abbrev && (
+                                    <div className="text-xs text-muted-foreground">{ts.team_abbrev}</div>
+                                  )}
+                                </div>
+                                <ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />
+                              </Link>
                             </td>
                             {sportFilter === 'all' && (
                               <td className="px-4 py-3">
