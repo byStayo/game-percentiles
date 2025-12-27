@@ -20,13 +20,16 @@ export type Database = {
           dk_line_percentile: number | null
           dk_offered: boolean
           dk_total_line: number | null
+          franchise_matchup_id: string | null
           game_id: string
           id: string
           is_visible: boolean
           league_id: string | null
           n_h2h: number
+          n_used: number | null
           p05: number | null
           p95: number | null
+          segment_used: string | null
           sport_id: string
           updated_at: string
         }
@@ -35,13 +38,16 @@ export type Database = {
           dk_line_percentile?: number | null
           dk_offered?: boolean
           dk_total_line?: number | null
+          franchise_matchup_id?: string | null
           game_id: string
           id?: string
           is_visible?: boolean
           league_id?: string | null
           n_h2h?: number
+          n_used?: number | null
           p05?: number | null
           p95?: number | null
+          segment_used?: string | null
           sport_id: string
           updated_at?: string
         }
@@ -50,13 +56,16 @@ export type Database = {
           dk_line_percentile?: number | null
           dk_offered?: boolean
           dk_total_line?: number | null
+          franchise_matchup_id?: string | null
           game_id?: string
           id?: string
           is_visible?: boolean
           league_id?: string | null
           n_h2h?: number
+          n_used?: number | null
           p05?: number | null
           p95?: number | null
+          segment_used?: string | null
           sport_id?: string
           updated_at?: string
         }
@@ -77,6 +86,51 @@ export type Database = {
           },
           {
             foreignKeyName: "daily_edges_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      franchises: {
+        Row: {
+          canonical_name: string
+          created_at: string
+          founded_year: number | null
+          id: string
+          league_id: string | null
+          notes: string | null
+          sport_id: string
+        }
+        Insert: {
+          canonical_name: string
+          created_at?: string
+          founded_year?: number | null
+          id?: string
+          league_id?: string | null
+          notes?: string | null
+          sport_id: string
+        }
+        Update: {
+          canonical_name?: string
+          created_at?: string
+          founded_year?: number | null
+          id?: string
+          league_id?: string | null
+          notes?: string | null
+          sport_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "franchises_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "franchises_sport_id_fkey"
             columns: ["sport_id"]
             isOneToOne: false
             referencedRelation: "sports"
@@ -124,53 +178,85 @@ export type Database = {
       }
       games: {
         Row: {
+          away_franchise_id: string | null
           away_score: number | null
           away_team_id: string
+          decade: string | null
           final_total: number | null
+          home_franchise_id: string | null
           home_score: number | null
           home_team_id: string
           id: string
+          is_playoff: boolean | null
           last_seen_at: string
           league_id: string | null
           provider_game_key: string
+          season_year: number | null
           sport_id: string
           start_time_utc: string
           status: string
+          week_round: number | null
         }
         Insert: {
+          away_franchise_id?: string | null
           away_score?: number | null
           away_team_id: string
+          decade?: string | null
           final_total?: number | null
+          home_franchise_id?: string | null
           home_score?: number | null
           home_team_id: string
           id?: string
+          is_playoff?: boolean | null
           last_seen_at?: string
           league_id?: string | null
           provider_game_key: string
+          season_year?: number | null
           sport_id: string
           start_time_utc: string
           status?: string
+          week_round?: number | null
         }
         Update: {
+          away_franchise_id?: string | null
           away_score?: number | null
           away_team_id?: string
+          decade?: string | null
           final_total?: number | null
+          home_franchise_id?: string | null
           home_score?: number | null
           home_team_id?: string
           id?: string
+          is_playoff?: boolean | null
           last_seen_at?: string
           league_id?: string | null
           provider_game_key?: string
+          season_year?: number | null
           sport_id?: string
           start_time_utc?: string
           status?: string
+          week_round?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "games_away_franchise_id_fkey"
+            columns: ["away_franchise_id"]
+            isOneToOne: false
+            referencedRelation: "franchises"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "games_away_team_id_fkey"
             columns: ["away_team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_home_franchise_id_fkey"
+            columns: ["home_franchise_id"]
+            isOneToOne: false
+            referencedRelation: "franchises"
             referencedColumns: ["id"]
           },
           {
@@ -260,36 +346,68 @@ export type Database = {
       }
       matchup_games: {
         Row: {
+          decade: string | null
+          franchise_high_id: string | null
+          franchise_low_id: string | null
           game_id: string
           id: number
           league_id: string | null
           played_at_utc: string
+          season_year: number | null
           sport_id: string
           team_high_id: string
           team_low_id: string
+          team_version_high_id: string | null
+          team_version_low_id: string | null
           total: number
         }
         Insert: {
+          decade?: string | null
+          franchise_high_id?: string | null
+          franchise_low_id?: string | null
           game_id: string
           id?: number
           league_id?: string | null
           played_at_utc: string
+          season_year?: number | null
           sport_id: string
           team_high_id: string
           team_low_id: string
+          team_version_high_id?: string | null
+          team_version_low_id?: string | null
           total: number
         }
         Update: {
+          decade?: string | null
+          franchise_high_id?: string | null
+          franchise_low_id?: string | null
           game_id?: string
           id?: number
           league_id?: string | null
           played_at_utc?: string
+          season_year?: number | null
           sport_id?: string
           team_high_id?: string
           team_low_id?: string
+          team_version_high_id?: string | null
+          team_version_low_id?: string | null
           total?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "matchup_games_franchise_high_id_fkey"
+            columns: ["franchise_high_id"]
+            isOneToOne: false
+            referencedRelation: "franchises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matchup_games_franchise_low_id_fkey"
+            columns: ["franchise_low_id"]
+            isOneToOne: false
+            referencedRelation: "franchises"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "matchup_games_game_id_fkey"
             columns: ["game_id"]
@@ -325,10 +443,26 @@ export type Database = {
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "matchup_games_team_version_high_id_fkey"
+            columns: ["team_version_high_id"]
+            isOneToOne: false
+            referencedRelation: "team_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matchup_games_team_version_low_id_fkey"
+            columns: ["team_version_low_id"]
+            isOneToOne: false
+            referencedRelation: "team_versions"
+            referencedColumns: ["id"]
+          },
         ]
       }
       matchup_stats: {
         Row: {
+          franchise_high_id: string | null
+          franchise_low_id: string | null
           id: number
           league_id: string | null
           max_total: number | null
@@ -337,12 +471,15 @@ export type Database = {
           n_games: number
           p05: number | null
           p95: number | null
+          segment_key: string | null
           sport_id: string
           team_high_id: string
           team_low_id: string
           updated_at: string
         }
         Insert: {
+          franchise_high_id?: string | null
+          franchise_low_id?: string | null
           id?: number
           league_id?: string | null
           max_total?: number | null
@@ -351,12 +488,15 @@ export type Database = {
           n_games?: number
           p05?: number | null
           p95?: number | null
+          segment_key?: string | null
           sport_id: string
           team_high_id: string
           team_low_id: string
           updated_at?: string
         }
         Update: {
+          franchise_high_id?: string | null
+          franchise_low_id?: string | null
           id?: number
           league_id?: string | null
           max_total?: number | null
@@ -365,12 +505,27 @@ export type Database = {
           n_games?: number
           p05?: number | null
           p95?: number | null
+          segment_key?: string | null
           sport_id?: string
           team_high_id?: string
           team_low_id?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "matchup_stats_franchise_high_id_fkey"
+            columns: ["franchise_high_id"]
+            isOneToOne: false
+            referencedRelation: "franchises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matchup_stats_franchise_low_id_fkey"
+            columns: ["franchise_low_id"]
+            isOneToOne: false
+            referencedRelation: "franchises"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "matchup_stats_league_id_fkey"
             columns: ["league_id"]
@@ -474,6 +629,39 @@ export type Database = {
           },
         ]
       }
+      provider_raw: {
+        Row: {
+          endpoint: string
+          fetched_at: string
+          id: number
+          params_hash: string
+          payload_json: Json
+          provider: string
+          season_year: number | null
+          sport_id: string
+        }
+        Insert: {
+          endpoint: string
+          fetched_at?: string
+          id?: never
+          params_hash: string
+          payload_json: Json
+          provider?: string
+          season_year?: number | null
+          sport_id: string
+        }
+        Update: {
+          endpoint?: string
+          fetched_at?: string
+          id?: never
+          params_hash?: string
+          payload_json?: Json
+          provider?: string
+          season_year?: number | null
+          sport_id?: string
+        }
+        Relationships: []
+      }
       roster_snapshots: {
         Row: {
           continuity_score: number | null
@@ -521,6 +709,63 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      seasons: {
+        Row: {
+          created_at: string
+          end_date: string | null
+          games_count: number | null
+          id: string
+          is_complete: boolean | null
+          league_id: string | null
+          provider_season_key: string | null
+          season_year: number
+          sport_id: string
+          start_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_date?: string | null
+          games_count?: number | null
+          id?: string
+          is_complete?: boolean | null
+          league_id?: string | null
+          provider_season_key?: string | null
+          season_year: number
+          sport_id: string
+          start_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string | null
+          games_count?: number | null
+          id?: string
+          is_complete?: boolean | null
+          league_id?: string | null
+          provider_season_key?: string | null
+          season_year?: number
+          sport_id?: string
+          start_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seasons_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seasons_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
             referencedColumns: ["id"]
           },
         ]
@@ -603,6 +848,142 @@ export type Database = {
           },
         ]
       }
+      team_version_map: {
+        Row: {
+          created_at: string
+          franchise_id: string
+          id: string
+          league_id: string | null
+          provider: string
+          provider_team_key: string
+          sport_id: string
+          team_id: string | null
+          team_version_id: string
+        }
+        Insert: {
+          created_at?: string
+          franchise_id: string
+          id?: string
+          league_id?: string | null
+          provider?: string
+          provider_team_key: string
+          sport_id: string
+          team_id?: string | null
+          team_version_id: string
+        }
+        Update: {
+          created_at?: string
+          franchise_id?: string
+          id?: string
+          league_id?: string | null
+          provider?: string
+          provider_team_key?: string
+          sport_id?: string
+          team_id?: string | null
+          team_version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_version_map_franchise_id_fkey"
+            columns: ["franchise_id"]
+            isOneToOne: false
+            referencedRelation: "franchises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_version_map_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_version_map_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_version_map_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_version_map_team_version_id_fkey"
+            columns: ["team_version_id"]
+            isOneToOne: false
+            referencedRelation: "team_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_versions: {
+        Row: {
+          abbrev: string | null
+          city: string | null
+          created_at: string
+          display_name: string
+          effective_from: string
+          effective_to: string | null
+          franchise_id: string
+          id: string
+          league_id: string | null
+          notes: string | null
+          sport_id: string
+        }
+        Insert: {
+          abbrev?: string | null
+          city?: string | null
+          created_at?: string
+          display_name: string
+          effective_from: string
+          effective_to?: string | null
+          franchise_id: string
+          id?: string
+          league_id?: string | null
+          notes?: string | null
+          sport_id: string
+        }
+        Update: {
+          abbrev?: string | null
+          city?: string | null
+          created_at?: string
+          display_name?: string
+          effective_from?: string
+          effective_to?: string | null
+          franchise_id?: string
+          id?: string
+          league_id?: string | null
+          notes?: string | null
+          sport_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_versions_franchise_id_fkey"
+            columns: ["franchise_id"]
+            isOneToOne: false
+            referencedRelation: "franchises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_versions_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_versions_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teams: {
         Row: {
           abbrev: string | null
@@ -653,7 +1034,43 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      franchise_matchups: {
+        Row: {
+          first_game: string | null
+          franchise_high_id: string | null
+          franchise_high_name: string | null
+          franchise_low_id: string | null
+          franchise_low_name: string | null
+          games_10y: number | null
+          games_20y: number | null
+          last_game: string | null
+          sport_id: string | null
+          total_games: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matchup_games_franchise_high_id_fkey"
+            columns: ["franchise_high_id"]
+            isOneToOne: false
+            referencedRelation: "franchises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matchup_games_franchise_low_id_fkey"
+            columns: ["franchise_low_id"]
+            isOneToOne: false
+            referencedRelation: "franchises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matchup_games_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       [_ in never]: never
