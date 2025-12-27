@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.audit-data]
 verify_jwt = false
+
+[functions.backfill-all]
+verify_jwt = false
