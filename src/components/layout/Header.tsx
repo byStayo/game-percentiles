@@ -6,10 +6,10 @@ const navItems = [
   { href: "/", label: "Today" },
   { href: "/week", label: "Week" },
   { href: "/parlay", label: "Parlay" },
+  { href: "/standings", label: "Standings" },
   { href: "/teams", label: "Teams" },
   { href: "/compare", label: "Compare" },
   { href: "/stats", label: "Stats" },
-  { href: "/status", label: "Status" },
 ];
 
 export function Header() {
