@@ -119,6 +119,7 @@ const NHL_ABBREV_MAP: Record<string, string> = {
   'lak': 'los angeles kings',
   'min': 'minnesota wild',
   'mtl': 'montreal canadiens',
+  'nas': 'nashville predators',
   'nsh': 'nashville predators',
   'nj': 'new jersey devils',
   'njd': 'new jersey devils',
@@ -130,13 +131,15 @@ const NHL_ABBREV_MAP: Record<string, string> = {
   'sj': 'san jose sharks',
   'sjs': 'san jose sharks',
   'sea': 'seattle kraken',
-  'stl': 'st louis blues',
+  'stl': 'saint louis blues',
   'tb': 'tampa bay lightning',
   'tbl': 'tampa bay lightning',
   'tor': 'toronto maple leafs',
   'uta': 'utah hockey club',
   'van': 'vancouver canucks',
+  'veg': 'vegas golden knights',
   'vgk': 'vegas golden knights',
+  'was': 'washington capitals',
   'wsh': 'washington capitals',
   'wpg': 'winnipeg jets',
 }
@@ -210,6 +213,8 @@ const ALIAS_DICTIONARY: Record<string, string> = {
   'ny islanders': 'new york islanders',
   'nj devils': 'new jersey devils',
   'tb lightning': 'tampa bay lightning',
+  'st louis blues': 'saint louis blues',
+  'saint louis blues': 'saint louis blues',
   
   // Soccer
   'paris sg': 'paris saint germain',
@@ -245,17 +250,35 @@ function normalizeTeamName(name: string, sportId?: string): string {
   normalized = normalized.replace(/[^\w\s]/g, ' ')
   normalized = normalized.replace(/\s+/g, ' ').trim()
   
+  // Get the sport-specific abbreviation map
+  const abbrevMaps: Record<string, Record<string, string>> = {
+    nfl: NFL_ABBREV_MAP,
+    nba: NBA_ABBREV_MAP,
+    nhl: NHL_ABBREV_MAP,
+    mlb: MLB_ABBREV_MAP,
+  }
+  const sportMap = sportId ? abbrevMaps[sportId] : null
+  
   // Check if this is a sport abbreviation first (single word, all letters)
-  if (sportId && !normalized.includes(' ')) {
-    const abbrevMaps: Record<string, Record<string, string>> = {
-      nfl: NFL_ABBREV_MAP,
-      nba: NBA_ABBREV_MAP,
-      nhl: NHL_ABBREV_MAP,
-      mlb: MLB_ABBREV_MAP,
-    }
-    const sportMap = abbrevMaps[sportId]
-    if (sportMap && sportMap[normalized]) {
+  if (sportMap && !normalized.includes(' ')) {
+    if (sportMap[normalized]) {
       return sportMap[normalized]
+    }
+  }
+  
+  // For multi-word strings (like "Houston HOU" or "Los Angeles LAC"), 
+  // check if the last word is a sport abbreviation
+  if (sportMap && normalized.includes(' ')) {
+    const words = normalized.split(' ')
+    const lastWord = words[words.length - 1]
+    if (sportMap[lastWord]) {
+      // Replace the entire string with the canonical team name
+      return sportMap[lastWord]
+    }
+    // Also try abbreviation without context (for cases like "chicago chi")
+    const lastWordAbbrev = sportMap[lastWord]
+    if (lastWordAbbrev) {
+      return lastWordAbbrev
     }
   }
   
