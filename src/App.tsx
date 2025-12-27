@@ -10,6 +10,7 @@ import GameDetail from "./pages/GameDetail";
 import Status from "./pages/Status";
 import Stats from "./pages/Stats";
 import ParlayMachine from "./pages/ParlayMachine";
+import TeamSeasons from "./pages/TeamSeasons";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/status" element={<Status />} />
             <Route path="/stats" element={<Stats />} />
             <Route path="/parlay" element={<ParlayMachine />} />
+            <Route path="/teams" element={<TeamSeasons />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
