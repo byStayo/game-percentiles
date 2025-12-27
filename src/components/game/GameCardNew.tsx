@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { getTeamDisplayName, formatTimeET } from "@/lib/teamNames";
 import { PercentileBar } from "@/components/ui/percentile-bar";
 import { PickPill } from "@/components/game/PickPill";
+import { SegmentBadge } from "@/components/game/SegmentBadge";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
 import { Star, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -163,9 +164,18 @@ export function GameCard({ game }: GameCardProps) {
         </div>
       )}
 
-      {/* Footer */}
+      {/* Footer with segment info */}
       <div className="flex items-center justify-between pt-3 border-t border-border/40">
-        <span className="text-xs text-muted-foreground">{getFooterText()}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{getFooterText()}</span>
+          {game.segment_used && game.segment_used !== 'insufficient' && (
+            <SegmentBadge 
+              segment={game.segment_used} 
+              nUsed={game.n_used} 
+              showTooltip={false}
+            />
+          )}
+        </div>
         <ChevronRight className="h-4 w-4 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
       </div>
     </Link>

@@ -32,6 +32,8 @@ export interface TodayGame {
   dk_offered: boolean;
   dk_total_line: number | null;
   dk_line_percentile: number | null;
+  segment_used?: string;
+  n_used?: number;
   updated_at: string;
 }
 
@@ -65,6 +67,8 @@ export interface GameDetailResponse {
     dk_offered: boolean;
     dk_total_line: number | null;
     dk_line_percentile: number | null;
+    segment_used?: string;
+    n_used?: number;
   } | null;
   stats: {
     n_games: number;

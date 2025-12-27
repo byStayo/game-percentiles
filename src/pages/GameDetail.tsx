@@ -1,12 +1,13 @@
 import { useParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { format } from "date-fns";
-import { ArrowLeft, Calendar, Clock, History, BarChart3, Star } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, History, BarChart3, Star, Info } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
 import { useGameDetail } from "@/hooks/useApi";
 import { PercentileBar } from "@/components/ui/percentile-bar";
 import { PickPill } from "@/components/game/PickPill";
 import { WhatIsPPopover } from "@/components/game/WhatIsPPopover";
+import { SegmentBadge } from "@/components/game/SegmentBadge";
 import { GameDetailSkeleton } from "@/components/game/GameDetailSkeleton";
 import { Button } from "@/components/ui/button";
 import { HistoricalDistributionChart } from "@/components/game/HistoricalDistributionChart";
@@ -211,11 +212,19 @@ export default function GameDetail() {
               </div>
             )}
 
-            {/* Footer */}
-            <div className="px-5 py-3 border-t border-border/40 text-center text-xs text-muted-foreground">
-              {edge?.dk_offered && edge.dk_total_line !== null
-                ? `O/U ${edge.dk_total_line} • DraftKings`
-                : "DK unavailable"}
+            {/* Footer with segment info */}
+            <div className="px-5 py-3 border-t border-border/40 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                {edge?.dk_offered && edge.dk_total_line !== null
+                  ? `O/U ${edge.dk_total_line} • DraftKings`
+                  : "DK unavailable"}
+              </span>
+              {edge?.segment_used && edge.segment_used !== 'insufficient' && (
+                <SegmentBadge 
+                  segment={edge.segment_used} 
+                  nUsed={edge.n_used}
+                />
+              )}
             </div>
           </div>
 
