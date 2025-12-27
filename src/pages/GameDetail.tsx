@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { format } from "date-fns";
@@ -8,6 +9,7 @@ import { PercentileBar } from "@/components/ui/percentile-bar";
 import { PickPill } from "@/components/game/PickPill";
 import { WhatIsPPopover } from "@/components/game/WhatIsPPopover";
 import { SegmentBadge } from "@/components/game/SegmentBadge";
+import { SegmentSelector, type SegmentKey } from "@/components/game/SegmentSelector";
 import { GameDetailSkeleton } from "@/components/game/GameDetailSkeleton";
 import { Button } from "@/components/ui/button";
 import { HistoricalDistributionChart } from "@/components/game/HistoricalDistributionChart";
@@ -25,7 +27,8 @@ const sportColors: Record<SportId, { bg: string; text: string }> = {
 
 export default function GameDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, isLoading, error } = useGameDetail(id || "");
+  const [selectedSegment, setSelectedSegment] = useState<SegmentKey>("h2h_all");
+  const { data, isLoading, error } = useGameDetail(id || "", selectedSegment);
   const { isFavorite, toggleFavorite } = useFavoriteMatchups();
 
   if (isLoading) {
@@ -96,7 +99,11 @@ export default function GameDetail() {
               <ArrowLeft className="h-4 w-4" />
               Back
             </Link>
-            <WhatIsPPopover />
+            <SegmentSelector
+              value={selectedSegment}
+              onChange={setSelectedSegment}
+              disabled={isLoading}
+            />
           </div>
 
           {/* Main card - Hero pick first */}
