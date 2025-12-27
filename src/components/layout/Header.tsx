@@ -7,6 +7,7 @@ const navItems = [
   { href: "/week", label: "Week" },
   { href: "/parlay", label: "Parlay" },
   { href: "/standings", label: "Standings" },
+  { href: "/playoffs", label: "Playoffs" },
   { href: "/teams", label: "Teams" },
   { href: "/compare", label: "Compare" },
   { href: "/stats", label: "Stats" },
