@@ -44,3 +44,9 @@ verify_jwt = false
 
 [functions.backfill-all]
 verify_jwt = false
+
+[functions.backfill-rosters]
+verify_jwt = false
+
+[functions.daily-backfill]
+verify_jwt = false

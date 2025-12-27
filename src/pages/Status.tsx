@@ -396,6 +396,39 @@ function BackfillControls({ onComplete }: { onComplete: () => void }) {
           </Button>
         </div>
 
+        {/* Daily Backfill & Roster Continuity */}
+        <div className="p-4 bg-secondary/20 rounded-lg border border-border/50">
+          <div className="flex items-center gap-2 mb-3">
+            <HeartPulse className="h-4 w-4 text-muted-foreground" />
+            <h3 className="font-medium text-sm">Auto Maintenance</h3>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Daily backfill fills gaps and keeps data fresh. Roster backfill fetches ESPN rosters and computes continuity scores.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => triggerPipeline('daily-backfill', 'Daily Backfill')}
+              disabled={loading !== null}
+              className="gap-2"
+            >
+              {loading === 'daily-backfill' ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              Run Daily Backfill
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => triggerPipeline('backfill-rosters?sport=all&season=' + new Date().getFullYear(), 'Roster Backfill')}
+              disabled={loading !== null}
+              className="gap-2"
+            >
+              {loading?.includes('backfill-rosters') ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              Backfill Rosters
+            </Button>
+          </div>
+        </div>
+
         {/* Daily Pipeline Actions */}
         <div>
           <p className="text-sm text-muted-foreground mb-2">Daily Pipeline Actions</p>
