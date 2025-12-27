@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { format, formatDistanceToNow } from "date-fns";
-import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Database, Activity, Play, Loader2, Timer, Calendar, Zap } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Database, Activity, Play, Loader2, Timer, Calendar, Zap, Layers, TrendingUp, History } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
 import { useSystemStatus, useCronStatus } from "@/hooks/useApi";
 import type { CronJob } from "@/hooks/useApi";
@@ -9,11 +9,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Progress } from "@/components/ui/progress";
 
 const API_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
 const jobLabels: Record<string, { name: string; description: string }> = {
   backfill: { name: "Backfill", description: "Historical data import" },
+  "backfill-all": { name: "Full Backfill", description: "25+ years all sports" },
   ingest: { name: "Daily Ingest", description: "Today's games sync" },
   compute: { name: "Compute", description: "Percentile calculations" },
   odds_refresh: { name: "Odds Refresh", description: "DraftKings lines" },
@@ -246,26 +248,56 @@ function CronJobsSection() {
 }
 function BackfillControls({ onComplete }: { onComplete: () => void }) {
   const [loading, setLoading] = useState<string | null>(null);
+  const [backfillProgress, setBackfillProgress] = useState<Record<string, any>>({});
 
-  const triggerBackfill = async (sportId: string) => {
-    setLoading(sportId);
+  const triggerFullBackfill = async (sports: string[]) => {
+    const key = sports.join(',');
+    setLoading(key);
     try {
-      const response = await fetch(`${API_BASE}/backfill`, {
+      const response = await fetch(`${API_BASE}/backfill-all`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sport_id: sportId, seasons_override: 5 }),
+        body: JSON.stringify({ sports, store_raw: false }),
       });
       const data = await response.json();
       if (data.success) {
-        toast.success(`Backfill started for ${sportId.toUpperCase()}`, {
-          description: `Job #${data.job_id} processing 5 seasons in background`,
+        toast.success(`Full historical backfill started`, {
+          description: `Job #${data.job_id} - ${sports.map(s => s.toUpperCase()).join(', ')} (25+ years)`,
         });
+        setBackfillProgress(prev => ({
+          ...prev,
+          [key]: { job_id: data.job_id, status: 'running', started: new Date().toISOString() }
+        }));
         onComplete();
       } else {
         toast.error(`Backfill failed: ${data.error}`);
       }
     } catch (error) {
       toast.error(`Backfill error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const triggerRecomputeStats = async () => {
+    setLoading('recompute');
+    try {
+      const response = await fetch(`${API_BASE}/backfill-all`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recompute_only: true }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success(`Recomputing segmented stats`, {
+          description: `Job #${data.job_id} - ${data.segments?.join(', ')}`,
+        });
+        onComplete();
+      } else {
+        toast.error(`Recompute failed: ${data.error}`);
+      }
+    } catch (error) {
+      toast.error(`Recompute error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(null);
     }
@@ -301,19 +333,36 @@ function BackfillControls({ onComplete }: { onComplete: () => void }) {
     <div className="bg-card rounded-xl border border-border p-6 shadow-card">
       <div className="flex items-center gap-2 mb-4">
         <Play className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">Manual Controls</h2>
+        <h2 className="text-lg font-semibold">Data Controls</h2>
       </div>
       
-      <div className="space-y-4">
-        <div>
-          <p className="text-sm text-muted-foreground mb-2">Trigger Backfill (5 seasons)</p>
+      <div className="space-y-6">
+        {/* Full Historical Backfill */}
+        <div className="p-4 bg-secondary/20 rounded-lg border border-border/50">
+          <div className="flex items-center gap-2 mb-3">
+            <History className="h-4 w-4 text-muted-foreground" />
+            <h3 className="font-medium text-sm">Full Historical Backfill (25+ years)</h3>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Fetches all games from ESPN (1995-present). Creates franchise entities and computes segmented stats (3y, 5y, 10y, 20y, all-time).
+          </p>
           <div className="flex flex-wrap gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => triggerFullBackfill(['nba', 'nfl', 'nhl', 'mlb'])}
+              disabled={loading !== null}
+              className="gap-2"
+            >
+              {loading === 'nba,nfl,nhl,mlb' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Layers className="h-3 w-3" />}
+              All Sports
+            </Button>
             {sports.map((sport) => (
               <Button
                 key={sport}
                 variant="outline"
                 size="sm"
-                onClick={() => triggerBackfill(sport)}
+                onClick={() => triggerFullBackfill([sport])}
                 disabled={loading !== null}
                 className="gap-2"
               >
@@ -324,8 +373,30 @@ function BackfillControls({ onComplete }: { onComplete: () => void }) {
           </div>
         </div>
 
-        <div className="border-t border-border pt-4">
-          <p className="text-sm text-muted-foreground mb-2">Pipeline Actions</p>
+        {/* Segment Stats Recompute */}
+        <div className="p-4 bg-secondary/20 rounded-lg border border-border/50">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <h3 className="font-medium text-sm">Recompute Segment Stats</h3>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Recalculates percentile stats for all segments (h2h_3y, h2h_5y, h2h_10y, h2h_20y, h2h_all) without fetching new data.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={triggerRecomputeStats}
+            disabled={loading !== null}
+            className="gap-2"
+          >
+            {loading === 'recompute' ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+            Recompute All Segments
+          </Button>
+        </div>
+
+        {/* Daily Pipeline Actions */}
+        <div>
+          <p className="text-sm text-muted-foreground mb-2">Daily Pipeline Actions</p>
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
