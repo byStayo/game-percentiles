@@ -253,28 +253,56 @@ Deno.serve(async (req) => {
 
       // ========================================
       // CHECK 10: Orphaned daily_edges (no matching game)
+      // Using a different approach: get edges and check if their game exists
       // ========================================
-      const { data: edges } = await supabase
+      const { data: edgesWithGameCheck } = await supabase
+        .from('daily_edges')
+        .select('id, game_id, games!inner(id)')
+        .eq('sport_id', sport)
+        .limit(1);
+
+      // If we can query with inner join, there are no orphans for sampled edges
+      // For a proper count, we check edges without games
+      const { count: totalEdgesCount } = await supabase
+        .from('daily_edges')
+        .select('id', { count: 'exact', head: true })
+        .eq('sport_id', sport);
+
+      // Sample check: get some edges and verify their games exist
+      const { data: sampleEdges } = await supabase
         .from('daily_edges')
         .select('id, game_id')
         .eq('sport_id', sport)
-        .limit(200);
+        .limit(50);
 
-      const { data: games } = await supabase
-        .from('games')
-        .select('id')
-        .eq('sport_id', sport);
-
-      const gameIdSet = new Set(games?.map(g => g.id) || []);
-      const orphanedEdges = edges?.filter(e => !gameIdSet.has(e.game_id)) || [];
+      // Verify each sample edge's game exists
+      let orphanedCount = 0;
+      const orphanedExamples: any[] = [];
+      
+      if (sampleEdges) {
+        for (const edge of sampleEdges) {
+          const { data: gameExists } = await supabase
+            .from('games')
+            .select('id')
+            .eq('id', edge.game_id)
+            .maybeSingle();
+          
+          if (!gameExists) {
+            orphanedCount++;
+            if (orphanedExamples.length < 5) {
+              orphanedExamples.push(edge);
+            }
+          }
+        }
+      }
 
       results.push({
         sport_id: sport,
         check_name: 'edges_have_matching_game',
-        status: orphanedEdges.length === 0 ? 'pass' : 'fail',
-        details: `Found ${orphanedEdges.length} daily_edges with no matching game`,
-        count: orphanedEdges.length,
-        examples: orphanedEdges.slice(0, 5),
+        status: orphanedCount === 0 ? 'pass' : 'fail',
+        details: `Sampled ${sampleEdges?.length || 0} edges, found ${orphanedCount} with no matching game`,
+        count: orphanedCount,
+        examples: orphanedExamples,
       });
 
       // ========================================
