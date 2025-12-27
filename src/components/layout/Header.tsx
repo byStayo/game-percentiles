@@ -73,6 +73,7 @@ const analyticsGroup: NavGroup = {
   label: "Analytics",
   items: [
     { href: "/analysis", label: "Matchup Analysis", icon: Target },
+    { href: "/accuracy", label: "Accuracy Tracking", icon: Target },
     { href: "/matchups", label: "Matchup Finder", icon: Target },
     { href: "/rivalries", label: "Rivalries", icon: Flame },
     { href: "/ou-trends", label: "O/U Trends", icon: TrendingDown },

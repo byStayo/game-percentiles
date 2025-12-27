@@ -25,6 +25,7 @@ import PowerRankings from "./pages/PowerRankings";
 import Streaks from "./pages/Streaks";
 import BetSimulator from "./pages/BetSimulator";
 import BestBets from "./pages/BestBets";
+import AccuracyTracking from "./pages/AccuracyTracking";
 import FranchiseManagement from "./pages/FranchiseManagement";
 import NotFound from "./pages/NotFound";
 
@@ -59,6 +60,7 @@ const App = () => (
             <Route path="/rankings" element={<PowerRankings />} />
             <Route path="/streaks" element={<Streaks />} />
             <Route path="/simulator" element={<BetSimulator />} />
+            <Route path="/accuracy" element={<AccuracyTracking />} />
             <Route path="/franchises" element={<FranchiseManagement />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
