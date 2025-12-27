@@ -46,7 +46,7 @@ export default function Index() {
   const [viewMode, setViewMode] = useState<ViewMode>("all");
   const [sortBy, setSortBy] = useState<SortOption>("edge");
   const [onlyPicks, setOnlyPicks] = useState(true);
-  const [hideLowSample, setHideLowSample] = useState(true);
+  const [hideWeakData, setHideWeakData] = useState(true);
 
   // Swipe gesture handlers for date navigation
   const goToPreviousDay = useCallback(() => {
@@ -106,8 +106,8 @@ export default function Index() {
   const filteredAndSortedGames = useMemo(() => {
     let games = [...displayGames];
 
-    // Filter: hide low sample games
-    if (hideLowSample) {
+    // Filter: hide games with weak data quality (low/insufficient = n < 5)
+    if (hideWeakData) {
       games = games.filter((g) => g.n_h2h >= 5);
     }
 
@@ -139,7 +139,7 @@ export default function Index() {
     }
 
     return games;
-  }, [displayGames, sortBy, onlyPicks, hideLowSample]);
+  }, [displayGames, sortBy, onlyPicks, hideWeakData]);
 
   // Sport counts
   const sportCounts = useMemo(
@@ -250,12 +250,12 @@ export default function Index() {
 
               <label className="flex items-center gap-3 cursor-pointer touch-manipulation">
                 <Switch
-                  id="hide-low"
-                  checked={hideLowSample}
-                  onCheckedChange={setHideLowSample}
+                  id="hide-weak-data"
+                  checked={hideWeakData}
+                  onCheckedChange={setHideWeakData}
                   className="scale-110"
                 />
-                <span className="text-sm font-medium">Hide n&lt;5</span>
+                <span className="text-sm font-medium">Good data only</span>
               </label>
 
               <div className="ml-auto">
