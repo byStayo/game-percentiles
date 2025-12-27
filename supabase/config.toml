@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.compute-all-segments]
 verify_jwt = false
+
+[functions.instant-backfill]
+verify_jwt = false
