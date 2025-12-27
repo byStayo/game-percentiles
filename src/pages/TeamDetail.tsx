@@ -2,12 +2,14 @@ import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout/Layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, Trophy, TrendingUp, TrendingDown, Calendar, Target, Users, ChevronRight } from "lucide-react";
+import { ArrowLeft, Trophy, TrendingUp, TrendingDown, Calendar, Target, Users, ChevronRight, RefreshCw, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { SportId } from "@/types";
 import {
@@ -16,11 +18,13 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   ResponsiveContainer,
   BarChart,
   Bar,
   Legend,
+  AreaChart,
+  Area,
 } from "recharts";
 import { format } from "date-fns";
 
@@ -65,6 +69,21 @@ interface H2HSummary {
   wins: number;
   losses: number;
   games: H2HGame[];
+}
+
+interface RosterSnapshot {
+  id: string;
+  season_year: number;
+  continuity_score: number | null;
+  era_tag: string | null;
+  notes: string | null;
+  key_players: Array<{
+    id: string;
+    name: string;
+    position: string;
+    jersey: string;
+    experience: number;
+  }> | null;
 }
 
 const sportLabels: Record<SportId, string> = {
@@ -172,6 +191,22 @@ export default function TeamDetail() {
     enabled: !!teamId,
   });
 
+  // Fetch roster snapshots for continuity timeline
+  const { data: rosterSnapshots, isLoading: rosterLoading } = useQuery({
+    queryKey: ['roster-snapshots', teamId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('roster_snapshots')
+        .select('id, season_year, continuity_score, era_tag, notes, key_players')
+        .eq('team_id', teamId!)
+        .order('season_year', { ascending: true });
+
+      if (error) throw error;
+      return (data || []) as RosterSnapshot[];
+    },
+    enabled: !!teamId,
+  });
+
   // Group H2H by opponent
   const h2hSummaries = useMemo(() => {
     if (!h2hGames) return [];
@@ -202,7 +237,29 @@ export default function TeamDetail() {
     );
   }, [h2hGames]);
 
-  const isLoading = teamLoading || seasonsLoading || h2hLoading;
+  const isLoading = teamLoading || seasonsLoading || h2hLoading || rosterLoading;
+
+  // Roster continuity chart data
+  const rosterChartData = useMemo(() => {
+    if (!rosterSnapshots?.length) return [];
+    return rosterSnapshots.map(s => ({
+      year: s.season_year,
+      continuity: s.continuity_score || 0,
+      era: s.era_tag?.split(' ')[0] || 'unknown',
+    }));
+  }, [rosterSnapshots]);
+
+  // Current era info
+  const currentEra = useMemo(() => {
+    if (!rosterSnapshots?.length) return null;
+    const latest = rosterSnapshots[rosterSnapshots.length - 1];
+    return {
+      tag: latest.era_tag,
+      notes: latest.notes,
+      continuity: latest.continuity_score,
+      keyPlayers: latest.key_players,
+    };
+  }, [rosterSnapshots]);
 
   // Calculate career stats
   const careerStats = useMemo(() => {
@@ -372,7 +429,7 @@ export default function TeamDetail() {
                               <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
                               <XAxis dataKey="year" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
                               <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                              <Tooltip
+                              <RechartsTooltip
                                 contentStyle={{
                                   backgroundColor: 'hsl(var(--card))',
                                   border: '1px solid hsl(var(--border))',
@@ -400,7 +457,7 @@ export default function TeamDetail() {
                               <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
                               <XAxis dataKey="year" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
                               <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                              <Tooltip
+                              <RechartsTooltip
                                 contentStyle={{
                                   backgroundColor: 'hsl(var(--card))',
                                   border: '1px solid hsl(var(--border))',
@@ -592,6 +649,172 @@ export default function TeamDetail() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Roster Continuity Section */}
+                <Card className="bg-card border-border/60 mt-8">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <RefreshCw className="h-5 w-5" />
+                      Roster Continuity
+                    </CardTitle>
+                    <CardDescription>
+                      Track how team composition changes over seasons. Higher continuity means historical data is more applicable.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {rosterSnapshots && rosterSnapshots.length > 0 ? (
+                      <div className="space-y-6">
+                        {/* Current Era Summary */}
+                        {currentEra && (
+                          <div className="p-4 rounded-xl bg-muted/30">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <p className="text-sm text-muted-foreground">Current Era</p>
+                                <p className="text-xl font-bold">{currentEra.tag || 'Unknown'}</p>
+                                {currentEra.notes && (
+                                  <p className="text-sm text-muted-foreground mt-1">{currentEra.notes}</p>
+                                )}
+                              </div>
+                              {currentEra.continuity !== null && (
+                                <div className={cn(
+                                  "text-center px-4 py-2 rounded-lg",
+                                  currentEra.continuity >= 70 ? "bg-status-live/10" :
+                                  currentEra.continuity >= 40 ? "bg-yellow-500/10" : "bg-destructive/10"
+                                )}>
+                                  <p className={cn(
+                                    "text-3xl font-bold",
+                                    currentEra.continuity >= 70 ? "text-status-live" :
+                                    currentEra.continuity >= 40 ? "text-yellow-500" : "text-destructive"
+                                  )}>
+                                    {currentEra.continuity.toFixed(0)}%
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">Continuity</p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Key Players */}
+                            {currentEra.keyPlayers && currentEra.keyPlayers.length > 0 && (
+                              <div className="mt-4 pt-3 border-t border-border/40">
+                                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Key Players</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {currentEra.keyPlayers.slice(0, 5).map((player) => (
+                                    <Badge key={player.id} variant="secondary" className="text-xs">
+                                      {player.name}
+                                      {player.position && <span className="ml-1 text-muted-foreground">({player.position})</span>}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Continuity Timeline Chart */}
+                        {rosterChartData.length > 1 && (
+                          <div className="h-48">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <AreaChart data={rosterChartData}>
+                                <defs>
+                                  <linearGradient id="continuityGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                                  </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
+                                <XAxis dataKey="year" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                                <YAxis domain={[0, 100]} className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                                <RechartsTooltip
+                                  contentStyle={{
+                                    backgroundColor: 'hsl(var(--card))',
+                                    border: '1px solid hsl(var(--border))',
+                                    borderRadius: '8px',
+                                  }}
+                                  formatter={(value: number) => [`${value.toFixed(1)}%`, 'Continuity']}
+                                />
+                                <Area
+                                  type="monotone"
+                                  dataKey="continuity"
+                                  stroke="hsl(var(--primary))"
+                                  strokeWidth={2}
+                                  fill="url(#continuityGradient)"
+                                />
+                              </AreaChart>
+                            </ResponsiveContainer>
+                          </div>
+                        )}
+
+                        {/* Era Timeline */}
+                        <div>
+                          <p className="text-sm font-medium mb-3">Era Timeline</p>
+                          <div className="flex gap-1 overflow-x-auto pb-2">
+                            {rosterSnapshots.map((snapshot, idx) => {
+                              const score = snapshot.continuity_score || 0;
+                              const eraType = snapshot.era_tag?.split(' ')[0]?.toLowerCase() || 'unknown';
+                              
+                              return (
+                                <Tooltip key={snapshot.id}>
+                                  <TooltipTrigger asChild>
+                                    <div
+                                      className={cn(
+                                        "flex-1 min-w-[40px] h-8 rounded-md flex items-center justify-center cursor-pointer transition-all hover:ring-2 hover:ring-primary/50",
+                                        eraType === 'stable' && "bg-status-live/20",
+                                        eraType === 'transition' && "bg-yellow-500/20",
+                                        eraType === 'retooling' && "bg-orange-500/20",
+                                        eraType === 'rebuild' && "bg-destructive/20",
+                                        !['stable', 'transition', 'retooling', 'rebuild'].includes(eraType) && "bg-muted"
+                                      )}
+                                    >
+                                      <span className="text-2xs font-medium text-muted-foreground">
+                                        {snapshot.season_year.toString().slice(-2)}
+                                      </span>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-xs">
+                                    <div className="space-y-1">
+                                      <p className="font-medium">{snapshot.season_year}</p>
+                                      <p className="text-sm">Continuity: <span className="font-medium">{score.toFixed(0)}%</span></p>
+                                      {snapshot.era_tag && (
+                                        <Badge variant="outline" className="text-xs">{snapshot.era_tag}</Badge>
+                                      )}
+                                      {snapshot.notes && (
+                                        <p className="text-xs text-muted-foreground">{snapshot.notes}</p>
+                                      )}
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              );
+                            })}
+                          </div>
+                          <div className="flex flex-wrap gap-3 mt-3 text-xs">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-3 h-3 rounded bg-status-live/20" />
+                              <span className="text-muted-foreground">Stable (70%+)</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-3 h-3 rounded bg-yellow-500/20" />
+                              <span className="text-muted-foreground">Transition (50-70%)</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-3 h-3 rounded bg-orange-500/20" />
+                              <span className="text-muted-foreground">Retooling (30-50%)</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-3 h-3 rounded bg-destructive/20" />
+                              <span className="text-muted-foreground">Rebuild (&lt;30%)</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <RefreshCw className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>No roster continuity data available.</p>
+                        <p className="text-sm">Run the roster backfill from the Status page to populate this data.</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </>
             )}
           </>
