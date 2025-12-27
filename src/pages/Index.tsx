@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
-import { format } from "date-fns";
+import { format, addDays, subDays } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { Layout } from "@/components/layout/Layout";
 import { DatePickerInline } from "@/components/ui/date-picker-inline";
@@ -9,6 +9,7 @@ import { GameCardSkeleton } from "@/components/game/GameCardSkeleton";
 import { EmptyState } from "@/components/game/EmptyState";
 import { ErrorState } from "@/components/game/ErrorState";
 import { WhatIsPPopover } from "@/components/game/WhatIsPPopover";
+import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useTodayGames, TodayGame } from "@/hooks/useApi";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -46,6 +47,21 @@ export default function Index() {
   const [sortBy, setSortBy] = useState<SortOption>("edge");
   const [onlyPicks, setOnlyPicks] = useState(true);
   const [hideLowSample, setHideLowSample] = useState(true);
+
+  // Swipe gesture handlers for date navigation
+  const goToPreviousDay = useCallback(() => {
+    setSelectedDate((prev) => subDays(prev, 1));
+  }, []);
+
+  const goToNextDay = useCallback(() => {
+    setSelectedDate((prev) => addDays(prev, 1));
+  }, []);
+
+  const { onTouchStart, onTouchEnd } = useSwipeGesture({
+    onSwipeLeft: goToNextDay,
+    onSwipeRight: goToPreviousDay,
+    threshold: 60,
+  });
 
   // Fetch all sports data
   const nflQuery = useTodayGames(selectedDate, "nfl");
@@ -150,7 +166,11 @@ export default function Index() {
       </Helmet>
 
       <Layout>
-        <div className="space-y-6 animate-fade-in">
+        <div 
+          className="space-y-6 animate-fade-in"
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+        >
           {/* Hero section - minimal */}
           <div className="text-center space-y-1 pt-2 sm:pt-4">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight">
