@@ -5,12 +5,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ESPN Scoreboard API URLs - we'll search historical dates
-const ESPN_SCOREBOARD_URLS: Record<string, string> = {
-  nba: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
-  nfl: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
-  nhl: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
-  mlb: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
+// ESPN Team Schedule API - bulk fetch all games for a team
+const ESPN_SCHEDULE_URLS: Record<string, string> = {
+  nba: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams",
+  nfl: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams",
+  nhl: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams",
+  mlb: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams",
 };
 
 // ESPN abbreviation normalization
@@ -96,126 +96,141 @@ function computeDecade(year: number): string {
   return `${decadeStart}s`;
 }
 
-// Generate season date ranges for a sport going back N years
-function getSeasonDates(sport: string, yearsBack: number): { startDate: Date; endDate: Date }[] {
-  const currentYear = new Date().getFullYear();
-  const seasons: { startDate: Date; endDate: Date }[] = [];
+// Get ESPN team ID from teams list
+async function getEspnTeamId(sport: string, teamAbbrev: string): Promise<string | null> {
+  const baseUrl = ESPN_SCHEDULE_URLS[sport];
+  if (!baseUrl) return null;
 
-  for (let i = 0; i < yearsBack; i++) {
-    const year = currentYear - i;
-    let start: Date;
-    let end: Date;
+  try {
+    const response = await fetch(baseUrl, { headers: { Accept: "application/json" } });
+    if (!response.ok) return null;
 
-    switch (sport) {
-      case "nba":
-        start = new Date(year - 1, 9, 15); // Oct 15
-        end = new Date(year, 5, 30);       // June 30
-        break;
-      case "nfl":
-        start = new Date(year, 8, 1);      // Sept 1
-        end = new Date(year + 1, 1, 15);   // Feb 15
-        break;
-      case "nhl":
-        start = new Date(year - 1, 9, 1);  // Oct 1
-        end = new Date(year, 5, 30);       // June 30
-        break;
-      case "mlb":
-        start = new Date(year, 2, 20);     // March 20
-        end = new Date(year, 10, 15);      // Nov 15
-        break;
-      default:
-        continue;
+    const data = await response.json();
+    for (const team of data.sports?.[0]?.leagues?.[0]?.teams || []) {
+      const abbrev = normalizeAbbrev(sport, team.team?.abbreviation);
+      if (abbrev === teamAbbrev) {
+        return team.team?.id;
+      }
     }
-
-    // Don't go into the future
-    const today = new Date();
-    if (end > today) end = today;
-    if (start > today) continue;
-
-    seasons.push({ startDate: start, endDate: end });
+  } catch (e) {
+    console.log(`[HYDRATE] Error fetching ESPN teams: ${e}`);
   }
 
-  return seasons;
+  return null;
 }
 
-// Fetch matchup games for a specific pair of teams from ESPN
-async function fetchMatchupGamesFromESPN(
+// OPTIMIZED: Fetch all games from team schedule endpoint (bulk fetch)
+async function fetchTeamSchedule(
+  sport: string,
+  espnTeamId: string,
+  season: number
+): Promise<ParsedGame[]> {
+  const sportPath: Record<string, string> = {
+    nba: "basketball/nba",
+    nfl: "football/nfl",
+    nhl: "hockey/nhl",
+    mlb: "baseball/mlb",
+  };
+
+  const path = sportPath[sport];
+  if (!path) return [];
+
+  // Fetch team schedule for the season
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${path}/teams/${espnTeamId}/schedule?season=${season}`;
+  
+  try {
+    const response = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!response.ok) {
+      console.log(`[HYDRATE] Schedule fetch failed: ${response.status} for ${url}`);
+      return [];
+    }
+
+    const data = await response.json();
+    const games: ParsedGame[] = [];
+
+    for (const event of data.events || []) {
+      // Only include completed games
+      if (!event.competitions?.[0] || event.status?.type?.name !== "STATUS_FINAL") continue;
+
+      const competition = event.competitions[0];
+      const homeTeam = competition.competitors?.find((c: any) => c.homeAway === "home");
+      const awayTeam = competition.competitors?.find((c: any) => c.homeAway === "away");
+      if (!homeTeam || !awayTeam) continue;
+
+      const homeScore = parseInt(homeTeam.score?.value || homeTeam.score, 10);
+      const awayScore = parseInt(awayTeam.score?.value || awayTeam.score, 10);
+      if (isNaN(homeScore) || isNaN(awayScore)) continue;
+
+      const homeAbbrev = normalizeAbbrev(sport, homeTeam.team?.abbreviation);
+      const awayAbbrev = normalizeAbbrev(sport, awayTeam.team?.abbreviation);
+
+      games.push({
+        espnId: event.id,
+        homeAbbrev,
+        awayAbbrev,
+        homeScore,
+        awayScore,
+        startTimeUtc: event.date,
+        seasonYear: event.season?.year || season,
+        isPlayoff: event.seasonType?.type === 3 || event.season?.type === 3,
+      });
+    }
+
+    return games;
+  } catch (e) {
+    console.log(`[HYDRATE] Error fetching schedule: ${e}`);
+    return [];
+  }
+}
+
+// Fetch matchup games using bulk team schedule API
+async function fetchMatchupGamesOptimized(
   sport: string,
   teamAAbbrev: string,
   teamBAbbrev: string,
   yearsBack: number
 ): Promise<ParsedGame[]> {
-  const baseUrl = ESPN_SCOREBOARD_URLS[sport];
-  if (!baseUrl) return [];
+  console.log(`[HYDRATE] Using optimized bulk schedule fetch for ${teamAAbbrev} vs ${teamBAbbrev}`);
 
-  const matchupGames: ParsedGame[] = [];
-  const seasons = getSeasonDates(sport, yearsBack);
-  const today = new Date();
+  // Get ESPN team ID for team A
+  const espnTeamId = await getEspnTeamId(sport, teamAAbbrev);
+  if (!espnTeamId) {
+    console.log(`[HYDRATE] Could not find ESPN ID for ${teamAAbbrev}`);
+    return [];
+  }
 
-  // For each season, sample key dates (weekly for NFL, every 3 days for others)
-  for (const season of seasons) {
-    let currentDate = new Date(season.startDate);
-    const stepDays = sport === "nfl" ? 7 : 3;
+  const currentYear = new Date().getFullYear();
+  const allGames: ParsedGame[] = [];
+  const seen = new Set<string>();
 
-    while (currentDate <= season.endDate && currentDate <= today) {
-      const dateStr = currentDate.toISOString().split("T")[0].replace(/-/g, "");
-      const url = `${baseUrl}?dates=${dateStr}`;
+  // Fetch schedules for each year (parallel fetch)
+  const seasonYears: number[] = [];
+  for (let i = 0; i < yearsBack; i++) {
+    // For winter sports (NBA, NHL, NFL), the season year is the ending year
+    const year = currentYear - i;
+    seasonYears.push(year);
+  }
 
-      try {
-        const response = await fetch(url, { headers: { Accept: "application/json" } });
-        if (response.ok) {
-          const data = await response.json();
-          
-          for (const event of data.events || []) {
-            const competition = event.competitions?.[0];
-            if (!competition || !event.status?.type?.completed) continue;
+  const schedulePromises = seasonYears.map(year => fetchTeamSchedule(sport, espnTeamId, year));
+  const scheduleResults = await Promise.all(schedulePromises);
 
-            const homeTeam = competition.competitors.find((c: any) => c.homeAway === "home");
-            const awayTeam = competition.competitors.find((c: any) => c.homeAway === "away");
-            if (!homeTeam || !awayTeam) continue;
+  for (const games of scheduleResults) {
+    for (const game of games) {
+      // Filter to only matchups between these two teams
+      const isMatchup = (
+        (game.homeAbbrev === teamAAbbrev && game.awayAbbrev === teamBAbbrev) ||
+        (game.homeAbbrev === teamBAbbrev && game.awayAbbrev === teamAAbbrev)
+      );
 
-            const homeAbbrev = normalizeAbbrev(sport, homeTeam.team.abbreviation);
-            const awayAbbrev = normalizeAbbrev(sport, awayTeam.team.abbreviation);
-
-            // Check if this is the matchup we want
-            const isMatchup = (
-              (homeAbbrev === teamAAbbrev && awayAbbrev === teamBAbbrev) ||
-              (homeAbbrev === teamBAbbrev && awayAbbrev === teamAAbbrev)
-            );
-
-            if (!isMatchup) continue;
-
-            const homeScore = parseInt(homeTeam.score, 10);
-            const awayScore = parseInt(awayTeam.score, 10);
-            if (isNaN(homeScore) || isNaN(awayScore)) continue;
-
-            matchupGames.push({
-              espnId: event.id,
-              homeAbbrev,
-              awayAbbrev,
-              homeScore,
-              awayScore,
-              startTimeUtc: event.date,
-              seasonYear: event.season?.year || currentDate.getFullYear(),
-              isPlayoff: event.season?.type === 3,
-            });
-          }
-        }
-      } catch {
-        // Continue on error
+      if (isMatchup && !seen.has(game.espnId)) {
+        seen.add(game.espnId);
+        allGames.push(game);
       }
-
-      currentDate.setDate(currentDate.getDate() + stepDays);
     }
   }
 
-  // Remove duplicates by espnId
-  const seen = new Set<string>();
-  return matchupGames.filter(g => {
-    if (seen.has(g.espnId)) return false;
-    seen.add(g.espnId);
-    return true;
-  });
+  console.log(`[HYDRATE] Found ${allGames.length} matchup games via bulk schedule API`);
+  return allGames;
 }
 
 // Insert games into DB, return how many were added
@@ -226,6 +241,8 @@ async function insertMatchupGames(
 ): Promise<{ inserted: number; skipped: number }> {
   let inserted = 0;
   let skipped = 0;
+
+  if (games.length === 0) return { inserted, skipped };
 
   // Get existing game keys
   const gameKeys = games.map(g => `espn-${sport}-${g.espnId}`);
@@ -427,7 +444,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`[HYDRATE] Starting hydration for ${sport_id}: ${team_a_id} vs ${team_b_id}, ${years_back} years`);
+    console.log(`[HYDRATE] Starting optimized hydration for ${sport_id}: ${team_a_id} vs ${team_b_id}, ${years_back} years`);
 
     // Get team abbreviations
     const { data: teamA } = await supabase.from("teams").select("abbrev").eq("id", team_a_id).single();
@@ -466,14 +483,14 @@ Deno.serve(async (req) => {
       .from("job_runs")
       .insert({
         job_name: "hydrate-matchup",
-        details: { sport_id, team_a: teamA.abbrev, team_b: teamB.abbrev, years_back },
+        details: { sport_id, team_a: teamA.abbrev, team_b: teamB.abbrev, years_back, optimized: true },
       })
       .select("id")
       .single();
 
-    // Fetch historical matchup games from ESPN
-    const espnGames = await fetchMatchupGamesFromESPN(sport_id, teamA.abbrev, teamB.abbrev, years_back);
-    console.log(`[HYDRATE] Found ${espnGames.length} games from ESPN`);
+    // OPTIMIZED: Use bulk team schedule API instead of day-by-day scraping
+    const espnGames = await fetchMatchupGamesOptimized(sport_id, teamA.abbrev, teamB.abbrev, years_back);
+    console.log(`[HYDRATE] Found ${espnGames.length} games from ESPN bulk API`);
 
     // Insert new games
     const { inserted, skipped } = await insertMatchupGames(supabase, sport_id, espnGames);
@@ -501,6 +518,7 @@ Deno.serve(async (req) => {
             team_a: teamA.abbrev,
             team_b: teamB.abbrev,
             years_back,
+            optimized: true,
             espn_found: espnGames.length,
             inserted,
             skipped,
@@ -523,6 +541,7 @@ Deno.serve(async (req) => {
         n_games_total: n_games,
         segments_updated,
         hydrated: inserted > 0,
+        optimized: true,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
