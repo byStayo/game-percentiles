@@ -1,15 +1,19 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { format } from "date-fns";
-import { ArrowLeft, Calendar, Clock, History, BarChart3, Star, Info } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft, Calendar, Clock, History, BarChart3, Star, Shield } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
 import { useGameDetail } from "@/hooks/useApi";
+import { supabase } from "@/integrations/supabase/client";
 import { PercentileBar } from "@/components/ui/percentile-bar";
 import { PickPill } from "@/components/game/PickPill";
 import { WhatIsPPopover } from "@/components/game/WhatIsPPopover";
 import { SegmentBadge } from "@/components/game/SegmentBadge";
-import { SegmentSelector, type SegmentKey } from "@/components/game/SegmentSelector";
+import { SegmentSelector, type SegmentKey, type SegmentAvailability, getRecommendedSegment } from "@/components/game/SegmentSelector";
+import { ConfidenceBadge } from "@/components/game/ConfidenceBadge";
+import { RecencyIndicator } from "@/components/game/RecencyIndicator";
 import { GameDetailSkeleton } from "@/components/game/GameDetailSkeleton";
 import { Button } from "@/components/ui/button";
 import { HistoricalDistributionChart } from "@/components/game/HistoricalDistributionChart";
@@ -30,6 +34,72 @@ export default function GameDetail() {
   const [selectedSegment, setSelectedSegment] = useState<SegmentKey>("h2h_all");
   const { data, isLoading, error } = useGameDetail(id || "", selectedSegment);
   const { isFavorite, toggleFavorite } = useFavoriteMatchups();
+
+  // Fetch roster continuity for both teams
+  const { data: rosterData } = useQuery({
+    queryKey: ["roster-continuity-game", data?.game?.home_team?.id, data?.game?.away_team?.id],
+    queryFn: async () => {
+      const homeId = data?.game?.home_team?.id;
+      const awayId = data?.game?.away_team?.id;
+      if (!homeId || !awayId) return null;
+
+      const { data: rosters, error } = await supabase
+        .from("roster_snapshots")
+        .select("team_id, continuity_score, season_year, era_tag")
+        .in("team_id", [homeId, awayId])
+        .order("season_year", { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+
+      const homeRoster = rosters?.find((r) => r.team_id === homeId);
+      const awayRoster = rosters?.find((r) => r.team_id === awayId);
+
+      return {
+        homeContinuity: homeRoster?.continuity_score ?? null,
+        awayContinuity: awayRoster?.continuity_score ?? null,
+        homeEra: homeRoster?.era_tag ?? null,
+        awayEra: awayRoster?.era_tag ?? null,
+      };
+    },
+    enabled: !!data?.game?.home_team?.id && !!data?.game?.away_team?.id,
+  });
+
+  // Fetch segment availability for smart recommendations
+  const { data: segmentAvailability } = useQuery({
+    queryKey: ["segment-availability", data?.game?.home_team?.id, data?.game?.away_team?.id],
+    queryFn: async () => {
+      const homeId = data?.game?.home_team?.id;
+      const awayId = data?.game?.away_team?.id;
+      if (!homeId || !awayId) return [];
+
+      const [lowId, highId] = [homeId, awayId].sort();
+
+      const { data: stats, error } = await supabase
+        .from("matchup_stats")
+        .select("segment_key, n_games")
+        .eq("team_low_id", lowId)
+        .eq("team_high_id", highId);
+
+      if (error) throw error;
+
+      return (stats || []).map((s) => ({
+        segment: s.segment_key as SegmentKey,
+        nGames: s.n_games,
+      })) as SegmentAvailability[];
+    },
+    enabled: !!data?.game?.home_team?.id && !!data?.game?.away_team?.id,
+  });
+
+  // Auto-select recommended segment when data loads
+  useMemo(() => {
+    if (segmentAvailability && segmentAvailability.length > 0 && selectedSegment === "h2h_all") {
+      const recommended = getRecommendedSegment(segmentAvailability);
+      if (recommended !== selectedSegment) {
+        setSelectedSegment(recommended);
+      }
+    }
+  }, [segmentAvailability]);
 
   if (isLoading) {
     return <GameDetailSkeleton />;
@@ -103,6 +173,8 @@ export default function GameDetail() {
               value={selectedSegment}
               onChange={setSelectedSegment}
               disabled={isLoading}
+              availability={segmentAvailability}
+              showRecommendation={true}
             />
           </div>
 
@@ -219,19 +291,36 @@ export default function GameDetail() {
               </div>
             )}
 
-            {/* Footer with segment info */}
+            {/* Footer with segment info and confidence */}
             <div className="px-5 py-3 border-t border-border/40 flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
-                {edge?.dk_offered && edge.dk_total_line !== null
-                  ? `O/U ${edge.dk_total_line} • DraftKings`
-                  : "DK unavailable"}
-              </span>
-              {edge?.segment_used && edge.segment_used !== 'insufficient' && (
-                <SegmentBadge 
-                  segment={edge.segment_used} 
-                  nUsed={edge.n_used}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {edge?.dk_offered && edge.dk_total_line !== null
+                    ? `O/U ${edge.dk_total_line} • DraftKings`
+                    : "DK unavailable"}
+                </span>
+                {edge?.segment_used && edge.segment_used !== 'insufficient' && (
+                  <SegmentBadge 
+                    segment={edge.segment_used} 
+                    nUsed={edge.n_used}
+                  />
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <RecencyIndicator 
+                  segment={edge?.segment_used} 
+                  homeContinuity={rosterData?.homeContinuity}
+                  awayContinuity={rosterData?.awayContinuity}
+                  size="md"
                 />
-              )}
+                <ConfidenceBadge 
+                  nGames={nH2H} 
+                  segment={edge?.segment_used}
+                  homeContinuity={rosterData?.homeContinuity}
+                  awayContinuity={rosterData?.awayContinuity}
+                  showDetails={true}
+                />
+              </div>
             </div>
           </div>
 
