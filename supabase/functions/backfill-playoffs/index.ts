@@ -32,6 +32,9 @@ const ABBREV_TO_DB: Record<string, Record<string, string>> = {
     'NSH': 'NAS',
     'SJS': 'SJ',
     'WSH': 'WAS',
+    'LAK': 'LA',
+    'NJD': 'NJ',
+    'PHX': 'ARI',
   },
 };
 
