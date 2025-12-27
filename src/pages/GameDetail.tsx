@@ -7,8 +7,8 @@ import { useGameDetail } from "@/hooks/useApi";
 import { PercentileBar } from "@/components/ui/percentile-bar";
 import { PickPill } from "@/components/game/PickPill";
 import { WhatIsPPopover } from "@/components/game/WhatIsPPopover";
+import { GameDetailSkeleton } from "@/components/game/GameDetailSkeleton";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { HistoricalDistributionChart } from "@/components/game/HistoricalDistributionChart";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
 import { cn } from "@/lib/utils";
@@ -21,19 +21,6 @@ const sportColors: Record<SportId, { bg: string; text: string }> = {
   mlb: { bg: "bg-sport-mlb/10", text: "text-sport-mlb" },
   nhl: { bg: "bg-muted", text: "text-muted-foreground" },
 };
-
-function GameDetailSkeleton() {
-  return (
-    <Layout>
-      <div className="max-w-xl mx-auto space-y-6 px-4">
-        <Skeleton className="h-6 w-24" />
-        <Skeleton className="h-12 w-full rounded-xl" />
-        <Skeleton className="h-32 w-full rounded-2xl" />
-        <Skeleton className="h-48 w-full rounded-2xl" />
-      </div>
-    </Layout>
-  );
-}
 
 export default function GameDetail() {
   const { id } = useParams<{ id: string }>();
