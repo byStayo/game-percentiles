@@ -81,9 +81,9 @@ async function hydrateMatchup(
         },
         body: JSON.stringify({
           sport_id: sportId,
-          home_team_id: homeTeamId,
-          away_team_id: awayTeamId,
-          horizon_years: 10,
+          team_a_id: homeTeamId,
+          team_b_id: awayTeamId,
+          years_back: 10,
         }),
       }
     );
