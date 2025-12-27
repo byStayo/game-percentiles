@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.api-status]
 verify_jwt = false
+
+[functions.api-cron-status]
+verify_jwt = false

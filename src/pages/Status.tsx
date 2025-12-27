@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { format, formatDistanceToNow } from "date-fns";
-import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Database, Activity, Play, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, RefreshCw, BarChart3, Database, Activity, Play, Loader2, Timer, Calendar, Zap } from "lucide-react";
 import { Layout } from "@/components/layout/Layout";
-import { useSystemStatus } from "@/hooks/useApi";
+import { useSystemStatus, useCronStatus } from "@/hooks/useApi";
+import type { CronJob } from "@/hooks/useApi";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -81,7 +82,168 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: string |
   );
 }
 
-// Backfill controls component
+// Cron job card component
+function CronJobCard({ job }: { job: CronJob }) {
+  const isSuccess = job.last_run?.status === 'succeeded';
+  const isFailed = job.last_run?.status === 'failed';
+  
+  return (
+    <div className="bg-card rounded-xl border border-border p-4 shadow-card">
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex-1 min-w-0">
+          <h4 className="font-medium text-sm truncate">{job.name}</h4>
+          <p className="text-xs text-muted-foreground">{job.function}</p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {job.active ? (
+            <span className="w-2 h-2 rounded-full bg-status-live animate-pulse" />
+          ) : (
+            <span className="w-2 h-2 rounded-full bg-muted-foreground" />
+          )}
+        </div>
+      </div>
+      
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-xs">
+          <Timer className="h-3 w-3 text-muted-foreground" />
+          <span className="text-muted-foreground">{job.schedule_human}</span>
+        </div>
+        
+        {job.next_run && (
+          <div className="flex items-center gap-2 text-xs">
+            <Calendar className="h-3 w-3 text-muted-foreground" />
+            <span className="text-muted-foreground">
+              Next: {formatDistanceToNow(new Date(job.next_run), { addSuffix: true })}
+            </span>
+          </div>
+        )}
+        
+        {job.last_run && (
+          <div className="flex items-center gap-2">
+            {isSuccess ? (
+              <CheckCircle2 className="h-3 w-3 text-status-live" />
+            ) : isFailed ? (
+              <XCircle className="h-3 w-3 text-destructive" />
+            ) : (
+              <Clock className="h-3 w-3 text-muted-foreground" />
+            )}
+            <span className={cn(
+              "text-xs",
+              isSuccess && "text-status-live",
+              isFailed && "text-destructive",
+              !isSuccess && !isFailed && "text-muted-foreground"
+            )}>
+              {formatDistanceToNow(new Date(job.last_run.started_at), { addSuffix: true })}
+              {job.last_run.duration_ms !== null && ` (${job.last_run.duration_ms}ms)`}
+            </span>
+          </div>
+        )}
+        
+        {job.stats_24h.total > 0 && (
+          <div className="flex items-center gap-2 pt-1 border-t border-border">
+            <span className="text-xs text-muted-foreground">24h:</span>
+            <span className="text-xs text-status-live">{job.stats_24h.success} ✓</span>
+            {job.stats_24h.failed > 0 && (
+              <span className="text-xs text-destructive">{job.stats_24h.failed} ✗</span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Cron jobs section component
+function CronJobsSection() {
+  const { data, isLoading, error } = useCronStatus();
+  
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-6 w-48" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} className="h-32 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+  
+  if (error || !data) {
+    return (
+      <div className="bg-card rounded-xl border border-border p-6 text-center">
+        <XCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
+        <p className="text-sm text-muted-foreground">Unable to load cron status</p>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="space-y-6">
+      {/* Summary */}
+      <div className="bg-card rounded-xl border border-border p-6 shadow-card">
+        <div className="flex items-center gap-2 mb-4">
+          <Zap className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-lg font-semibold">Scheduled Jobs</h2>
+        </div>
+        
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <div>
+            <p className="text-3xl font-bold">{data.summary.total_jobs}</p>
+            <p className="text-xs text-muted-foreground">Total Jobs</p>
+          </div>
+          <div>
+            <p className="text-3xl font-bold text-status-live">{data.summary.active_jobs}</p>
+            <p className="text-xs text-muted-foreground">Active</p>
+          </div>
+          <div>
+            <p className="text-3xl font-bold">{data.summary.runs_24h}</p>
+            <p className="text-xs text-muted-foreground">Runs (24h)</p>
+          </div>
+          <div>
+            <p className="text-3xl font-bold">{data.summary.success_rate}%</p>
+            <p className="text-xs text-muted-foreground">Success Rate</p>
+          </div>
+        </div>
+        
+        {/* Job cards */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {data.jobs.map((job) => (
+            <CronJobCard key={job.id} job={job} />
+          ))}
+        </div>
+      </div>
+      
+      {/* Recent runs */}
+      {data.recent_runs.length > 0 && (
+        <div className="bg-card rounded-xl border border-border p-6 shadow-card">
+          <h3 className="text-sm font-medium mb-3">Recent Activity</h3>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {data.recent_runs.map((run, i) => (
+              <div key={i} className="flex items-center justify-between text-xs py-1.5 border-b border-border last:border-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  {run.status === 'succeeded' ? (
+                    <CheckCircle2 className="h-3 w-3 text-status-live flex-shrink-0" />
+                  ) : (
+                    <XCircle className="h-3 w-3 text-destructive flex-shrink-0" />
+                  )}
+                  <span className="font-medium truncate">{run.job_name}</span>
+                </div>
+                <div className="flex items-center gap-3 text-muted-foreground flex-shrink-0">
+                  {run.duration_ms !== null && (
+                    <span>{run.duration_ms}ms</span>
+                  )}
+                  <span>{formatDistanceToNow(new Date(run.started_at), { addSuffix: true })}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 function BackfillControls({ onComplete }: { onComplete: () => void }) {
   const [loading, setLoading] = useState<string | null>(null);
 
@@ -352,12 +514,15 @@ export default function Status() {
                 )}
               </div>
 
+              {/* Cron Jobs */}
+              <CronJobsSection />
+
               {/* Manual Controls */}
               <BackfillControls onComplete={() => refetch()} />
 
-              {/* Job Status */}
+              {/* Pipeline Jobs (from job_runs table) */}
               <div>
-                <h2 className="text-lg font-semibold mb-4">Pipeline Jobs</h2>
+                <h2 className="text-lg font-semibold mb-4">Pipeline Jobs (Last Run)</h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {Object.keys(jobLabels).map((jobName) => (
                     <JobCard
