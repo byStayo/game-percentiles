@@ -5,8 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertTriangle, CheckCircle2, Database, TrendingUp, Users, Calendar } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Database, TrendingUp, Users, Calendar, Grid3X3 } from "lucide-react";
 import type { SportId } from "@/types";
+import { cn } from "@/lib/utils";
 
 interface SegmentStats {
   segment_key: string;
@@ -186,13 +187,12 @@ export function DataHealthDashboard() {
   const isLoading = segmentLoading || coverageLoading || lowDataLoading || dbLoading || rosterLoading;
 
   const segmentLabels: Record<string, string> = {
-    h2h_1y: "Last 1 Year",
-    h2h_3y: "Last 3 Years",
-    h2h_5y: "Last 5 Years",
-    h2h_10y: "Last 10 Years",
-    h2h_20y: "Last 20 Years",
-    h2h_all: "All-Time",
-    hybrid_form: "Hybrid Form",
+    h2h_1y: "1Y",
+    h2h_3y: "3Y",
+    h2h_5y: "5Y",
+    h2h_10y: "10Y",
+    h2h_all: "All",
+    hybrid_form: "Hybrid",
   };
 
   const sportLabels: Record<string, string> = {
@@ -201,6 +201,25 @@ export function DataHealthDashboard() {
     nhl: "NHL",
     mlb: "MLB",
   };
+
+  // Build sport × segment coverage matrix
+  const segments = ["h2h_1y", "h2h_3y", "h2h_5y", "h2h_10y", "h2h_all"];
+  const sports = ["nba", "nfl", "nhl", "mlb"];
+  
+  const coverageMatrix: Record<string, Record<string, { count: number; avgGames: number }>> = {};
+  sports.forEach(s => { coverageMatrix[s] = {}; });
+  
+  segmentStats?.forEach(seg => {
+    if (seg.bySport) {
+      Object.entries(seg.bySport).forEach(([sport, count]) => {
+        if (!coverageMatrix[sport]) coverageMatrix[sport] = {};
+        coverageMatrix[sport][seg.segment_key] = { 
+          count: count as number, 
+          avgGames: seg.avg_games 
+        };
+      });
+    }
+  });
 
   return (
     <div className="space-y-6">
@@ -250,30 +269,69 @@ export function DataHealthDashboard() {
                 </div>
               </div>
 
-              {/* Segment Coverage */}
+              {/* Sport × Segment Coverage Matrix */}
               <div className="mb-6">
                 <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  Segment Coverage (matchup_stats records)
+                  <Grid3X3 className="h-4 w-4" />
+                  Sport × Segment Coverage Matrix
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
-                  {segmentStats?.sort((a, b) => {
-                    const order = ["h2h_1y", "h2h_3y", "h2h_5y", "h2h_10y", "h2h_20y", "h2h_all", "hybrid_form"];
-                    return order.indexOf(a.segment_key) - order.indexOf(b.segment_key);
-                  }).map((segment) => (
-                    <div
-                      key={segment.segment_key}
-                      className="p-3 rounded-lg border border-border/60 bg-card"
-                    >
-                      <div className="text-xs text-muted-foreground mb-1">
-                        {segmentLabels[segment.segment_key] || segment.segment_key}
-                      </div>
-                      <div className="text-lg font-bold">{segment.count.toLocaleString()}</div>
-                      <div className="text-2xs text-muted-foreground">
-                        avg {segment.avg_games.toFixed(1)} games
-                      </div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="text-left p-2 border-b border-border font-medium text-muted-foreground">Sport</th>
+                        {segments.map(seg => (
+                          <th key={seg} className="text-center p-2 border-b border-border font-medium text-muted-foreground">
+                            {segmentLabels[seg]}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sports.map(sport => (
+                        <tr key={sport} className="border-b border-border/50">
+                          <td className="p-2 font-semibold uppercase">{sport}</td>
+                          {segments.map(seg => {
+                            const data = coverageMatrix[sport]?.[seg];
+                            const count = data?.count || 0;
+                            const hasData = count > 0;
+                            const isGood = count >= 50;
+                            const isWarning = count > 0 && count < 50;
+                            
+                            return (
+                              <td key={seg} className="p-2 text-center">
+                                <div className={cn(
+                                  "inline-flex flex-col items-center px-2 py-1 rounded-md text-xs",
+                                  !hasData && "bg-destructive/10 text-destructive",
+                                  isWarning && "bg-yellow-500/10 text-yellow-600",
+                                  isGood && "bg-status-live/10 text-status-live"
+                                )}>
+                                  <span className="font-bold">{count}</span>
+                                  {hasData && (
+                                    <span className="text-2xs opacity-70">
+                                      ~{data?.avgGames?.toFixed(0) || 0}g
+                                    </span>
+                                  )}
+                                  {!hasData && <span className="text-2xs">gap</span>}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded bg-status-live/20" /> 50+ matchups
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded bg-yellow-500/20" /> 1-49 matchups
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded bg-destructive/20" /> Gap (0)
+                  </span>
                 </div>
               </div>
 

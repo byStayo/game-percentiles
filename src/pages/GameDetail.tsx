@@ -18,6 +18,7 @@ import { GameDetailSkeleton } from "@/components/game/GameDetailSkeleton";
 import { RosterContinuityCard } from "@/components/game/RosterContinuityCard";
 import { SegmentComparison } from "@/components/game/SegmentComparison";
 import { SegmentTimeline } from "@/components/game/SegmentTimeline";
+import { SegmentAnalysis } from "@/components/game/SegmentAnalysis";
 import { Button } from "@/components/ui/button";
 import { HistoricalDistributionChart } from "@/components/game/HistoricalDistributionChart";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
@@ -451,6 +452,20 @@ export default function GameDetail() {
               awayContinuity={rosterData.awayContinuity}
               homeEra={rosterData.homeEra}
               awayEra={rosterData.awayEra}
+            />
+          )}
+
+          {/* Segment Analysis - All time windows with confidence */}
+          {game.home_team?.id && game.away_team?.id && (
+            <SegmentAnalysis
+              sportId={game.sport_id}
+              homeTeamId={game.home_team.id}
+              awayTeamId={game.away_team.id}
+              homeRosterContinuity={rosterData?.homeContinuity}
+              awayRosterContinuity={rosterData?.awayContinuity}
+              dkLine={edge?.dk_total_line}
+              onSegmentSelect={(seg) => setSelectedSegment(seg as SegmentKey)}
+              selectedSegment={selectedSegment}
             />
           )}
 
