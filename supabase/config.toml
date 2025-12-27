@@ -50,9 +50,3 @@ verify_jwt = false
 
 [functions.daily-backfill]
 verify_jwt = false
-
-[functions.import-games]
-verify_jwt = false
-
-[functions.import-status]
-verify_jwt = false
