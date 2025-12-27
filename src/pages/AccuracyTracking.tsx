@@ -40,6 +40,11 @@ import {
   Filter,
   BarChart3,
   Activity,
+  DollarSign,
+  Trophy,
+  Swords,
+  Building,
+  Flame,
 } from "lucide-react";
 import type { SportId } from "@/types";
 
@@ -71,6 +76,37 @@ interface PredictionResult {
   actual_direction: "over" | "under" | "push";
   is_correct: boolean;
   confidence_score: number;
+  is_playoff: boolean;
+  is_division: boolean;
+  is_rivalry: boolean;
+}
+
+// Standard vig/juice for sports betting (-110 odds = 4.55% juice per side)
+const STANDARD_VIG = -110;
+const BET_AMOUNT = 100;
+
+// Calculate profit from a winning bet at -110 odds
+const calculateWinProfit = (betAmount: number, odds: number = STANDARD_VIG): number => {
+  if (odds < 0) {
+    return betAmount * (100 / Math.abs(odds));
+  }
+  return betAmount * (odds / 100);
+};
+
+// Calculate ROI percentage
+const calculateROI = (totalProfit: number, totalWagered: number): number => {
+  if (totalWagered === 0) return 0;
+  return (totalProfit / totalWagered) * 100;
+};
+
+interface MatchupTypeStats {
+  type: string;
+  icon: typeof Trophy;
+  total: number;
+  correct: number;
+  accuracy: number;
+  profit: number;
+  roi: number;
 }
 
 export default function AccuracyTracking() {
@@ -95,7 +131,7 @@ export default function AccuracyTracking() {
           dk_line_percentile,
           n_h2h,
           segment_used,
-          games!inner(final_total, status)
+          games!inner(final_total, status, is_playoff, home_team_id, away_team_id)
         `)
         .eq("dk_offered", true)
         .not("dk_line_percentile", "is", null)
@@ -110,16 +146,52 @@ export default function AccuracyTracking() {
 
       if (error) throw error;
 
+      // Get team seasons for division info
+      const gameIds = (data || []).map(d => d.game_id);
+      const teamIds = new Set<string>();
+      for (const edge of data || []) {
+        const game = edge.games as unknown as { home_team_id: string; away_team_id: string };
+        teamIds.add(game.home_team_id);
+        teamIds.add(game.away_team_id);
+      }
+
+      // Fetch team seasons for division matchups
+      const { data: teamSeasons } = await supabase
+        .from("team_seasons")
+        .select("team_id, division, conference")
+        .in("team_id", Array.from(teamIds));
+
+      const teamDivisionMap: Record<string, { division: string | null; conference: string | null }> = {};
+      for (const ts of teamSeasons || []) {
+        teamDivisionMap[ts.team_id] = { division: ts.division, conference: ts.conference };
+      }
+
       // Process results
       const results: PredictionResult[] = [];
 
       for (const edge of data || []) {
-        const game = edge.games as unknown as { final_total: number | null; status: string };
+        const game = edge.games as unknown as { 
+          final_total: number | null; 
+          status: string; 
+          is_playoff: boolean | null;
+          home_team_id: string;
+          away_team_id: string;
+        };
         if (game.status !== "final" || game.final_total === null) continue;
 
         const dkLine = edge.dk_total_line!;
         const finalTotal = game.final_total;
         const percentile = edge.dk_line_percentile!;
+
+        // Determine matchup types
+        const homeTeamInfo = teamDivisionMap[game.home_team_id];
+        const awayTeamInfo = teamDivisionMap[game.away_team_id];
+        
+        const isDivision = !!(homeTeamInfo?.division && awayTeamInfo?.division && 
+          homeTeamInfo.division === awayTeamInfo.division);
+        
+        // Rivalry detection: same division or historic matchups (n_h2h > 50)
+        const isRivalry = isDivision || edge.n_h2h > 50;
 
         // Determine predicted direction based on percentile
         let predictedDirection: "over" | "under" | "push";
@@ -166,6 +238,9 @@ export default function AccuracyTracking() {
           actual_direction: actualDirection,
           is_correct: isCorrect,
           confidence_score: confidence.score,
+          is_playoff: game.is_playoff || false,
+          is_division: isDivision,
+          is_rivalry: isRivalry,
         });
       }
 
@@ -180,29 +255,51 @@ export default function AccuracyTracking() {
     return predictions.filter((p) => p.confidence_score >= minConfidence);
   }, [predictions, minConfidence]);
 
-  // Calculate overall accuracy stats
+  // Calculate overall accuracy stats with ROI
   const stats = useMemo(() => {
     const actionable = filteredPredictions.filter(
       (p) => p.predicted_direction !== "push"
     );
     const correct = actionable.filter((p) => p.is_correct);
 
+    // Calculate ROI
+    const totalWagered = actionable.length * BET_AMOUNT;
+    let totalProfit = 0;
+    actionable.forEach((p) => {
+      if (p.actual_direction === "push") {
+        // Push = money back, no profit/loss
+        totalProfit += 0;
+      } else if (p.is_correct) {
+        totalProfit += calculateWinProfit(BET_AMOUNT);
+      } else {
+        totalProfit -= BET_AMOUNT;
+      }
+    });
+    const roi = calculateROI(totalProfit, totalWagered);
+
     // Group by sport
-    const bySport: Record<string, { total: number; correct: number }> = {};
+    const bySport: Record<string, { total: number; correct: number; profit: number }> = {};
     actionable.forEach((p) => {
       if (!bySport[p.sport_id]) {
-        bySport[p.sport_id] = { total: 0, correct: 0 };
+        bySport[p.sport_id] = { total: 0, correct: 0, profit: 0 };
       }
       bySport[p.sport_id].total++;
-      if (p.is_correct) bySport[p.sport_id].correct++;
+      if (p.actual_direction === "push") {
+        // Push
+      } else if (p.is_correct) {
+        bySport[p.sport_id].correct++;
+        bySport[p.sport_id].profit += calculateWinProfit(BET_AMOUNT);
+      } else {
+        bySport[p.sport_id].profit -= BET_AMOUNT;
+      }
     });
 
     // Group by confidence tier
-    const byConfidence: Record<string, { total: number; correct: number }> = {
-      "80+": { total: 0, correct: 0 },
-      "60-79": { total: 0, correct: 0 },
-      "40-59": { total: 0, correct: 0 },
-      "<40": { total: 0, correct: 0 },
+    const byConfidence: Record<string, { total: number; correct: number; profit: number }> = {
+      "80+": { total: 0, correct: 0, profit: 0 },
+      "60-79": { total: 0, correct: 0, profit: 0 },
+      "40-59": { total: 0, correct: 0, profit: 0 },
+      "<40": { total: 0, correct: 0, profit: 0 },
     };
 
     actionable.forEach((p) => {
@@ -213,7 +310,14 @@ export default function AccuracyTracking() {
       else tier = "<40";
 
       byConfidence[tier].total++;
-      if (p.is_correct) byConfidence[tier].correct++;
+      if (p.actual_direction === "push") {
+        // Push
+      } else if (p.is_correct) {
+        byConfidence[tier].correct++;
+        byConfidence[tier].profit += calculateWinProfit(BET_AMOUNT);
+      } else {
+        byConfidence[tier].profit -= BET_AMOUNT;
+      }
     });
 
     // Strong predictions (percentile <= 15 or >= 85)
@@ -221,21 +325,87 @@ export default function AccuracyTracking() {
       (p) => p.dk_line_percentile <= 15 || p.dk_line_percentile >= 85
     );
     const strongCorrect = strongPredictions.filter((p) => p.is_correct);
+    
+    let strongProfit = 0;
+    strongPredictions.forEach((p) => {
+      if (p.actual_direction === "push") {
+        // Push
+      } else if (p.is_correct) {
+        strongProfit += calculateWinProfit(BET_AMOUNT);
+      } else {
+        strongProfit -= BET_AMOUNT;
+      }
+    });
 
     return {
       total: filteredPredictions.length,
       actionable: actionable.length,
       correct: correct.length,
       accuracy: actionable.length > 0 ? (correct.length / actionable.length) * 100 : 0,
+      totalWagered,
+      totalProfit,
+      roi,
       strongTotal: strongPredictions.length,
       strongCorrect: strongCorrect.length,
       strongAccuracy:
         strongPredictions.length > 0
           ? (strongCorrect.length / strongPredictions.length) * 100
           : 0,
+      strongProfit,
+      strongRoi: calculateROI(strongProfit, strongPredictions.length * BET_AMOUNT),
       bySport,
       byConfidence,
     };
+  }, [filteredPredictions]);
+
+  // Matchup type leaderboard
+  const matchupTypeLeaderboard = useMemo((): MatchupTypeStats[] => {
+    const actionable = filteredPredictions.filter(
+      (p) => p.predicted_direction !== "push"
+    );
+
+    const calculateTypeStats = (
+      type: string,
+      icon: typeof Trophy,
+      filterFn: (p: PredictionResult) => boolean
+    ): MatchupTypeStats => {
+      const filtered = actionable.filter(filterFn);
+      const correct = filtered.filter((p) => p.is_correct);
+      let profit = 0;
+      filtered.forEach((p) => {
+        if (p.actual_direction === "push") {
+          // Push
+        } else if (p.is_correct) {
+          profit += calculateWinProfit(BET_AMOUNT);
+        } else {
+          profit -= BET_AMOUNT;
+        }
+      });
+      
+      return {
+        type,
+        icon,
+        total: filtered.length,
+        correct: correct.length,
+        accuracy: filtered.length > 0 ? (correct.length / filtered.length) * 100 : 0,
+        profit,
+        roi: calculateROI(profit, filtered.length * BET_AMOUNT),
+      };
+    };
+
+    const types: MatchupTypeStats[] = [
+      calculateTypeStats("Playoff Games", Trophy, (p) => p.is_playoff),
+      calculateTypeStats("Division Games", Building, (p) => p.is_division),
+      calculateTypeStats("Rivalries", Flame, (p) => p.is_rivalry),
+      calculateTypeStats("Regular Season", Swords, (p) => !p.is_playoff),
+      calculateTypeStats("High Confidence", Target, (p) => p.confidence_score >= 70),
+      calculateTypeStats("Strong Signal", TrendingUp, (p) => p.dk_line_percentile <= 15 || p.dk_line_percentile >= 85),
+    ];
+
+    // Sort by accuracy descending, filter out types with no data
+    return types
+      .filter((t) => t.total >= 5)
+      .sort((a, b) => b.accuracy - a.accuracy);
   }, [filteredPredictions]);
 
   // Daily accuracy trend
@@ -427,18 +597,149 @@ export default function AccuracyTracking() {
             />
           </div>
 
-          {/* Accuracy by Confidence */}
+          {/* ROI Tracking */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                ROI Tracking
+                <span className="text-xs font-normal text-muted-foreground ml-auto">
+                  $100/bet at -110 odds
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-4 rounded-xl bg-secondary/30 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">Total Wagered</div>
+                  <div className="text-xl font-bold">${stats.totalWagered.toLocaleString()}</div>
+                </div>
+                <div className={cn(
+                  "p-4 rounded-xl text-center",
+                  stats.totalProfit >= 0 ? "bg-status-live/10" : "bg-status-over/10"
+                )}>
+                  <div className="text-xs text-muted-foreground mb-1">Net Profit/Loss</div>
+                  <div className={cn(
+                    "text-xl font-bold",
+                    stats.totalProfit >= 0 ? "text-status-live" : "text-status-over"
+                  )}>
+                    {stats.totalProfit >= 0 ? "+" : ""}${stats.totalProfit.toFixed(2)}
+                  </div>
+                </div>
+                <div className={cn(
+                  "p-4 rounded-xl text-center",
+                  stats.roi >= 0 ? "bg-status-live/10" : "bg-status-over/10"
+                )}>
+                  <div className="text-xs text-muted-foreground mb-1">Overall ROI</div>
+                  <div className={cn(
+                    "text-xl font-bold",
+                    stats.roi >= 0 ? "text-status-live" : "text-status-over"
+                  )}>
+                    {stats.roi >= 0 ? "+" : ""}{stats.roi.toFixed(2)}%
+                  </div>
+                </div>
+                <div className={cn(
+                  "p-4 rounded-xl text-center",
+                  stats.strongRoi >= 0 ? "bg-status-live/10" : "bg-status-over/10"
+                )}>
+                  <div className="text-xs text-muted-foreground mb-1">Strong Picks ROI</div>
+                  <div className={cn(
+                    "text-xl font-bold",
+                    stats.strongRoi >= 0 ? "text-status-live" : "text-status-over"
+                  )}>
+                    {stats.strongRoi >= 0 ? "+" : ""}{stats.strongRoi.toFixed(2)}%
+                  </div>
+                  <div className="text-2xs text-muted-foreground">
+                    ${stats.strongProfit >= 0 ? "+" : ""}{stats.strongProfit.toFixed(0)}
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground text-center mt-3">
+                Standard -110 juice (4.55% vig per side). Win pays $90.91 per $100 bet.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Matchup Type Leaderboard */}
+          {matchupTypeLeaderboard.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Trophy className="h-4 w-4" />
+                  Matchup Type Leaderboard
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {matchupTypeLeaderboard.map((item, index) => {
+                    const Icon = item.icon;
+                    return (
+                      <div
+                        key={item.type}
+                        className={cn(
+                          "flex items-center gap-4 p-3 rounded-xl",
+                          index === 0 ? "bg-primary/10 border border-primary/20" : "bg-secondary/30"
+                        )}
+                      >
+                        <div className={cn(
+                          "flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold",
+                          index === 0 ? "bg-primary text-primary-foreground" :
+                          index === 1 ? "bg-secondary text-secondary-foreground" :
+                          index === 2 ? "bg-muted text-muted-foreground" :
+                          "bg-muted/50 text-muted-foreground"
+                        )}>
+                          {index + 1}
+                        </div>
+                        <Icon className={cn(
+                          "h-5 w-5",
+                          index === 0 ? "text-primary" : "text-muted-foreground"
+                        )} />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">{item.type}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {item.correct}/{item.total} games
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className={cn(
+                            "text-lg font-bold",
+                            item.accuracy >= 55 ? "text-status-live" :
+                            item.accuracy >= 50 ? "text-foreground" :
+                            "text-status-over"
+                          )}>
+                            {item.accuracy.toFixed(1)}%
+                          </div>
+                          <div className={cn(
+                            "text-xs",
+                            item.roi >= 0 ? "text-status-live" : "text-status-over"
+                          )}>
+                            {item.roi >= 0 ? "+" : ""}{item.roi.toFixed(1)}% ROI
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground text-center mt-3">
+                  Rankings based on prediction accuracy. Min 5 games required.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Accuracy by Confidence with ROI */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
                 <TrendingUp className="h-4 w-4" />
-                Accuracy by Confidence Tier
+                Accuracy & ROI by Confidence Tier
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-4 gap-3">
                 {Object.entries(stats.byConfidence).map(([tier, data]) => {
                   const accuracy = data.total > 0 ? (data.correct / data.total) * 100 : 0;
+                  const tierRoi = calculateROI(data.profit, data.total * BET_AMOUNT);
                   return (
                     <div
                       key={tier}
@@ -468,6 +769,12 @@ export default function AccuracyTracking() {
                       </div>
                       <div className="text-2xs text-muted-foreground">
                         {data.correct}/{data.total}
+                      </div>
+                      <div className={cn(
+                        "text-xs mt-1",
+                        tierRoi >= 0 ? "text-status-live" : "text-status-over"
+                      )}>
+                        {tierRoi >= 0 ? "+" : ""}{tierRoi.toFixed(1)}% ROI
                       </div>
                     </div>
                   );
@@ -608,16 +915,17 @@ export default function AccuracyTracking() {
             </CardContent>
           </Card>
 
-          {/* Sport Breakdown */}
+          {/* Sport Breakdown with ROI */}
           {Object.keys(stats.bySport).length > 1 && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Accuracy by Sport</CardTitle>
+                <CardTitle className="text-sm">Accuracy & ROI by Sport</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {Object.entries(stats.bySport).map(([sport, data]) => {
                     const accuracy = data.total > 0 ? (data.correct / data.total) * 100 : 0;
+                    const sportRoi = calculateROI(data.profit, data.total * BET_AMOUNT);
                     return (
                       <div
                         key={sport}
@@ -636,6 +944,12 @@ export default function AccuracyTracking() {
                         </div>
                         <div className="text-2xs text-muted-foreground">
                           {data.correct}/{data.total}
+                        </div>
+                        <div className={cn(
+                          "text-xs mt-1",
+                          sportRoi >= 0 ? "text-status-live" : "text-status-over"
+                        )}>
+                          {sportRoi >= 0 ? "+" : ""}{sportRoi.toFixed(1)}% ROI
                         </div>
                       </div>
                     );
