@@ -15,6 +15,8 @@ import { SegmentSelector, type SegmentKey, type SegmentAvailability, getRecommen
 import { ConfidenceBadge } from "@/components/game/ConfidenceBadge";
 import { RecencyIndicator } from "@/components/game/RecencyIndicator";
 import { GameDetailSkeleton } from "@/components/game/GameDetailSkeleton";
+import { RosterContinuityCard } from "@/components/game/RosterContinuityCard";
+import { SegmentComparison } from "@/components/game/SegmentComparison";
 import { Button } from "@/components/ui/button";
 import { HistoricalDistributionChart } from "@/components/game/HistoricalDistributionChart";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
@@ -352,6 +354,27 @@ export default function GameDetail() {
                 <div className="text-2xs text-muted-foreground">P95</div>
               </div>
             </div>
+          )}
+
+          {/* Roster Continuity Card */}
+          {rosterData && (rosterData.homeContinuity !== null || rosterData.awayContinuity !== null) && (
+            <RosterContinuityCard
+              homeTeamName={homeTeamName}
+              awayTeamName={awayTeamName}
+              homeContinuity={rosterData.homeContinuity}
+              awayContinuity={rosterData.awayContinuity}
+              homeEra={rosterData.homeEra}
+              awayEra={rosterData.awayEra}
+            />
+          )}
+
+          {/* Segment Comparison */}
+          {game.home_team?.id && game.away_team?.id && (
+            <SegmentComparison
+              homeTeamId={game.home_team.id}
+              awayTeamId={game.away_team.id}
+              dkLine={edge?.dk_total_line}
+            />
           )}
 
           {/* Distribution Chart */}

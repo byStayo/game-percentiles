@@ -53,6 +53,7 @@ const coreNav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/", label: "Today", icon: Calendar },
   { href: "/week", label: "Week", icon: Calendar },
+  { href: "/best-bets", label: "Best Bets", icon: Trophy },
   { href: "/parlay", label: "Parlay", icon: Target },
 ];
 
