@@ -8,7 +8,10 @@ import { GameCard } from "@/components/game/GameCardNew";
 import { GameCardSkeleton } from "@/components/game/GameCardSkeleton";
 import { EmptyState } from "@/components/game/EmptyState";
 import { ErrorState } from "@/components/game/ErrorState";
+import { TopPicks } from "@/components/game/TopPicks";
+import { FavoritesSection } from "@/components/game/FavoritesSection";
 import { useTodayGames, TodayGame } from "@/hooks/useApi";
+import { useFavorites } from "@/hooks/useFavorites";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Clock, TrendingUp, Filter, ChevronDown } from "lucide-react";
@@ -37,6 +40,7 @@ export default function Index() {
   const [selectedSport, setSelectedSport] = useState<SportId>('nba');
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [sortBy, setSortBy] = useState<SortOption>('time');
+  const { favorites, removeFavorite } = useFavorites();
   
   // Fetch all sports data
   const nflQuery = useTodayGames(selectedDate, 'nfl');
@@ -206,6 +210,20 @@ export default function Index() {
                   </span>
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Top Picks & Favorites - only in all view */}
+          {viewMode === 'all' && !isLoading && allGames.length > 0 && (
+            <div className="grid gap-5 lg:grid-cols-2">
+              <TopPicks games={allGames} isLoading={isLoading} />
+              {favorites.length > 0 && (
+                <FavoritesSection
+                  favorites={favorites}
+                  games={allGames}
+                  onRemove={removeFavorite}
+                />
+              )}
             </div>
           )}
 

@@ -3,6 +3,8 @@ import { cn } from "@/lib/utils";
 import { getTeamDisplayName, formatTimeET } from "@/lib/teamNames";
 import { PercentileBar } from "@/components/ui/percentile-bar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { FavoriteButton } from "@/components/game/FavoriteButton";
+import { useFavorites } from "@/hooks/useFavorites";
 import { ChevronRight, AlertTriangle, Check, X, TrendingUp, TrendingDown } from "lucide-react";
 import type { TodayGame } from "@/hooks/useApi";
 import type { SportId } from "@/types";
@@ -76,9 +78,24 @@ export function GameCard({ game }: GameCardProps) {
   const isFinal = game.status === 'final';
   const colors = sportColors[game.sport_id];
   const predictionResult = getPredictionResult(game);
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   const homeTeamName = getTeamDisplayName(game.home_team, game.sport_id);
   const awayTeamName = getTeamDisplayName(game.away_team, game.sport_id);
+
+  const homeTeamData = game.home_team ? {
+    id: game.home_team.id,
+    name: game.home_team.name,
+    abbrev: game.home_team.abbrev || game.home_team.name,
+    sportId: game.sport_id,
+  } : null;
+
+  const awayTeamData = game.away_team ? {
+    id: game.away_team.id,
+    name: game.away_team.name,
+    abbrev: game.away_team.abbrev || game.away_team.name,
+    sportId: game.sport_id,
+  } : null;
 
   return (
     <Link
@@ -165,13 +182,31 @@ export function GameCard({ game }: GameCardProps) {
       {/* Teams */}
       <div className="space-y-3 mb-6">
         <div className="flex items-center justify-between">
-          <span className="text-base font-semibold text-foreground truncate pr-3">{awayTeamName}</span>
+          <div className="flex items-center gap-1 min-w-0">
+            {awayTeamData && (
+              <FavoriteButton
+                team={awayTeamData}
+                isFavorite={isFavorite(awayTeamData.id)}
+                onToggle={toggleFavorite}
+              />
+            )}
+            <span className="text-base font-semibold text-foreground truncate">{awayTeamName}</span>
+          </div>
           {(isFinal || isLive) && game.away_score !== null && (
             <span className="text-2xl font-bold tabular-nums">{game.away_score}</span>
           )}
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-base font-semibold text-foreground truncate pr-3">{homeTeamName}</span>
+          <div className="flex items-center gap-1 min-w-0">
+            {homeTeamData && (
+              <FavoriteButton
+                team={homeTeamData}
+                isFavorite={isFavorite(homeTeamData.id)}
+                onToggle={toggleFavorite}
+              />
+            )}
+            <span className="text-base font-semibold text-foreground truncate">{homeTeamName}</span>
+          </div>
           {(isFinal || isLive) && game.home_score !== null && (
             <span className="text-2xl font-bold tabular-nums">{game.home_score}</span>
           )}
