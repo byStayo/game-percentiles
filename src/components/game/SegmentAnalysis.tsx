@@ -176,8 +176,8 @@ function SegmentRow({ segment, dkLine, isSelected, isRecommended, onSelect }: Se
           
           <div className="flex items-center gap-3">
             <Tooltip>
-              <TooltipTrigger>
-                <span className={`text-xs font-medium ${confidenceColor}`}>
+              <TooltipTrigger asChild>
+                <span className={`text-xs font-medium cursor-help ${confidenceColor}`}>
                   {segment.confidence}%
                 </span>
               </TooltipTrigger>
