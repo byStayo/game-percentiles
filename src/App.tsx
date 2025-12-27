@@ -18,6 +18,7 @@ import Standings from "./pages/Standings";
 import PlayoffBracket from "./pages/PlayoffBracket";
 import LeagueStats from "./pages/LeagueStats";
 import MatchupFinder from "./pages/MatchupFinder";
+import MatchupAnalysis from "./pages/MatchupAnalysis";
 import OverUnderTrends from "./pages/OverUnderTrends";
 import Rivalries from "./pages/Rivalries";
 import PowerRankings from "./pages/PowerRankings";
@@ -50,6 +51,7 @@ const App = () => (
             <Route path="/playoffs" element={<PlayoffBracket />} />
             <Route path="/league-stats" element={<LeagueStats />} />
             <Route path="/matchups" element={<MatchupFinder />} />
+            <Route path="/analysis" element={<MatchupAnalysis />} />
             <Route path="/ou-trends" element={<OverUnderTrends />} />
             <Route path="/rivalries" element={<Rivalries />} />
             <Route path="/rankings" element={<PowerRankings />} />
