@@ -1,5 +1,8 @@
 project_id = "rxumflkgwevrayewnjif"
 
+[functions.compute-team-seasons]
+verify_jwt = false
+
 [functions.ingest-games]
 verify_jwt = false
 
