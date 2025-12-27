@@ -16,7 +16,7 @@ interface HistoricalDistributionChartProps {
   p05: number | null;
   p95: number | null;
   median: number | null;
-  dkLine: number | null;
+  dkLine?: number | null;
 }
 
 export function HistoricalDistributionChart({

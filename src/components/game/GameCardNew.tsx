@@ -4,6 +4,8 @@ import { getTeamDisplayName, formatTimeET } from "@/lib/teamNames";
 import { PercentileBar } from "@/components/ui/percentile-bar";
 import { PickPill } from "@/components/game/PickPill";
 import { SegmentBadge } from "@/components/game/SegmentBadge";
+import { RecencyIndicator } from "@/components/game/RecencyIndicator";
+import { ConfidenceBadge } from "@/components/game/ConfidenceBadge";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
 import { Star, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -164,7 +166,7 @@ export function GameCard({ game }: GameCardProps) {
         </div>
       )}
 
-      {/* Footer with segment info */}
+      {/* Footer with segment info and confidence indicators */}
       <div className="flex items-center justify-between pt-3 border-t border-border/40">
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">{getFooterText()}</span>
@@ -176,7 +178,15 @@ export function GameCard({ game }: GameCardProps) {
             />
           )}
         </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
+        <div className="flex items-center gap-2">
+          <RecencyIndicator segment={game.segment_used} size="sm" />
+          <ConfidenceBadge 
+            nGames={game.n_h2h} 
+            segment={game.segment_used}
+            showDetails={true}
+          />
+          <ChevronRight className="h-4 w-4 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
+        </div>
       </div>
     </Link>
   );
