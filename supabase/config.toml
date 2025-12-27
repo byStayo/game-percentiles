@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.daily-backfill]
 verify_jwt = false
+
+[functions.compute-all-segments]
+verify_jwt = false
