@@ -6,9 +6,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { ArrowLeftRight, Trophy, TrendingUp, TrendingDown, Search, X } from "lucide-react";
+import { ArrowLeftRight, Trophy, TrendingUp, Search, X, Swords, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { SportId } from "@/types";
+import { format } from "date-fns";
 import {
   LineChart,
   Line,
@@ -37,6 +38,17 @@ interface SeasonStats {
   ppg_avg: number;
   opp_ppg_avg: number;
   playoff_result: string | null;
+}
+
+interface H2HGame {
+  id: string;
+  start_time_utc: string;
+  home_team_id: string;
+  away_team_id: string;
+  home_score: number | null;
+  away_score: number | null;
+  final_total: number | null;
+  status: string;
 }
 
 const sportLabels: Record<SportId, string> = {
@@ -200,6 +212,25 @@ export default function TeamCompare() {
       return (data || []) as SeasonStats[];
     },
     enabled: !!team2?.id,
+  });
+
+  // H2H matchup games
+  const { data: h2hGames, isLoading: h2hLoading } = useQuery({
+    queryKey: ['h2h-games', team1?.id, team2?.id],
+    queryFn: async () => {
+      // Query games where these two teams played each other
+      const { data, error } = await supabase
+        .from('games')
+        .select('id, start_time_utc, home_team_id, away_team_id, home_score, away_score, final_total, status')
+        .eq('status', 'final')
+        .or(`and(home_team_id.eq.${team1!.id},away_team_id.eq.${team2!.id}),and(home_team_id.eq.${team2!.id},away_team_id.eq.${team1!.id})`)
+        .order('start_time_utc', { ascending: false })
+        .limit(50);
+      
+      if (error) throw error;
+      return (data || []) as H2HGame[];
+    },
+    enabled: !!team1?.id && !!team2?.id,
   });
 
   // Comparison stats
@@ -541,6 +572,111 @@ export default function TeamCompare() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* H2H Matchup History */}
+                {h2hGames && h2hGames.length > 0 && (
+                  <Card className="bg-card border-border/60 mt-8">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Swords className="h-5 w-5" />
+                        Head-to-Head Matchups ({h2hGames.length} games)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-border/60 text-sm text-muted-foreground">
+                              <th className="px-4 py-3 text-left font-medium">Date</th>
+                              <th className="px-4 py-3 text-center font-medium">{team1.abbrev || team1.name}</th>
+                              <th className="px-4 py-3 text-center font-medium">Score</th>
+                              <th className="px-4 py-3 text-center font-medium">{team2.abbrev || team2.name}</th>
+                              <th className="px-4 py-3 text-right font-medium">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {h2hGames.map((game) => {
+                              const t1IsHome = game.home_team_id === team1.id;
+                              const t1Score = t1IsHome ? game.home_score : game.away_score;
+                              const t2Score = t1IsHome ? game.away_score : game.home_score;
+                              const t1Won = t1Score !== null && t2Score !== null && t1Score > t2Score;
+                              const t2Won = t1Score !== null && t2Score !== null && t2Score > t1Score;
+
+                              return (
+                                <tr key={game.id} className="border-b border-border/30 hover:bg-muted/30">
+                                  <td className="px-4 py-3 text-sm">
+                                    <div className="flex items-center gap-2">
+                                      <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                                      {format(new Date(game.start_time_utc), 'MMM d, yyyy')}
+                                    </div>
+                                  </td>
+                                  <td className={cn(
+                                    "px-4 py-3 text-center font-medium",
+                                    t1Won && "text-status-over"
+                                  )}>
+                                    {t1Score ?? '-'}
+                                    {t1IsHome && <span className="ml-1 text-xs text-muted-foreground">(H)</span>}
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-muted-foreground">vs</td>
+                                  <td className={cn(
+                                    "px-4 py-3 text-center font-medium",
+                                    t2Won && "text-status-over"
+                                  )}>
+                                    {t2Score ?? '-'}
+                                    {!t1IsHome && <span className="ml-1 text-xs text-muted-foreground">(H)</span>}
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-medium">
+                                    {game.final_total ?? '-'}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      
+                      {/* H2H Summary */}
+                      {(() => {
+                        const t1Wins = h2hGames.filter(g => {
+                          const t1IsHome = g.home_team_id === team1.id;
+                          const t1Score = t1IsHome ? g.home_score : g.away_score;
+                          const t2Score = t1IsHome ? g.away_score : g.home_score;
+                          return t1Score !== null && t2Score !== null && t1Score > t2Score;
+                        }).length;
+                        const t2Wins = h2hGames.filter(g => {
+                          const t1IsHome = g.home_team_id === team1.id;
+                          const t1Score = t1IsHome ? g.home_score : g.away_score;
+                          const t2Score = t1IsHome ? g.away_score : g.home_score;
+                          return t1Score !== null && t2Score !== null && t2Score > t1Score;
+                        }).length;
+                        const avgTotal = h2hGames.reduce((sum, g) => sum + (g.final_total || 0), 0) / h2hGames.length;
+
+                        return (
+                          <div className="px-4 py-3 border-t border-border/60 bg-muted/20">
+                            <div className="flex items-center justify-between text-sm">
+                              <div>
+                                <span className="font-medium">{team1.abbrev || team1.name}</span>
+                                <span className="mx-2 text-status-over font-bold">{t1Wins}</span>
+                                <span className="text-muted-foreground">-</span>
+                                <span className="mx-2 text-status-over font-bold">{t2Wins}</span>
+                                <span className="font-medium">{team2.abbrev || team2.name}</span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                Avg Total: <span className="font-medium text-foreground">{avgTotal.toFixed(1)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {h2hGames && h2hGames.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground mt-8">
+                    No head-to-head matchups found between these teams
+                  </div>
+                )}
               </>
             )}
 
