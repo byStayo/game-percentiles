@@ -31,6 +31,10 @@ const ESPN_TO_DB: Record<string, Record<string, string>> = {
     "MIN": "MIN", "NE": "NE", "NO": "NO", "NYG": "NYG", "NYJ": "NYJ",
     "PHI": "PHI", "PIT": "PIT", "SF": "SF", "SEA": "SEA", "TB": "TB",
     "TEN": "TEN", "WSH": "WAS",
+    // Historical team mappings (relocated/renamed franchises)
+    "SD": "LAC",   // San Diego Chargers -> LA Chargers
+    "STL": "LAR",  // St. Louis Rams -> LA Rams
+    "OAK": "LV",   // Oakland Raiders -> Las Vegas Raiders
   },
   nhl: {
     "ANA": "ANA", "ARI": "ARI", "BOS": "BOS", "BUF": "BUF", "CGY": "CGY",
@@ -270,7 +274,6 @@ async function runBackfill(
               away_team_id: awayTeam.id,
               home_score: espnGame.homeScore,
               away_score: espnGame.awayScore,
-              final_total: finalTotal,
               start_time_utc: espnGame.startTimeUtc,
               status: "final",
             })
