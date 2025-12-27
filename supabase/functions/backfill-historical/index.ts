@@ -13,7 +13,7 @@ const ESPN_API_URLS: Record<string, string> = {
   mlb: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
 };
 
-// Team name mappings (ESPN abbreviation -> our standard abbreviation)
+// Team name mappings (ESPN abbreviation -> our DB abbreviation)
 const ESPN_TO_DB: Record<string, Record<string, string>> = {
   nba: {
     "ATL": "ATL", "BOS": "BOS", "BKN": "BKN", "CHA": "CHA", "CHI": "CHI",
@@ -70,11 +70,13 @@ interface ESPNResponse {
 }
 
 interface ParsedGame {
+  espnId: string;
   homeTeamAbbrev: string;
   awayTeamAbbrev: string;
   homeScore: number;
   awayScore: number;
   gameDate: string;
+  startTimeUtc: string;
 }
 
 async function fetchESPNGames(sport: string, dateStr: string): Promise<ParsedGame[]> {
@@ -109,11 +111,13 @@ async function fetchESPNGames(sport: string, dateStr: string): Promise<ParsedGam
       if (isNaN(homeScore) || isNaN(awayScore)) continue;
 
       games.push({
+        espnId: event.id,
         homeTeamAbbrev: homeTeam.team.abbreviation,
         awayTeamAbbrev: awayTeam.team.abbreviation,
         homeScore,
         awayScore,
-        gameDate: event.date,
+        gameDate: dateStr,
+        startTimeUtc: event.date,
       });
     }
 
@@ -154,9 +158,25 @@ async function runBackfill(
     .select("id")
     .single();
 
+  // Load team lookup table
+  const { data: teams } = await supabase
+    .from("teams")
+    .select("id, abbrev, name")
+    .eq("sport_id", sport);
+
+  const teamByAbbrev: Record<string, { id: string; name: string }> = {};
+  const teamByName: Record<string, { id: string; abbrev: string }> = {};
+  for (const team of teams || []) {
+    if (team.abbrev) teamByAbbrev[team.abbrev] = { id: team.id, name: team.name };
+    if (team.name) teamByName[team.name] = { id: team.id, abbrev: team.abbrev };
+  }
+
   let correctedCount = 0;
   let checkedCount = 0;
+  let insertedCount = 0;
   let errorCount = 0;
+
+  const mapping = ESPN_TO_DB[sport] || {};
 
   for (const dateStr of dates) {
     try {
@@ -169,63 +189,119 @@ async function runBackfill(
       const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
       const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
 
+      // Get existing games for this date
       const { data: ourGames } = await supabase
         .from("games")
         .select(`
-          id, home_score, away_score, final_total,
-          home_team:teams!games_home_team_id_fkey(id, name),
-          away_team:teams!games_away_team_id_fkey(id, name)
+          id, home_score, away_score, final_total, provider_game_key,
+          home_team:teams!games_home_team_id_fkey(id, abbrev, name),
+          away_team:teams!games_away_team_id_fkey(id, abbrev, name)
         `)
         .eq("sport_id", sport)
-        .eq("status", "final")
         .gte("start_time_utc", startOfDay.toISOString())
         .lte("start_time_utc", endOfDay.toISOString());
 
-      for (const ourGame of ourGames || []) {
-        checkedCount++;
-        const homeTeamData = ourGame.home_team as unknown as { id: string; name: string } | null;
-        const awayTeamData = ourGame.away_team as unknown as { id: string; name: string } | null;
-        const homeTeam = homeTeamData?.name;
-        const awayTeam = awayTeamData?.name;
+      // Create lookup of existing games by team matchup
+      const existingGamesByMatchup: Record<string, any> = {};
+      for (const game of ourGames || []) {
+        const homeTeam = game.home_team as unknown as { id: string; abbrev: string; name: string } | null;
+        const awayTeam = game.away_team as unknown as { id: string; abbrev: string; name: string } | null;
+        if (homeTeam?.abbrev && awayTeam?.abbrev) {
+          const key = `${homeTeam.abbrev}-${awayTeam.abbrev}`;
+          existingGamesByMatchup[key] = game;
+        }
+      }
 
-        if (!homeTeam || !awayTeam) continue;
+      for (const espnGame of espnGames) {
+        const homeAbbrev = mapping[espnGame.homeTeamAbbrev] || espnGame.homeTeamAbbrev;
+        const awayAbbrev = mapping[espnGame.awayTeamAbbrev] || espnGame.awayTeamAbbrev;
+        const matchupKey = `${homeAbbrev}-${awayAbbrev}`;
 
-        const mapping = ESPN_TO_DB[sport] || {};
-        for (const espnGame of espnGames) {
-          const espnHomeDb = mapping[espnGame.homeTeamAbbrev] || espnGame.homeTeamAbbrev;
-          const espnAwayDb = mapping[espnGame.awayTeamAbbrev] || espnGame.awayTeamAbbrev;
+        const existingGame = existingGamesByMatchup[matchupKey];
 
-          if (homeTeam === espnHomeDb && awayTeam === espnAwayDb) {
-            const scoreDiffers =
-              ourGame.home_score !== espnGame.homeScore ||
-              ourGame.away_score !== espnGame.awayScore;
+        if (existingGame) {
+          // Game exists - verify/correct scores
+          checkedCount++;
+          const scoreDiffers =
+            existingGame.home_score !== espnGame.homeScore ||
+            existingGame.away_score !== espnGame.awayScore;
 
-            if (scoreDiffers) {
-              const { error } = await supabase
-                .from("games")
-                .update({
-                  home_score: espnGame.homeScore,
-                  away_score: espnGame.awayScore,
-                })
-                .eq("id", ourGame.id);
+          if (scoreDiffers && existingGame.status !== "scheduled") {
+            const { error } = await supabase
+              .from("games")
+              .update({
+                home_score: espnGame.homeScore,
+                away_score: espnGame.awayScore,
+                final_total: espnGame.homeScore + espnGame.awayScore,
+                status: "final",
+              })
+              .eq("id", existingGame.id);
 
-              if (!error) {
-                correctedCount++;
-                await supabase
-                  .from("matchup_games")
-                  .update({ total: espnGame.homeScore + espnGame.awayScore })
-                  .eq("game_id", ourGame.id);
-              } else {
-                errorCount++;
-              }
+            if (!error) {
+              correctedCount++;
+              // Update matchup_games too
+              await supabase
+                .from("matchup_games")
+                .update({ total: espnGame.homeScore + espnGame.awayScore })
+                .eq("game_id", existingGame.id);
+            } else {
+              errorCount++;
             }
-            break;
+          }
+        } else {
+          // Game doesn't exist - INSERT it
+          const homeTeam = teamByAbbrev[homeAbbrev];
+          const awayTeam = teamByAbbrev[awayAbbrev];
+
+          if (!homeTeam || !awayTeam) {
+            console.log(`[BACKFILL] Missing team: ${homeAbbrev} or ${awayAbbrev}`);
+            continue;
+          }
+
+          const providerGameKey = `espn-${sport}-${espnGame.espnId}`;
+          const finalTotal = espnGame.homeScore + espnGame.awayScore;
+
+          const { data: newGame, error: insertError } = await supabase
+            .from("games")
+            .insert({
+              sport_id: sport,
+              provider_game_key: providerGameKey,
+              home_team_id: homeTeam.id,
+              away_team_id: awayTeam.id,
+              home_score: espnGame.homeScore,
+              away_score: espnGame.awayScore,
+              final_total: finalTotal,
+              start_time_utc: espnGame.startTimeUtc,
+              status: "final",
+            })
+            .select("id")
+            .single();
+
+          if (!insertError && newGame) {
+            insertedCount++;
+
+            // Also insert into matchup_games for stats
+            const [teamHighId, teamLowId] = [homeTeam.id, awayTeam.id].sort();
+            await supabase.from("matchup_games").insert({
+              game_id: newGame.id,
+              sport_id: sport,
+              team_high_id: teamHighId,
+              team_low_id: teamLowId,
+              total: finalTotal,
+              played_at_utc: espnGame.startTimeUtc,
+            });
+          } else if (insertError) {
+            // Might be duplicate provider_game_key - that's OK
+            if (!insertError.message?.includes("duplicate")) {
+              console.error(`[BACKFILL] Insert error:`, insertError.message);
+              errorCount++;
+            }
           }
         }
       }
 
       // Rate limit protection
-      await new Promise((r) => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 100));
     } catch (err) {
       console.error(`[BACKFILL] Error on ${dateStr}:`, err);
       errorCount++;
@@ -246,14 +322,15 @@ async function runBackfill(
           days_processed: dates.length,
           games_checked: checkedCount,
           games_corrected: correctedCount,
+          games_inserted: insertedCount,
           errors: errorCount,
         },
       })
       .eq("id", jobRun.id);
   }
 
-  console.log(`[BACKFILL] Complete: ${checkedCount} checked, ${correctedCount} corrected, ${errorCount} errors`);
-  return { checkedCount, correctedCount, errorCount };
+  console.log(`[BACKFILL] Complete: ${checkedCount} checked, ${correctedCount} corrected, ${insertedCount} inserted, ${errorCount} errors`);
+  return { checkedCount, correctedCount, insertedCount, errorCount };
 }
 
 Deno.serve(async (req) => {
@@ -270,7 +347,7 @@ Deno.serve(async (req) => {
     let sport = "nba";
     let startDate = "";
     let endDate = "";
-    let mode = "verify";
+    let mode = "backfill"; // Changed default to backfill (insert + verify)
     let async = false;
 
     try {
@@ -278,7 +355,7 @@ Deno.serve(async (req) => {
       sport = body.sport || "nba";
       startDate = body.start_date;
       endDate = body.end_date;
-      mode = body.mode || "verify";
+      mode = body.mode || "backfill";
       async = body.async === true;
     } catch {
       // No body - use defaults for cron: last 7 days
