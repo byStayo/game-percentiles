@@ -13,6 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataHealthDashboard } from "@/components/status/DataHealthDashboard";
 import { RosterContinuityTimeline } from "@/components/status/RosterContinuityTimeline";
+import { LiveJobProgress } from "@/components/status/LiveJobProgress";
 
 const API_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
@@ -633,6 +634,9 @@ export default function Status() {
                       </div>
                     )}
                   </div>
+
+                  {/* Live Job Progress */}
+                  <LiveJobProgress />
 
                   {/* Cron Jobs */}
                   <CronJobsSection />
