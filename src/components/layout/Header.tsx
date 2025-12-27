@@ -10,6 +10,7 @@ const navItems = [
   { href: "/playoffs", label: "Playoffs" },
   { href: "/teams", label: "Teams" },
   { href: "/compare", label: "Compare" },
+  { href: "/league-stats", label: "League Stats" },
   { href: "/stats", label: "Stats" },
 ];
 

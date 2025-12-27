@@ -162,6 +162,51 @@ const NBA_PLAYOFFS: PlayoffEntry[] = [
   { team_abbrev: 'LAC', season_year: 2015, playoff_result: 'Conf Semis' },
   { team_abbrev: 'CHI', season_year: 2015, playoff_result: 'Conf Semis' },
   { team_abbrev: 'WAS', season_year: 2015, playoff_result: 'Conf Semis' },
+  // 2014 Playoffs
+  { team_abbrev: 'SAS', season_year: 2014, playoff_result: 'Champion' },
+  { team_abbrev: 'MIA', season_year: 2014, playoff_result: 'Finals' },
+  { team_abbrev: 'OKC', season_year: 2014, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'IND', season_year: 2014, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'LAC', season_year: 2014, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'POR', season_year: 2014, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'BKN', season_year: 2014, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'WAS', season_year: 2014, playoff_result: 'Conf Semis' },
+  // 2013 Playoffs
+  { team_abbrev: 'MIA', season_year: 2013, playoff_result: 'Champion' },
+  { team_abbrev: 'SAS', season_year: 2013, playoff_result: 'Finals' },
+  { team_abbrev: 'MEM', season_year: 2013, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'IND', season_year: 2013, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'GSW', season_year: 2013, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'OKC', season_year: 2013, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'CHI', season_year: 2013, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'NYK', season_year: 2013, playoff_result: 'Conf Semis' },
+  // 2012 Playoffs
+  { team_abbrev: 'MIA', season_year: 2012, playoff_result: 'Champion' },
+  { team_abbrev: 'OKC', season_year: 2012, playoff_result: 'Finals' },
+  { team_abbrev: 'SAS', season_year: 2012, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'BOS', season_year: 2012, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'LAC', season_year: 2012, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'LAL', season_year: 2012, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'IND', season_year: 2012, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'PHI', season_year: 2012, playoff_result: 'Conf Semis' },
+  // 2011 Playoffs
+  { team_abbrev: 'DAL', season_year: 2011, playoff_result: 'Champion' },
+  { team_abbrev: 'MIA', season_year: 2011, playoff_result: 'Finals' },
+  { team_abbrev: 'OKC', season_year: 2011, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'CHI', season_year: 2011, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'LAL', season_year: 2011, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'MEM', season_year: 2011, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'BOS', season_year: 2011, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'ATL', season_year: 2011, playoff_result: 'Conf Semis' },
+  // 2010 Playoffs
+  { team_abbrev: 'LAL', season_year: 2010, playoff_result: 'Champion' },
+  { team_abbrev: 'BOS', season_year: 2010, playoff_result: 'Finals' },
+  { team_abbrev: 'PHX', season_year: 2010, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'ORL', season_year: 2010, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'UTA', season_year: 2010, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'SAS', season_year: 2010, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'CLE', season_year: 2010, playoff_result: 'Conf Semis' },
+  { team_abbrev: 'ATL', season_year: 2010, playoff_result: 'Conf Semis' },
 ];
 
 const NFL_PLAYOFFS: PlayoffEntry[] = [
@@ -220,6 +265,31 @@ const NFL_PLAYOFFS: PlayoffEntry[] = [
   { team_abbrev: 'SEA', season_year: 2015, playoff_result: 'Super Bowl' },
   { team_abbrev: 'IND', season_year: 2015, playoff_result: 'Conf Champ' },
   { team_abbrev: 'GB', season_year: 2015, playoff_result: 'Conf Champ' },
+  // 2013 Season (Super Bowl XLVIII)
+  { team_abbrev: 'SEA', season_year: 2014, playoff_result: 'Champion' },
+  { team_abbrev: 'DEN', season_year: 2014, playoff_result: 'Super Bowl' },
+  { team_abbrev: 'NE', season_year: 2014, playoff_result: 'Conf Champ' },
+  { team_abbrev: 'SF', season_year: 2014, playoff_result: 'Conf Champ' },
+  // 2012 Season (Super Bowl XLVII)
+  { team_abbrev: 'BAL', season_year: 2013, playoff_result: 'Champion' },
+  { team_abbrev: 'SF', season_year: 2013, playoff_result: 'Super Bowl' },
+  { team_abbrev: 'NE', season_year: 2013, playoff_result: 'Conf Champ' },
+  { team_abbrev: 'ATL', season_year: 2013, playoff_result: 'Conf Champ' },
+  // 2011 Season (Super Bowl XLVI)
+  { team_abbrev: 'NYG', season_year: 2012, playoff_result: 'Champion' },
+  { team_abbrev: 'NE', season_year: 2012, playoff_result: 'Super Bowl' },
+  { team_abbrev: 'BAL', season_year: 2012, playoff_result: 'Conf Champ' },
+  { team_abbrev: 'SF', season_year: 2012, playoff_result: 'Conf Champ' },
+  // 2010 Season (Super Bowl XLV)
+  { team_abbrev: 'GB', season_year: 2011, playoff_result: 'Champion' },
+  { team_abbrev: 'PIT', season_year: 2011, playoff_result: 'Super Bowl' },
+  { team_abbrev: 'NYJ', season_year: 2011, playoff_result: 'Conf Champ' },
+  { team_abbrev: 'CHI', season_year: 2011, playoff_result: 'Conf Champ' },
+  // 2009 Season (Super Bowl XLIV)
+  { team_abbrev: 'NO', season_year: 2010, playoff_result: 'Champion' },
+  { team_abbrev: 'IND', season_year: 2010, playoff_result: 'Super Bowl' },
+  { team_abbrev: 'NYJ', season_year: 2010, playoff_result: 'Conf Champ' },
+  { team_abbrev: 'MIN', season_year: 2010, playoff_result: 'Conf Champ' },
 ];
 
 const MLB_PLAYOFFS: PlayoffEntry[] = [
@@ -273,6 +343,31 @@ const MLB_PLAYOFFS: PlayoffEntry[] = [
   { team_abbrev: 'NYM', season_year: 2015, playoff_result: 'World Series' },
   { team_abbrev: 'TOR', season_year: 2015, playoff_result: 'ALCS' },
   { team_abbrev: 'CHC', season_year: 2015, playoff_result: 'NLCS' },
+  // 2014 World Series
+  { team_abbrev: 'SF', season_year: 2014, playoff_result: 'Champion' },
+  { team_abbrev: 'KC', season_year: 2014, playoff_result: 'World Series' },
+  { team_abbrev: 'BAL', season_year: 2014, playoff_result: 'ALCS' },
+  { team_abbrev: 'STL', season_year: 2014, playoff_result: 'NLCS' },
+  // 2013 World Series
+  { team_abbrev: 'BOS', season_year: 2013, playoff_result: 'Champion' },
+  { team_abbrev: 'STL', season_year: 2013, playoff_result: 'World Series' },
+  { team_abbrev: 'DET', season_year: 2013, playoff_result: 'ALCS' },
+  { team_abbrev: 'LAD', season_year: 2013, playoff_result: 'NLCS' },
+  // 2012 World Series
+  { team_abbrev: 'SF', season_year: 2012, playoff_result: 'Champion' },
+  { team_abbrev: 'DET', season_year: 2012, playoff_result: 'World Series' },
+  { team_abbrev: 'NYY', season_year: 2012, playoff_result: 'ALCS' },
+  { team_abbrev: 'STL', season_year: 2012, playoff_result: 'NLCS' },
+  // 2011 World Series
+  { team_abbrev: 'STL', season_year: 2011, playoff_result: 'Champion' },
+  { team_abbrev: 'TEX', season_year: 2011, playoff_result: 'World Series' },
+  { team_abbrev: 'DET', season_year: 2011, playoff_result: 'ALCS' },
+  { team_abbrev: 'MIL', season_year: 2011, playoff_result: 'NLCS' },
+  // 2010 World Series
+  { team_abbrev: 'SF', season_year: 2010, playoff_result: 'Champion' },
+  { team_abbrev: 'TEX', season_year: 2010, playoff_result: 'World Series' },
+  { team_abbrev: 'NYY', season_year: 2010, playoff_result: 'ALCS' },
+  { team_abbrev: 'PHI', season_year: 2010, playoff_result: 'NLCS' },
 ];
 
 const NHL_PLAYOFFS: PlayoffEntry[] = [
@@ -326,6 +421,31 @@ const NHL_PLAYOFFS: PlayoffEntry[] = [
   { team_abbrev: 'TB', season_year: 2015, playoff_result: 'Finals' },
   { team_abbrev: 'ANA', season_year: 2015, playoff_result: 'Conf Finals' },
   { team_abbrev: 'NYR', season_year: 2015, playoff_result: 'Conf Finals' },
+  // 2014 Stanley Cup
+  { team_abbrev: 'LAK', season_year: 2014, playoff_result: 'Champion' },
+  { team_abbrev: 'NYR', season_year: 2014, playoff_result: 'Finals' },
+  { team_abbrev: 'CHI', season_year: 2014, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'MTL', season_year: 2014, playoff_result: 'Conf Finals' },
+  // 2013 Stanley Cup
+  { team_abbrev: 'CHI', season_year: 2013, playoff_result: 'Champion' },
+  { team_abbrev: 'BOS', season_year: 2013, playoff_result: 'Finals' },
+  { team_abbrev: 'LAK', season_year: 2013, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'PIT', season_year: 2013, playoff_result: 'Conf Finals' },
+  // 2012 Stanley Cup
+  { team_abbrev: 'LAK', season_year: 2012, playoff_result: 'Champion' },
+  { team_abbrev: 'NJD', season_year: 2012, playoff_result: 'Finals' },
+  { team_abbrev: 'PHX', season_year: 2012, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'NYR', season_year: 2012, playoff_result: 'Conf Finals' },
+  // 2011 Stanley Cup
+  { team_abbrev: 'BOS', season_year: 2011, playoff_result: 'Champion' },
+  { team_abbrev: 'VAN', season_year: 2011, playoff_result: 'Finals' },
+  { team_abbrev: 'SJS', season_year: 2011, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'TB', season_year: 2011, playoff_result: 'Conf Finals' },
+  // 2010 Stanley Cup
+  { team_abbrev: 'CHI', season_year: 2010, playoff_result: 'Champion' },
+  { team_abbrev: 'PHI', season_year: 2010, playoff_result: 'Finals' },
+  { team_abbrev: 'SJS', season_year: 2010, playoff_result: 'Conf Finals' },
+  { team_abbrev: 'MTL', season_year: 2010, playoff_result: 'Conf Finals' },
 ];
 
 async function backfillPlayoffs(
