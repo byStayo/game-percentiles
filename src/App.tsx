@@ -24,6 +24,7 @@ import Rivalries from "./pages/Rivalries";
 import PowerRankings from "./pages/PowerRankings";
 import Streaks from "./pages/Streaks";
 import BetSimulator from "./pages/BetSimulator";
+import BestBets from "./pages/BestBets";
 import FranchiseManagement from "./pages/FranchiseManagement";
 import NotFound from "./pages/NotFound";
 
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/status" element={<Status />} />
             <Route path="/stats" element={<Stats />} />
             <Route path="/parlay" element={<ParlayMachine />} />
+            <Route path="/best-bets" element={<BestBets />} />
             <Route path="/teams" element={<TeamSeasons />} />
             <Route path="/team/:teamId" element={<TeamDetail />} />
             <Route path="/compare" element={<TeamCompare />} />
