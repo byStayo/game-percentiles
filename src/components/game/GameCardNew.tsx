@@ -35,6 +35,9 @@ export function GameCard({ game }: GameCardProps) {
   const isFinal = game.status === "final";
   const colors = sportColors[game.sport_id];
   const { isFavorite, toggleFavorite } = useFavoriteMatchups();
+  
+  // Determine if this game has a strong edge
+  const hasStrongEdge = game.best_over_edge || game.best_under_edge;
 
   const homeTeamName = getTeamDisplayName(game.home_team, game.sport_id);
   const awayTeamName = getTeamDisplayName(game.away_team, game.sport_id);
@@ -60,10 +63,13 @@ export function GameCard({ game }: GameCardProps) {
     <Link
       to={`/game/${game.game_id}`}
       className={cn(
-        "group block p-4 sm:p-5 bg-card rounded-2xl border border-border/60",
+        "group block p-4 sm:p-5 bg-card rounded-2xl border",
         "shadow-sm transition-all duration-200 ease-out touch-manipulation",
         "active:scale-[0.98] active:bg-muted/30",
-        "md:hover:shadow-md md:hover:-translate-y-0.5 md:hover:border-border"
+        "md:hover:shadow-md md:hover:-translate-y-0.5 md:hover:border-border",
+        hasStrongEdge
+          ? "border-status-edge/40 ring-1 ring-status-edge/20 shadow-edge-glow"
+          : "border-border/60"
       )}
     >
       {/* Top row: time + league | n badge + favorite */}

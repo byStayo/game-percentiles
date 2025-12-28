@@ -91,6 +91,7 @@ export default {
         xl: "var(--shadow-xl)",
         card: "var(--shadow-card)",
         "card-hover": "var(--shadow-card-hover)",
+        "edge-glow": "var(--shadow-edge-glow)",
       },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'Segoe UI', 'Roboto', 'sans-serif'],
