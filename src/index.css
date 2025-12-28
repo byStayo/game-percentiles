@@ -75,6 +75,11 @@
     --sidebar-accent-foreground: 0 0% 9%;
     --sidebar-border: 0 0% 91%;
     --sidebar-ring: 0 0% 9%;
+
+    /* Gradient accents */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.85) 100%);
+    --gradient-edge: linear-gradient(135deg, hsl(var(--status-edge)) 0%, hsl(40 95% 50%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--background)) 100%);
   }
 
   .dark {
@@ -118,6 +123,11 @@
     --sidebar-accent-foreground: 0 0% 95%;
     --sidebar-border: 0 0% 15%;
     --sidebar-ring: 0 0% 80%;
+
+    /* Gradient accents - dark mode */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.8) 100%);
+    --gradient-edge: linear-gradient(135deg, hsl(var(--status-edge)) 0%, hsl(35 90% 55%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--card) / 0.95) 100%);
   }
 }
 
@@ -250,6 +260,92 @@
   /* Pull to refresh indicator */
   .pull-indicator {
     @apply flex items-center justify-center py-4 text-muted-foreground;
+  }
+
+  /* Glassmorphism enhanced */
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-xl border border-border/50 shadow-card;
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300;
+  }
+
+  @media (hover: hover) {
+    .glass-card-hover:hover {
+      @apply bg-card/90 shadow-card-hover -translate-y-0.5;
+    }
+  }
+
+  /* Gradient border */
+  .gradient-border {
+    position: relative;
+  }
+
+  .gradient-border::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--gradient-edge);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Floating action button */
+  .fab {
+    @apply fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full shadow-lg;
+    @apply flex items-center justify-center;
+    @apply bg-primary text-primary-foreground;
+    @apply touch-manipulation active:scale-95 transition-transform;
+  }
+
+  @media (min-width: 768px) {
+    .fab {
+      @apply bottom-8 right-8;
+    }
+  }
+
+  /* Section divider */
+  .section-divider {
+    @apply relative py-4;
+  }
+
+  .section-divider::before {
+    content: "";
+    @apply absolute left-0 right-0 top-1/2 h-px bg-border/40;
+  }
+
+  .section-divider > span {
+    @apply relative bg-background px-3 text-xs font-medium text-muted-foreground uppercase tracking-wide;
+  }
+
+  /* Metric card enhancement */
+  .metric-card {
+    @apply bg-card rounded-xl border border-border/60 p-4 transition-all;
+  }
+
+  .metric-card-interactive {
+    @apply metric-card cursor-pointer;
+  }
+
+  @media (hover: hover) {
+    .metric-card-interactive:hover {
+      @apply bg-muted/50 -translate-y-0.5 shadow-md;
+    }
+  }
+
+  /* Last updated indicator */
+  .last-updated {
+    @apply text-2xs text-muted-foreground/70 flex items-center gap-1;
+  }
+
+  .last-updated::before {
+    content: "";
+    @apply w-1.5 h-1.5 rounded-full bg-status-live animate-pulse;
   }
 }
 
