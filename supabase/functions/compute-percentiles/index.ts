@@ -445,11 +445,14 @@ Deno.serve(async (req) => {
         let p95: number | null = null
 
         if (result) {
-          isVisible = true
           segmentUsed = result.segment_used
           nUsed = result.n_used
           p05 = result.p05
           p95 = result.p95
+
+          // ONLY show games with real H2H data - hybrid_form is NOT sufficient
+          // hybrid_form uses each team's recent games against ANY opponent, not actual matchup history
+          isVisible = segmentUsed !== 'hybrid_form' && segmentUsed !== 'insufficient'
 
           // Track which segment was used
           if (segmentUsed in counters) {
