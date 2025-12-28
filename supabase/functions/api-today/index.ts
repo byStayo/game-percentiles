@@ -53,7 +53,13 @@ Deno.serve(async (req) => {
         dk_line_percentile,
         segment_used,
         n_used,
-        updated_at
+        updated_at,
+        p95_over_line,
+        p95_over_odds,
+        p05_under_line,
+        p05_under_odds,
+        best_over_edge,
+        best_under_edge
       `)
       .eq('date_local', date)
       .eq('is_visible', true)
@@ -128,6 +134,13 @@ Deno.serve(async (req) => {
         segment_used: edge.segment_used,
         n_used: edge.n_used,
         updated_at: edge.updated_at,
+        // Edge detection data
+        p95_over_line: edge.p95_over_line,
+        p95_over_odds: edge.p95_over_odds,
+        p05_under_line: edge.p05_under_line,
+        p05_under_odds: edge.p05_under_odds,
+        best_over_edge: edge.best_over_edge,
+        best_under_edge: edge.best_under_edge,
       }
     })
 
