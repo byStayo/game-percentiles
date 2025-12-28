@@ -38,13 +38,13 @@ const sports: { id: SportId; name: string }[] = [
 ];
 
 type ViewMode = "all" | "sport";
-type SortOption = "edge" | "time";
+type SortOption = "edge" | "edges-first" | "time";
 
 export default function Index() {
   const [selectedDate, setSelectedDate] = useState(getTodayInET);
   const [selectedSport, setSelectedSport] = useState<SportId>("nba");
   const [viewMode, setViewMode] = useState<ViewMode>("all");
-  const [sortBy, setSortBy] = useState<SortOption>("edge");
+  const [sortBy, setSortBy] = useState<SortOption>("edges-first");
   const [onlyPicks, setOnlyPicks] = useState(true);
   const [hideWeakData, setHideWeakData] = useState(true);
 
@@ -122,7 +122,18 @@ export default function Index() {
     }
 
     // Sort
-    if (sortBy === "edge") {
+    if (sortBy === "edges-first") {
+      // Prioritize games with over/under edges at the top
+      games.sort((a, b) => {
+        const aHasEdge = (a.best_over_edge || a.best_under_edge) ? 1 : 0;
+        const bHasEdge = (b.best_over_edge || b.best_under_edge) ? 1 : 0;
+        if (bHasEdge !== aHasEdge) return bHasEdge - aHasEdge;
+        // Secondary sort by percentile edge strength
+        const aEdge = a.dk_line_percentile !== null ? Math.abs(50 - a.dk_line_percentile) : 0;
+        const bEdge = b.dk_line_percentile !== null ? Math.abs(50 - b.dk_line_percentile) : 0;
+        return bEdge - aEdge;
+      });
+    } else if (sortBy === "edge") {
       games.sort((a, b) => {
         const aEdge =
           a.dk_line_percentile !== null ? Math.abs(50 - a.dk_line_percentile) : 0;
@@ -230,7 +241,8 @@ export default function Index() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="edge">Edge</SelectItem>
+                  <SelectItem value="edges-first">Edges First</SelectItem>
+                  <SelectItem value="edge">Percentile</SelectItem>
                   <SelectItem value="time">Time</SelectItem>
                 </SelectContent>
               </Select>
