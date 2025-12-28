@@ -365,6 +365,42 @@ export type Database = {
           },
         ]
       }
+      lock_parlay_history: {
+        Row: {
+          combined_probability: number | null
+          created_at: string
+          id: string
+          is_complete: boolean | null
+          is_win: boolean | null
+          legs: Json
+          legs_hit: number | null
+          legs_pending: number | null
+          num_legs: number
+        }
+        Insert: {
+          combined_probability?: number | null
+          created_at?: string
+          id?: string
+          is_complete?: boolean | null
+          is_win?: boolean | null
+          legs?: Json
+          legs_hit?: number | null
+          legs_pending?: number | null
+          num_legs: number
+        }
+        Update: {
+          combined_probability?: number | null
+          created_at?: string
+          id?: string
+          is_complete?: boolean | null
+          is_win?: boolean | null
+          legs?: Json
+          legs_hit?: number | null
+          legs_pending?: number | null
+          num_legs?: number
+        }
+        Relationships: []
+      }
       matchup_games: {
         Row: {
           decade: string | null

@@ -14,6 +14,8 @@ import { DkDistanceBadge, isDkBeyondExtremes, BeyondExtremesWarning } from "@/co
 import { MiniPercentileChart } from "@/components/game/MiniPercentileChart";
 import { EdgeAccuracyCard } from "@/components/game/EdgeAccuracyCard";
 import { GameResultBadge } from "@/components/game/GameResultBadge";
+import { LockParlayStats } from "@/components/game/LockParlayStats";
+import { useLockParlayHistory } from "@/hooks/useLockParlayHistory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -117,6 +119,9 @@ export default function BestBets() {
   const { data: nhlData, isLoading: nhlLoading } = useTodayGames(today, "nhl");
 
   const isLoading = nflLoading || nbaLoading || mlbLoading || nhlLoading;
+
+  // Lock parlay history tracking
+  const { saveParlay, isSaving } = useLockParlayHistory();
 
   // Combine and rank all games by edge strength
   const { rankedGames, finalGames } = useMemo(() => {
@@ -356,7 +361,7 @@ export default function BestBets() {
   };
 
   // Lock parlay handler - only 95%+ probability picks
-  const handleLockParlay = () => {
+  const handleLockParlay = (trackHistory: boolean = false) => {
     if (lockPicks.length === 0) {
       toast.error("No 95%+ probability picks available");
       return;
@@ -373,6 +378,21 @@ export default function BestBets() {
       homeTeam: game.home_team,
       awayTeam: game.away_team,
     }));
+
+    // Save to history if tracking
+    if (trackHistory) {
+      const historyLegs = lockPicks.map(game => ({
+        game_id: game.game_id,
+        sport_id: game.sport_id,
+        pick: (game.bestPick || "over") as "over" | "under",
+        line: game.bestPick === "under" ? (game.p05_under_line ?? 0) : (game.p95_over_line ?? 0),
+        hit_probability: game.hitProbability,
+        home_team: game.home_team.name,
+        away_team: game.away_team.name,
+      }));
+      saveParlay(historyLegs);
+      toast.success(`Tracking ${lockPicks.length} lock picks for performance`);
+    }
 
     localStorage.setItem(EDGE_PARLAY_KEY, JSON.stringify(edgePicks));
     toast.success(`Added ${lockPicks.length} lock picks to parlay`);
@@ -606,9 +626,10 @@ export default function BestBets() {
                     </Badge>
                   </CardTitle>
                   <Button
-                    onClick={handleLockParlay}
+                    onClick={() => handleLockParlay(true)}
                     className="bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold"
                     size="sm"
+                    disabled={isSaving}
                   >
                     <Target className="h-4 w-4 mr-2" />
                     Build Lock Parlay ({lockPicks.length})
@@ -758,6 +779,9 @@ export default function BestBets() {
               </CardContent>
             </Card>
           )}
+
+          {/* Lock Parlay Historical Performance */}
+          <LockParlayStats />
 
           {/* Top Picks with Quick Parlay */}
           {topPicks.length > 0 && (
