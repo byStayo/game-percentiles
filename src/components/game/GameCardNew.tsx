@@ -19,11 +19,11 @@ interface GameCardProps {
   game: TodayGame;
 }
 
-const sportColors: Record<SportId, { bg: string; text: string; border: string }> = {
-  nfl: { bg: "bg-sport-nfl/10", text: "text-sport-nfl", border: "border-sport-nfl/30" },
-  nba: { bg: "bg-sport-nba/10", text: "text-sport-nba", border: "border-sport-nba/30" },
-  mlb: { bg: "bg-sport-mlb/10", text: "text-sport-mlb", border: "border-sport-mlb/30" },
-  nhl: { bg: "bg-muted", text: "text-muted-foreground", border: "border-border" },
+const sportColors: Record<SportId, string> = {
+  nfl: "text-sport-nfl bg-sport-nfl/10",
+  nba: "text-sport-nba bg-sport-nba/10",
+  mlb: "text-sport-mlb bg-sport-mlb/10",
+  nhl: "text-muted-foreground bg-muted",
 };
 
 export function GameCard({ game }: GameCardProps) {
@@ -31,12 +31,15 @@ export function GameCard({ game }: GameCardProps) {
   const startTime = new Date(game.start_time_utc);
   const isLive = game.status === "live";
   const isFinal = game.status === "final";
-  const colors = sportColors[game.sport_id];
   const { isFavorite, toggleFavorite } = useFavoriteMatchups();
   const { lightTap, success, warning } = useHapticFeedback();
   const [swipeState, setSwipeState] = useState<"none" | "left" | "right">("none");
 
   const hasEdge = (game.best_over_edge ?? 0) > 0 || (game.best_under_edge ?? 0) > 0;
+  
+  // Determine if there's a percentile-based lean
+  const P = game.dk_line_percentile ?? 50;
+  const hasLean = P <= 30 || P >= 70;
 
   const homeTeamName = getTeamDisplayName(game.home_team, game.sport_id);
   const awayTeamName = getTeamDisplayName(game.away_team, game.sport_id);
@@ -64,7 +67,7 @@ export function GameCard({ game }: GameCardProps) {
 
       const overEdge = game.best_over_edge ?? 0;
       const underEdge = game.best_under_edge ?? 0;
-      const pickType = overEdge > underEdge ? "over" : "under";
+      const pickType = overEdge > underEdge ? "over" : (P <= 30 ? "over" : "under");
 
       picks.push({
         gameId: game.game_id,
@@ -83,7 +86,7 @@ export function GameCard({ game }: GameCardProps) {
     } catch {
       toast.error("Could not add to parlay");
     }
-  }, [game, matchupData, navigate, success, warning]);
+  }, [game, matchupData, navigate, success, warning, P]);
 
   // Swipe handlers
   const handleSwipeLeft = useCallback(() => {
@@ -112,14 +115,14 @@ export function GameCard({ game }: GameCardProps) {
 
   return (
     <div
-      className="relative overflow-hidden rounded-2xl"
+      className="relative overflow-hidden rounded-xl"
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
       {/* Swipe indicators */}
       <div
         className={cn(
-          "absolute inset-y-0 left-0 w-14 flex items-center justify-center bg-primary/20 transition-opacity duration-200 z-10 pointer-events-none rounded-l-2xl",
+          "absolute inset-y-0 left-0 w-12 flex items-center justify-center bg-primary/20 transition-opacity duration-200 z-10 pointer-events-none rounded-l-xl",
           swipeState === "right" ? "opacity-100" : "opacity-0"
         )}
       >
@@ -127,7 +130,7 @@ export function GameCard({ game }: GameCardProps) {
       </div>
       <div
         className={cn(
-          "absolute inset-y-0 right-0 w-14 flex items-center justify-center bg-status-edge/20 transition-opacity duration-200 z-10 pointer-events-none rounded-r-2xl",
+          "absolute inset-y-0 right-0 w-12 flex items-center justify-center bg-status-edge/20 transition-opacity duration-200 z-10 pointer-events-none rounded-r-xl",
           swipeState === "left" ? "opacity-100" : "opacity-0"
         )}
       >
@@ -138,53 +141,46 @@ export function GameCard({ game }: GameCardProps) {
         to={`/game/${game.game_id}`}
         onClick={handleCardClick}
         className={cn(
-          "group block p-3 bg-card rounded-2xl border transition-all duration-150 touch-manipulation",
-          "active:scale-[0.98] active:bg-muted/30",
+          "group block p-3 bg-card rounded-xl border transition-all duration-150 touch-manipulation",
+          "active:scale-[0.98]",
           hasEdge
-            ? "border-status-edge/40 ring-1 ring-status-edge/20"
-            : "border-border/50",
-          swipeState === "left" && "-translate-x-3",
-          swipeState === "right" && "translate-x-3"
+            ? "border-status-edge/50 shadow-sm"
+            : hasLean
+              ? "border-border"
+              : "border-border/40",
+          swipeState === "left" && "-translate-x-2",
+          swipeState === "right" && "translate-x-2"
         )}
       >
-        {/* Header: Time + Sport + Favorite */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5">
+        {/* Row 1: Status + Sport + Matchup count + Favorite */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-1.5 min-w-0">
             {isLive ? (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs font-semibold bg-status-live/10 text-status-live">
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-bold bg-status-live/10 text-status-live">
                 <span className="w-1.5 h-1.5 rounded-full bg-status-live animate-pulse" />
                 LIVE
               </span>
             ) : isFinal ? (
-              <span className="px-1.5 py-0.5 rounded-full text-2xs font-medium bg-muted text-muted-foreground">
+              <span className="px-1.5 py-0.5 rounded text-2xs font-medium bg-muted text-muted-foreground">
                 Final
               </span>
             ) : (
-              <span className="text-xs text-muted-foreground font-medium">
+              <span className="text-xs font-medium text-muted-foreground">
                 {formatTimeET(startTime)}
               </span>
             )}
-            <span
-              className={cn(
-                "px-1.5 py-0.5 rounded text-2xs font-bold uppercase",
-                colors.bg,
-                colors.text
-              )}
-            >
+            <span className={cn("px-1.5 py-0.5 rounded text-2xs font-bold uppercase", sportColors[game.sport_id])}>
               {game.sport_id}
             </span>
-            <span className="text-2xs text-muted-foreground/70">
-              n={game.n_h2h}
+            <span className="text-2xs text-muted-foreground/70 tabular-nums">
+              {game.n_h2h} games
             </span>
           </div>
 
           <Button
             variant="ghost"
             size="icon"
-            className={cn(
-              "h-7 w-7 -mr-1",
-              isFav && "text-yellow-500 hover:text-yellow-600"
-            )}
+            className={cn("h-7 w-7 -mr-1 shrink-0", isFav && "text-yellow-500")}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -196,28 +192,24 @@ export function GameCard({ game }: GameCardProps) {
           </Button>
         </div>
 
-        {/* Teams - clean and scannable */}
-        <div className="space-y-0.5 mb-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-foreground truncate pr-2">
-              {awayTeamName}
-            </span>
+        {/* Row 2: Teams */}
+        <div className="mb-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold truncate">{awayTeamName}</span>
             {(isFinal || isLive) && game.away_score !== null && (
-              <span className="text-lg font-bold tabular-nums">{game.away_score}</span>
+              <span className="text-base font-bold tabular-nums">{game.away_score}</span>
             )}
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-foreground truncate pr-2">
-              {homeTeamName}
-            </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold truncate">{homeTeamName}</span>
             {(isFinal || isLive) && game.home_score !== null && (
-              <span className="text-lg font-bold tabular-nums">{game.home_score}</span>
+              <span className="text-base font-bold tabular-nums">{game.home_score}</span>
             )}
           </div>
         </div>
 
-        {/* Pick recommendation - the main focus */}
-        <div className="flex items-center justify-between gap-2 mb-2">
+        {/* Row 3: Pick recommendation (the hero) */}
+        <div className="flex items-center justify-between gap-2 mb-2.5">
           <PickPill
             nH2H={game.n_h2h}
             dkOffered={game.dk_offered}
@@ -232,10 +224,10 @@ export function GameCard({ game }: GameCardProps) {
             isFinal={isFinal}
             compact
           />
-          <ChevronRight className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+          <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0 group-active:translate-x-0.5 transition-transform" />
         </div>
 
-        {/* Percentile bar - simplified */}
+        {/* Row 4: Percentile bar (compact) */}
         {game.p05 !== null && game.p95 !== null && (
           <PercentileBar
             p05={game.p05}
@@ -243,6 +235,7 @@ export function GameCard({ game }: GameCardProps) {
             dkLine={game.dk_total_line}
             dkPercentile={game.dk_line_percentile}
             finalTotal={isFinal ? game.final_total : undefined}
+            compact
           />
         )}
       </Link>

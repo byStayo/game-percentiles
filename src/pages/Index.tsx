@@ -9,7 +9,7 @@ import { GameCard } from "@/components/game/GameCardNew";
 import { GameCardSkeleton } from "@/components/game/GameCardSkeleton";
 import { EmptyState } from "@/components/game/EmptyState";
 import { ErrorState } from "@/components/game/ErrorState";
-import { WhatIsPPopover } from "@/components/game/WhatIsPPopover";
+
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useTodayGames, TodayGame } from "@/hooks/useApi";
 import { Switch } from "@/components/ui/switch";
@@ -48,7 +48,7 @@ export default function Index() {
   const [viewMode, setViewMode] = useState<ViewMode>("all");
   const [sortBy, setSortBy] = useState<SortOption>("edges-first");
   const [onlyPicks, setOnlyPicks] = useState(true);
-  const [onlyEdges, setOnlyEdges] = useState(false);
+  
   const [hideWeakData, setHideWeakData] = useState(true);
 
   // Swipe gesture handlers for date navigation
@@ -126,11 +126,6 @@ export default function Index() {
       });
     }
 
-    // Filter: only show games with detected over/under edges
-    if (onlyEdges) {
-      games = games.filter((g) => g.best_over_edge || g.best_under_edge);
-    }
-
     // Sort
     if (sortBy === "edges-first") {
       // Prioritize games with over/under edges at the top
@@ -160,7 +155,7 @@ export default function Index() {
     }
 
     return games;
-  }, [displayGames, sortBy, onlyPicks, onlyEdges, hideWeakData]);
+  }, [displayGames, sortBy, onlyPicks, hideWeakData]);
 
   // Sport counts
   const sportCounts = useMemo(
@@ -197,24 +192,21 @@ export default function Index() {
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
-          {/* Hero section - compact on mobile */}
-          <div className="text-center space-y-1.5 sm:space-y-2 pt-1 sm:pt-4">
-            <h1 className="text-xl sm:text-2xl md:text-4xl font-bold tracking-tight">
-              Game Percentiles
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {totalGames} games • {picksCount} picks
-              {edgesCount > 0 && (
-                <Link to="/best-bets" className="text-status-edge hover:underline ml-1">• {edgesCount} edges</Link>
-              )}
-            </p>
+          {/* Hero section - minimal on mobile */}
+          <div className="flex items-center justify-between pt-1 sm:pt-4">
+            <div>
+              <h1 className="text-lg sm:text-2xl font-bold">Today's Picks</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {picksCount} of {totalGames} games have an edge
+              </p>
+            </div>
             {edgesCount > 0 && (
               <Link
                 to="/best-bets"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full bg-status-edge/10 text-status-edge border border-status-edge/20 hover:bg-status-edge/20 transition-colors touch-manipulation active:scale-95"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-status-edge/10 text-status-edge border border-status-edge/30 hover:bg-status-edge/20 transition-colors touch-manipulation active:scale-95"
               >
                 <Zap className="h-3.5 w-3.5" />
-                View Edges
+                {edgesCount}
               </Link>
             )}
           </div>
@@ -227,113 +219,84 @@ export default function Index() {
             />
           </div>
 
-          {/* Controls row - mobile optimized */}
-          <div className="flex flex-col gap-2.5 sm:gap-3 p-3 rounded-2xl bg-card border border-border/60">
-            {/* Top row: View mode toggle + Sort */}
-            <div className="flex items-center justify-between gap-2">
-              {/* View mode pills */}
-              <div className="flex items-center gap-0.5 p-0.5 rounded-full bg-muted/50">
-                <button
-                  onClick={() => setViewMode("all")}
-                  className={cn(
-                    "px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full transition-all duration-200 touch-manipulation",
-                    "active:scale-95",
-                    viewMode === "all"
-                      ? "bg-foreground text-background shadow-sm"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setViewMode("sport")}
-                  className={cn(
-                    "px-3 py-1.5 text-xs sm:text-sm font-medium rounded-full transition-all duration-200 touch-manipulation",
-                    "active:scale-95",
-                    viewMode === "sport"
-                      ? "bg-foreground text-background shadow-sm"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  Sport
-                </button>
-              </div>
-
-              {/* Sort dropdown - compact */}
-              <Select
-                value={sortBy}
-                onValueChange={(v) => setSortBy(v as SortOption)}
+          {/* Controls - simplified for mobile */}
+          <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-card border border-border/50">
+            {/* View mode */}
+            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted/50">
+              <button
+                onClick={() => setViewMode("all")}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                  viewMode === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                )}
               >
-                <SelectTrigger className="w-[100px] sm:w-[130px] h-8 sm:h-9 text-xs sm:text-sm bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="edges-first">Edges First</SelectItem>
-                  <SelectItem value="edge">Percentile</SelectItem>
-                  <SelectItem value="time">Time</SelectItem>
-                </SelectContent>
-              </Select>
+                All
+              </button>
+              <button
+                onClick={() => setViewMode("sport")}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                  viewMode === "sport" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                )}
+              >
+                By Sport
+              </button>
             </div>
 
-            {/* Bottom row: Toggles - horizontal scroll on mobile */}
-            <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto scrollbar-hide -mx-1 px-1">
-              <label className="flex items-center gap-2 cursor-pointer touch-manipulation shrink-0">
+            {/* Sort */}
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+              <SelectTrigger className="w-24 h-7 text-xs bg-background border-border/50">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="edges-first">Best First</SelectItem>
+                <SelectItem value="edge">By Edge</SelectItem>
+                <SelectItem value="time">By Time</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Filters as compact toggles */}
+            <div className="flex items-center gap-2 ml-auto">
+              <label className="flex items-center gap-1.5 cursor-pointer touch-manipulation">
                 <Switch
                   id="only-picks"
                   checked={onlyPicks}
                   onCheckedChange={setOnlyPicks}
+                  className="scale-75"
                 />
-                <span className="text-xs sm:text-sm font-medium whitespace-nowrap">Picks</span>
+                <span className="text-xs">Picks only</span>
               </label>
-
-              <label className="flex items-center gap-2 cursor-pointer touch-manipulation shrink-0">
+              <label className="flex items-center gap-1.5 cursor-pointer touch-manipulation">
                 <Switch
-                  id="hide-weak-data"
+                  id="hide-weak"
                   checked={hideWeakData}
                   onCheckedChange={setHideWeakData}
+                  className="scale-75"
                 />
-                <span className="text-xs sm:text-sm font-medium whitespace-nowrap">Good data</span>
+                <span className="text-xs">5+ games</span>
               </label>
-
-              <label className="flex items-center gap-2 cursor-pointer touch-manipulation shrink-0">
-                <Switch
-                  id="only-edges"
-                  checked={onlyEdges}
-                  onCheckedChange={setOnlyEdges}
-                />
-                <span className="text-xs sm:text-sm font-medium whitespace-nowrap">Edges</span>
-              </label>
-
-              <div className="ml-auto shrink-0">
-                <WhatIsPPopover />
-              </div>
             </div>
           </div>
 
-          {/* Sport tabs (only shown in sport view mode) - compact chips */}
+          {/* Sport tabs (only shown in sport view) */}
           {viewMode === "sport" && (
-            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
+            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide -mx-3 px-3">
               {sports.map((sport) => (
                 <button
                   key={sport.id}
                   onClick={() => setSelectedSport(sport.id)}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap touch-manipulation",
-                    "active:scale-95",
+                    "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap touch-manipulation active:scale-95",
                     selectedSport === sport.id
-                      ? "bg-foreground text-background shadow-md"
+                      ? "bg-foreground text-background shadow-sm"
                       : "bg-muted/50 text-muted-foreground"
                   )}
                 >
                   {sport.name}
-                  <span
-                    className={cn(
-                      "px-1.5 py-0.5 rounded text-2xs font-semibold tabular-nums",
-                      selectedSport === sport.id
-                        ? "bg-background/20 text-background"
-                        : "bg-muted text-muted-foreground"
-                    )}
-                  >
+                  <span className={cn(
+                    "px-1 rounded text-2xs tabular-nums",
+                    selectedSport === sport.id ? "bg-background/20" : "bg-muted"
+                  )}>
                     {sportCounts[sport.id]}
                   </span>
                 </button>
@@ -341,9 +304,9 @@ export default function Index() {
             </div>
           )}
 
-          {/* Games grid - single column on mobile for easier scanning */}
+          {/* Games list */}
           {isLoading ? (
-            <div className="grid gap-3 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-2.5 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[...Array(6)].map((_, i) => (
                 <GameCardSkeleton key={i} />
               ))}
@@ -360,18 +323,18 @@ export default function Index() {
               }}
             />
           ) : filteredAndSortedGames.length > 0 ? (
-            <div className="grid gap-3 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-2.5 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filteredAndSortedGames.map((game) => (
                 <GameCard key={game.id} game={game} />
               ))}
             </div>
           ) : (
             <EmptyState
-              title={onlyPicks ? "No picks available" : "No games available"}
+              title={onlyPicks ? "No picks today" : "No games today"}
               description={
                 onlyPicks
-                  ? `No picks for ${format(selectedDate, "MMM d")}. Try disabling "Picks only".`
-                  : `No games for ${format(selectedDate, "MMM d")}.`
+                  ? "No actionable edges found. Try disabling 'Picks only'."
+                  : `No games scheduled for ${format(selectedDate, "MMM d")}.`
               }
             />
           )}
