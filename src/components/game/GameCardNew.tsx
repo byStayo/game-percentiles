@@ -2,8 +2,7 @@ import { useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { getTeamDisplayName, formatTimeET } from "@/lib/teamNames";
-import { PercentileBar } from "@/components/ui/percentile-bar";
-import { PickPill } from "@/components/game/PickPill";
+import { StatsChart } from "@/components/game/StatsChart";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useHapticFeedback } from "@/hooks/useHapticFeedback";
@@ -208,35 +207,23 @@ export function GameCard({ game }: GameCardProps) {
           </div>
         </div>
 
-        {/* Row 3: Pick recommendation (the hero) */}
-        <div className="flex items-center justify-between gap-2 mb-2.5">
-          <PickPill
-            nH2H={game.n_h2h}
-            dkOffered={game.dk_offered}
-            dkTotalLine={game.dk_total_line}
-            dkLinePercentile={game.dk_line_percentile}
-            bestOverEdge={game.best_over_edge}
-            bestUnderEdge={game.best_under_edge}
-            p95OverLine={game.p95_over_line}
-            p05UnderLine={game.p05_under_line}
-            p05={game.p05}
-            p95={game.p95}
-            isFinal={isFinal}
-            compact
-          />
-          <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0 group-active:translate-x-0.5 transition-transform" />
-        </div>
-
-        {/* Row 4: Percentile bar (compact) */}
+        {/* Stats visualization */}
         {game.p05 !== null && game.p95 !== null && (
-          <PercentileBar
-            p05={game.p05}
-            p95={game.p95}
-            dkLine={game.dk_total_line}
-            dkPercentile={game.dk_line_percentile}
-            finalTotal={isFinal ? game.final_total : undefined}
-            compact
-          />
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <StatsChart
+                p05={game.p05}
+                p95={game.p95}
+                dkLine={game.dk_total_line}
+                dkPercentile={game.dk_line_percentile}
+                finalTotal={isFinal ? game.final_total : undefined}
+                bestOverEdge={game.best_over_edge}
+                bestUnderEdge={game.best_under_edge}
+                nH2H={game.n_h2h}
+              />
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0 mt-3 group-active:translate-x-0.5 transition-transform" />
+          </div>
         )}
       </Link>
     </div>
