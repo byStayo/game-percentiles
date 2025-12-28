@@ -374,7 +374,7 @@ export default function Index() {
                 );
               })}
             </div>
-          )
+          )}
 
           {/* Games list */}
           {isLoading ? (
