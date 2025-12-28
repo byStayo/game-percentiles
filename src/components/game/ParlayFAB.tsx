@@ -57,11 +57,11 @@ export function ParlayFAB({
     localStorage.setItem("parlayPicks", JSON.stringify(existing));
     setAddedPicks(new Set([...addedPicks, pick]));
     
-    toast.success(`Added ${pick.toUpperCase()} ${dkLine} to parlay list`, {
+    toast.success(`Added ${pick.toUpperCase()} ${dkLine} to parlay`, {
       description: `${awayTeam} @ ${homeTeam}`,
       action: {
-        label: "View List",
-        onClick: () => window.location.href = "/best-bets#lock-parlay",
+        label: "View Parlay",
+        onClick: () => window.location.href = "/parlay-builder",
       },
     });
   };
