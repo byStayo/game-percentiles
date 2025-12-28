@@ -2,6 +2,7 @@ import { useLockParlayHistory } from "@/hooks/useLockParlayHistory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LockParlayChart } from "./LockParlayChart";
 import { 
   Trophy, 
   TrendingUp, 
@@ -115,6 +116,9 @@ export function LockParlayStats() {
             </div>
           </div>
         </div>
+
+        {/* Performance Chart */}
+        <LockParlayChart history={history} />
 
         {/* Recent Parlays */}
         <div className="space-y-2">

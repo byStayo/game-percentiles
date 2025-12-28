@@ -15,6 +15,7 @@ import { MiniPercentileChart } from "@/components/game/MiniPercentileChart";
 import { EdgeAccuracyCard } from "@/components/game/EdgeAccuracyCard";
 import { GameResultBadge } from "@/components/game/GameResultBadge";
 import { LockParlayStats } from "@/components/game/LockParlayStats";
+import { SameGameParlay } from "@/components/game/SameGameParlay";
 import { useLockParlayHistory } from "@/hooks/useLockParlayHistory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -779,6 +780,9 @@ export default function BestBets() {
               </CardContent>
             </Card>
           )}
+
+          {/* Same Game Parlay Mode */}
+          <SameGameParlay rankedGames={rankedGames} />
 
           {/* Lock Parlay Historical Performance */}
           <LockParlayStats />

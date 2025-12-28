@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.prewarm-slate]
 verify_jwt = false
+
+[functions.update-parlay-results]
+verify_jwt = false
