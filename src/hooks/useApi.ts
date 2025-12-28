@@ -35,6 +35,13 @@ export interface TodayGame {
   segment_used?: string;
   n_used?: number;
   updated_at: string;
+  // Edge detection data
+  p95_over_line?: number | null;
+  p95_over_odds?: number | null;
+  p05_under_line?: number | null;
+  p05_under_odds?: number | null;
+  best_over_edge?: number | null;
+  best_under_edge?: number | null;
 }
 
 export interface TodayResponse {
@@ -69,6 +76,14 @@ export interface GameDetailResponse {
     dk_line_percentile: number | null;
     segment_used?: string;
     n_used?: number;
+    // Edge detection data
+    p95_over_line?: number | null;
+    p95_over_odds?: number | null;
+    p05_under_line?: number | null;
+    p05_under_odds?: number | null;
+    best_over_edge?: number | null;
+    best_under_edge?: number | null;
+    alternate_lines?: Array<{ point: number; over_price: number; under_price: number }> | null;
   } | null;
   stats: {
     n_games: number;

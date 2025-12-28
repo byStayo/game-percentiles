@@ -8,13 +8,12 @@ import { useTodayGames } from "@/hooks/useApi";
 import { calculateConfidence, type ConfidenceResult } from "@/lib/confidenceScore";
 import { getTeamDisplayName, formatTimeET } from "@/lib/teamNames";
 import { ConfidenceBadge } from "@/components/game/ConfidenceBadge";
-import { RecencyIndicator } from "@/components/game/RecencyIndicator";
 import { PickPill } from "@/components/game/PickPill";
 import { SegmentBadge } from "@/components/game/SegmentBadge";
-import { PercentileBar } from "@/components/ui/percentile-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -27,6 +26,7 @@ import {
   Trophy,
   Shield,
   TrendingUp,
+  TrendingDown,
   Filter,
   ChevronRight,
   Star,
@@ -43,13 +43,30 @@ const SPORTS: { id: SportId | "all"; label: string }[] = [
   { id: "nhl", label: "NHL" },
 ];
 
+const EDGE_FILTERS = [
+  { id: "all", label: "All Games" },
+  { id: "over", label: "Over Edges" },
+  { id: "under", label: "Under Edges" },
+  { id: "any-edge", label: "Any Edge" },
+] as const;
+
+type EdgeFilter = typeof EDGE_FILTERS[number]["id"];
+
 interface RankedGame extends TodayGame {
   confidence: ConfidenceResult;
+  edgeType: "over" | "under" | "both" | "none";
+  edgeStrength: number;
+}
+
+function formatOdds(odds: number): string {
+  if (odds >= 0) return `+${odds}`;
+  return odds.toString();
 }
 
 export default function BestBets() {
   const [sportFilter, setSportFilter] = useState<SportId | "all">("all");
-  const [minConfidence, setMinConfidence] = useState(50);
+  const [edgeFilter, setEdgeFilter] = useState<EdgeFilter>("any-edge");
+  const [minConfidence, setMinConfidence] = useState(40);
   const [minSampleSize, setMinSampleSize] = useState(5);
 
   // Get today's date in ET
@@ -60,12 +77,14 @@ export default function BestBets() {
   }, []);
 
   // Fetch games for each sport
-  const { data: nflData } = useTodayGames(today, "nfl");
-  const { data: nbaData } = useTodayGames(today, "nba");
-  const { data: mlbData } = useTodayGames(today, "mlb");
-  const { data: nhlData } = useTodayGames(today, "nhl");
+  const { data: nflData, isLoading: nflLoading } = useTodayGames(today, "nfl");
+  const { data: nbaData, isLoading: nbaLoading } = useTodayGames(today, "nba");
+  const { data: mlbData, isLoading: mlbLoading } = useTodayGames(today, "mlb");
+  const { data: nhlData, isLoading: nhlLoading } = useTodayGames(today, "nhl");
 
-  // Combine and rank all games
+  const isLoading = nflLoading || nbaLoading || mlbLoading || nhlLoading;
+
+  // Combine and rank all games by edge strength
   const rankedGames = useMemo(() => {
     const allGames: TodayGame[] = [
       ...(nflData?.games || []),
@@ -74,25 +93,56 @@ export default function BestBets() {
       ...(nhlData?.games || []),
     ];
 
-    // Calculate confidence for each game and filter
-    const gamesWithConfidence: RankedGame[] = allGames
+    // Calculate confidence and edge type for each game
+    const gamesWithEdges: RankedGame[] = allGames
       .filter(game => game.status !== "final") // Only upcoming/live games
-      .map(game => ({
-        ...game,
-        confidence: calculateConfidence({
-          nGames: game.n_h2h,
-          segment: game.segment_used,
-        }),
-      }))
-      .filter(game => 
-        game.confidence.score >= minConfidence &&
-        game.n_h2h >= minSampleSize &&
-        (sportFilter === "all" || game.sport_id === sportFilter)
-      )
-      .sort((a, b) => b.confidence.score - a.confidence.score);
+      .map(game => {
+        const hasOverEdge = game.p95_over_line !== null && game.p95_over_line !== undefined;
+        const hasUnderEdge = game.p05_under_line !== null && game.p05_under_line !== undefined;
+        
+        let edgeType: RankedGame["edgeType"] = "none";
+        if (hasOverEdge && hasUnderEdge) edgeType = "both";
+        else if (hasOverEdge) edgeType = "over";
+        else if (hasUnderEdge) edgeType = "under";
+        
+        // Calculate edge strength (higher is better)
+        const overEdge = game.best_over_edge ?? 0;
+        const underEdge = game.best_under_edge ?? 0;
+        const edgeStrength = Math.max(overEdge, underEdge);
+        
+        return {
+          ...game,
+          confidence: calculateConfidence({
+            nGames: game.n_h2h,
+            segment: game.segment_used,
+          }),
+          edgeType,
+          edgeStrength,
+        };
+      })
+      .filter(game => {
+        // Apply filters
+        if (game.confidence.score < minConfidence) return false;
+        if (game.n_h2h < minSampleSize) return false;
+        if (sportFilter !== "all" && game.sport_id !== sportFilter) return false;
+        
+        // Edge filter
+        if (edgeFilter === "over" && game.edgeType !== "over" && game.edgeType !== "both") return false;
+        if (edgeFilter === "under" && game.edgeType !== "under" && game.edgeType !== "both") return false;
+        if (edgeFilter === "any-edge" && game.edgeType === "none") return false;
+        
+        return true;
+      })
+      // Sort by edge strength first, then confidence
+      .sort((a, b) => {
+        if (b.edgeStrength !== a.edgeStrength) {
+          return b.edgeStrength - a.edgeStrength;
+        }
+        return b.confidence.score - a.confidence.score;
+      });
 
-    return gamesWithConfidence;
-  }, [nflData, nbaData, mlbData, nhlData, sportFilter, minConfidence, minSampleSize]);
+    return gamesWithEdges;
+  }, [nflData, nbaData, mlbData, nhlData, sportFilter, edgeFilter, minConfidence, minSampleSize]);
 
   const topPicks = rankedGames.slice(0, 3);
   const otherPicks = rankedGames.slice(3);
@@ -100,10 +150,10 @@ export default function BestBets() {
   return (
     <>
       <Helmet>
-        <title>Best Bets | Game Percentiles</title>
+        <title>Best Bets | Edge Detection</title>
         <meta
           name="description"
-          content="Today's most reliable predictions ranked by data confidence. Find the best value bets based on sample size, recency, and historical accuracy."
+          content="Find the best value bets where DraftKings lines approach historical extremes. Edge detection identifies games with statistical advantages."
         />
       </Helmet>
 
@@ -112,13 +162,13 @@ export default function BestBets() {
           {/* Header */}
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-primary/10">
-                <Trophy className="h-6 w-6 text-primary" />
+              <div className="p-2 rounded-xl bg-status-live/10">
+                <Zap className="h-6 w-6 text-status-live" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold">Best Bets</h1>
                 <p className="text-muted-foreground text-sm">
-                  Games ranked by prediction reliability
+                  Games with DraftKings lines near historical p05/p95 extremes
                 </p>
               </div>
             </div>
@@ -133,7 +183,7 @@ export default function BestBets() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {/* Sport Filter */}
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground">Sport</label>
@@ -148,6 +198,26 @@ export default function BestBets() {
                       {SPORTS.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Edge Type Filter */}
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Edge Type</label>
+                  <Select
+                    value={edgeFilter}
+                    onValueChange={(v) => setEdgeFilter(v as EdgeFilter)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EDGE_FILTERS.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>
+                          {f.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -172,7 +242,7 @@ export default function BestBets() {
                 {/* Min Sample Size */}
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground">
-                    Min Sample Size: {minSampleSize} games
+                    Min Sample: {minSampleSize} games
                   </label>
                   <Slider
                     value={[minSampleSize]}
@@ -192,7 +262,7 @@ export default function BestBets() {
             <div className="space-y-3">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Star className="h-5 w-5 text-yellow-500" />
-                Top Picks
+                Top Edge Picks
               </h2>
               <div className="grid md:grid-cols-3 gap-4">
                 {topPicks.map((game, idx) => (
@@ -206,8 +276,8 @@ export default function BestBets() {
           {otherPicks.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Zap className="h-5 w-5 text-muted-foreground" />
-                More Picks ({otherPicks.length})
+                <TrendingUp className="h-5 w-5 text-muted-foreground" />
+                More Edges ({otherPicks.length})
               </h2>
               <div className="space-y-2">
                 {otherPicks.map((game, idx) => (
@@ -218,26 +288,49 @@ export default function BestBets() {
           )}
 
           {/* Empty State */}
-          {rankedGames.length === 0 && (
+          {rankedGames.length === 0 && !isLoading && (
             <Card>
               <CardContent className="py-12 text-center">
                 <Shield className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-                <h3 className="font-medium mb-1">No games match your filters</h3>
+                <h3 className="font-medium mb-1">No games with edges found</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Try lowering the minimum confidence or sample size
+                  Try adjusting filters or check back later for more games
                 </p>
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setMinConfidence(40);
+                    setEdgeFilter("all");
+                    setMinConfidence(30);
                     setMinSampleSize(3);
                   }}
                 >
-                  Reset Filters
+                  Show All Games
                 </Button>
               </CardContent>
             </Card>
           )}
+
+          {/* Loading State */}
+          {isLoading && rankedGames.length === 0 && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <div className="animate-pulse text-muted-foreground">
+                  Loading games...
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Explanation */}
+          <Card className="bg-muted/30">
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">
+                <strong>Edge Detection</strong> identifies games where DraftKings alternate lines approach 
+                historical p05/p95 extremes. A "3.5 pts edge" means the DK line is 3.5 points beyond 
+                the historical percentile — potentially offering value if history repeats.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </Layout>
     </>
@@ -277,12 +370,7 @@ function TopPickCard({ game, rank }: { game: RankedGame; rank: number }) {
             {game.sport_id}
           </span>
         </div>
-        <div className={cn(
-          "text-2xl font-bold",
-          game.confidence.color
-        )}>
-          {game.confidence.score}
-        </div>
+        <EdgeTypeBadge edgeType={game.edgeType} />
       </div>
 
       {/* Teams */}
@@ -296,26 +384,38 @@ function TopPickCard({ game, rank }: { game: RankedGame; rank: number }) {
         {formatTimeET(startTime)} ET
       </div>
 
-      {/* Pick Pill */}
-      <PickPill
-        nH2H={game.n_h2h}
-        dkOffered={game.dk_offered}
-        dkTotalLine={game.dk_total_line}
-        dkLinePercentile={game.dk_line_percentile}
-        isFinal={false}
-        className="text-xs"
-      />
+      {/* Edge Info */}
+      <div className="space-y-2 mb-3">
+        {game.p95_over_line !== null && game.p95_over_odds !== null && (
+          <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-status-over/10">
+            <div className="flex items-center gap-1.5">
+              <TrendingUp className="h-3.5 w-3.5 text-status-over" />
+              <span className="text-sm font-medium">O{game.p95_over_line}</span>
+            </div>
+            <span className="text-sm font-bold text-status-over">{formatOdds(game.p95_over_odds)}</span>
+          </div>
+        )}
+        {game.p05_under_line !== null && game.p05_under_odds !== null && (
+          <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-status-under/10">
+            <div className="flex items-center gap-1.5">
+              <TrendingDown className="h-3.5 w-3.5 text-status-under" />
+              <span className="text-sm font-medium">U{game.p05_under_line}</span>
+            </div>
+            <span className="text-sm font-bold text-status-under">{formatOdds(game.p05_under_odds)}</span>
+          </div>
+        )}
+      </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
+      <div className="flex items-center justify-between pt-3 border-t border-border/40">
         <div className="flex items-center gap-1.5">
           <span className="text-2xs text-muted-foreground">n={game.n_h2h}</span>
           {game.segment_used && (
             <SegmentBadge segment={game.segment_used} showTooltip={false} />
           )}
         </div>
-        <span className={cn("text-xs font-medium", game.confidence.color)}>
-          {game.confidence.label}
+        <span className="text-xs font-medium text-status-live">
+          {game.edgeStrength.toFixed(1)} pts edge
         </span>
       </div>
     </Link>
@@ -351,15 +451,49 @@ function RankedGameRow({ game, rank }: { game: RankedGame; rank: number }) {
         </div>
       </div>
 
-      {/* Confidence */}
-      <div className="flex items-center gap-3">
-        <ConfidenceBadge
-          nGames={game.n_h2h}
-          segment={game.segment_used}
-          showDetails={false}
-        />
-        <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+      {/* Edge Info */}
+      <div className="flex items-center gap-2">
+        <EdgeTypeBadge edgeType={game.edgeType} />
+        <span className="text-xs font-medium text-status-live tabular-nums">
+          {game.edgeStrength.toFixed(1)} pts
+        </span>
       </div>
+
+      {/* Arrow */}
+      <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
     </Link>
+  );
+}
+
+function EdgeTypeBadge({ edgeType }: { edgeType: RankedGame["edgeType"] }) {
+  if (edgeType === "none") return null;
+  
+  if (edgeType === "both") {
+    return (
+      <div className="flex items-center gap-0.5">
+        <Badge variant="outline" className="px-1.5 py-0 text-2xs bg-status-over/10 text-status-over border-status-over/20">
+          O
+        </Badge>
+        <Badge variant="outline" className="px-1.5 py-0 text-2xs bg-status-under/10 text-status-under border-status-under/20">
+          U
+        </Badge>
+      </div>
+    );
+  }
+  
+  if (edgeType === "over") {
+    return (
+      <Badge variant="outline" className="px-1.5 py-0.5 text-2xs bg-status-over/10 text-status-over border-status-over/20">
+        <TrendingUp className="h-3 w-3 mr-0.5" />
+        Over
+      </Badge>
+    );
+  }
+  
+  return (
+    <Badge variant="outline" className="px-1.5 py-0.5 text-2xs bg-status-under/10 text-status-under border-status-under/20">
+      <TrendingDown className="h-3 w-3 mr-0.5" />
+      Under
+    </Badge>
   );
 }

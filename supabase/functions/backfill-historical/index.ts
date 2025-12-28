@@ -231,12 +231,12 @@ async function runBackfill(
             existingGame.away_score !== espnGame.awayScore;
 
           if (scoreDiffers && existingGame.status !== "scheduled") {
+            // NOTE: final_total is a GENERATED column, don't update it directly
             const { error } = await supabase
               .from("games")
               .update({
                 home_score: espnGame.homeScore,
                 away_score: espnGame.awayScore,
-                final_total: espnGame.homeScore + espnGame.awayScore,
                 status: "final",
               })
               .eq("id", existingGame.id);
@@ -249,6 +249,7 @@ async function runBackfill(
                 .update({ total: espnGame.homeScore + espnGame.awayScore })
                 .eq("game_id", existingGame.id);
             } else {
+              console.error(`[BACKFILL] Update error:`, error.message);
               errorCount++;
             }
           }
@@ -265,6 +266,7 @@ async function runBackfill(
           const providerGameKey = `espn-${sport}-${espnGame.espnId}`;
           const finalTotal = espnGame.homeScore + espnGame.awayScore;
 
+          // NOTE: final_total is a GENERATED column - don't include it in insert
           const { data: newGame, error: insertError } = await supabase
             .from("games")
             .insert({
