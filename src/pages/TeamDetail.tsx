@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PageTransition, StaggerItem } from "@/components/ui/page-transition";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, Trophy, TrendingUp, TrendingDown, Calendar, Target, Users, ChevronRight, RefreshCw, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -317,47 +318,48 @@ export default function TeamDetail() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
-        {/* Back Link */}
-        <Link to="/teams" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Teams
-        </Link>
+      <PageTransition>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+          {/* Back Link */}
+          <Link to="/teams" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors group">
+            <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
+            Back to Teams
+          </Link>
 
-        {isLoading ? (
-          <div className="space-y-6">
-            <Skeleton className="h-20 w-80" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
-            </div>
-            <Skeleton className="h-80 rounded-xl" />
-          </div>
-        ) : !team ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground text-lg">Team not found</p>
-          </div>
-        ) : (
-          <>
-            {/* Header */}
-            <div className="mb-8">
-              <div className="flex items-center gap-3 mb-2">
-                <span className={cn(
-                  "px-2.5 py-1 rounded-lg text-xs font-semibold uppercase",
-                  team.sport_id === 'nba' && "bg-orange-500/10 text-orange-500",
-                  team.sport_id === 'nfl' && "bg-green-500/10 text-green-500",
-                  team.sport_id === 'mlb' && "bg-blue-500/10 text-blue-500",
-                  team.sport_id === 'nhl' && "bg-cyan-500/10 text-cyan-500"
-                )}>
-                  {sportLabels[team.sport_id]}
-                </span>
+          {isLoading ? (
+            <div className="space-y-6">
+              <Skeleton className="h-20 w-80" />
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
               </div>
-              <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
-                {team.city && `${team.city} `}{team.name}
-              </h1>
-              {team.abbrev && (
-                <p className="text-xl text-muted-foreground mt-1">{team.abbrev}</p>
-              )}
+              <Skeleton className="h-80 rounded-xl" />
             </div>
+          ) : !team ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground text-lg">Team not found</p>
+            </div>
+          ) : (
+            <>
+              {/* Header */}
+              <StaggerItem index={0} className="mb-8">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className={cn(
+                    "px-2.5 py-1 rounded-lg text-xs font-semibold uppercase",
+                    team.sport_id === 'nba' && "bg-sport-nba/10 text-sport-nba",
+                    team.sport_id === 'nfl' && "bg-sport-nfl/10 text-sport-nfl",
+                    team.sport_id === 'mlb' && "bg-sport-mlb/10 text-sport-mlb",
+                    team.sport_id === 'nhl' && "bg-muted text-muted-foreground"
+                  )}>
+                    {sportLabels[team.sport_id]}
+                  </span>
+                </div>
+                <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
+                  {team.city && `${team.city} `}{team.name}
+                </h1>
+                {team.abbrev && (
+                  <p className="text-xl text-muted-foreground mt-1">{team.abbrev}</p>
+                )}
+              </StaggerItem>
 
             {careerStats && (
               <>
@@ -819,7 +821,8 @@ export default function TeamDetail() {
             )}
           </>
         )}
-      </div>
+        </div>
+      </PageTransition>
     </Layout>
   );
 }
