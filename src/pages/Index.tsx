@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { Zap } from "lucide-react";
 import type { SportId } from "@/types";
 
 const ET_TIMEZONE = "America/New_York";
@@ -195,7 +196,7 @@ export default function Index() {
           onTouchEnd={onTouchEnd}
         >
           {/* Hero section - minimal */}
-          <div className="text-center space-y-1 pt-2 sm:pt-4">
+          <div className="text-center space-y-2 pt-2 sm:pt-4">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight">
               Game Percentiles
             </h1>
@@ -205,6 +206,15 @@ export default function Index() {
                 <Link to="/best-bets" className="text-status-edge hover:underline"> • {edgesCount} edge{edgesCount !== 1 ? 's' : ''}</Link>
               )}
             </p>
+            {edgesCount > 0 && (
+              <Link
+                to="/best-bets"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full bg-status-edge/10 text-status-edge border border-status-edge/20 hover:bg-status-edge/20 transition-colors"
+              >
+                <Zap className="h-4 w-4" />
+                View Best Edges
+              </Link>
+            )}
           </div>
 
           {/* Date picker - centered, more compact on mobile */}
