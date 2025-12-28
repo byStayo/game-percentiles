@@ -199,6 +199,11 @@ export default function BestBets() {
   const topPicks = rankedGames.slice(0, 3);
   const otherPicks = rankedGames.slice(3);
 
+  // Count games with DK lines beyond historical extremes
+  const beyondExtremesCount = useMemo(() => {
+    return rankedGames.filter(game => game.isBeyondExtremes).length;
+  }, [rankedGames]);
+
   // Calculate combined edge strength for top 3
   const combinedEdgeStrength = useMemo(() => {
     return topPicks.reduce((sum, game) => sum + game.edgeStrength, 0);
@@ -249,16 +254,32 @@ export default function BestBets() {
         <div className="max-w-4xl mx-auto space-y-6 animate-fade-in px-4 py-6">
           {/* Header */}
           <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-status-live/10">
-                <Zap className="h-6 w-6 text-status-live" />
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-status-live/10">
+                  <Zap className="h-6 w-6 text-status-live" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-2xl font-bold">Best Bets</h1>
+                    {beyondExtremesCount > 0 && (
+                      <Badge className="bg-status-live text-white animate-pulse">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        {beyondExtremesCount} beyond extremes
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-muted-foreground text-sm">
+                    Games with DraftKings lines near historical p05/p95 extremes
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold">Best Bets</h1>
-                <p className="text-muted-foreground text-sm">
-                  Games with DraftKings lines near historical p05/p95 extremes
-                </p>
-              </div>
+              <Link to="/parlay-optimizer">
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Target className="h-4 w-4" />
+                  Parlay Optimizer
+                </Button>
+              </Link>
             </div>
           </div>
 

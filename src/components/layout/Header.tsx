@@ -55,6 +55,7 @@ const coreNav: NavItem[] = [
   { href: "/week", label: "Week", icon: Calendar },
   { href: "/best-bets", label: "Best Bets", icon: Trophy },
   { href: "/parlay", label: "Parlay", icon: Target },
+  { href: "/parlay-optimizer", label: "Optimizer", icon: Zap },
 ];
 
 const teamsGroup: NavGroup = {
@@ -205,7 +206,7 @@ export function Header() {
 
         {/* Desktop Navigation - hidden on mobile, BottomNav handles mobile */}
         <nav className="hidden md:flex items-center gap-1 p-1 rounded-full bg-secondary/50">
-          {coreNav.slice(0, 4).map((item) => (
+          {coreNav.slice(0, 5).map((item) => (
             <Link
               key={item.href}
               to={item.href}

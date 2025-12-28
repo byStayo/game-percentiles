@@ -45,8 +45,8 @@ import { useState } from "react";
 const mainNavItems = [
   { href: "/", label: "Today", icon: Calendar },
   { href: "/best-bets", label: "Best Bets", icon: Trophy },
+  { href: "/parlay-optimizer", label: "Optimizer", icon: Target },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/parlay", label: "Parlay", icon: Target },
 ];
 
 const moreNavGroups = [
