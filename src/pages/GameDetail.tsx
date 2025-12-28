@@ -21,6 +21,7 @@ import { SegmentComparison } from "@/components/game/SegmentComparison";
 import { SegmentTimeline } from "@/components/game/SegmentTimeline";
 import { SegmentAnalysis } from "@/components/game/SegmentAnalysis";
 import { EdgeDetectionCard } from "@/components/game/EdgeDetectionCard";
+import { ParlayFAB } from "@/components/game/ParlayFAB";
 import { Button } from "@/components/ui/button";
 import { HistoricalDistributionChart } from "@/components/game/HistoricalDistributionChart";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
@@ -621,6 +622,17 @@ export default function GameDetail() {
             Historical data analysis for entertainment purposes only.
           </p>
         </div>
+
+        {/* Floating Action Button for Parlay */}
+        <ParlayFAB
+          gameId={game.id}
+          homeTeam={homeTeamName}
+          awayTeam={awayTeamName}
+          dkLine={edge?.dk_total_line ?? null}
+          percentile={edge?.dk_line_percentile ?? null}
+          p05={stats?.p05 ?? null}
+          p95={stats?.p95 ?? null}
+        />
       </Layout>
     </>
   );
