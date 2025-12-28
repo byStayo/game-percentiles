@@ -42,6 +42,9 @@ export interface TodayGame {
   p05_under_odds?: number | null;
   best_over_edge?: number | null;
   best_under_edge?: number | null;
+  // DK line range (extremes of what's offered)
+  dk_highest_over?: { line: number; odds: number } | null;
+  dk_lowest_under?: { line: number; odds: number } | null;
 }
 
 export interface TodayResponse {
