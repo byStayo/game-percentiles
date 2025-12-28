@@ -619,48 +619,135 @@ export default function BestBets() {
                 </p>
                 
                 {/* Combined Probability Display */}
-                {lockPicks.length >= 2 && (
-                  <div className="mt-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Target className="h-4 w-4 text-yellow-600" />
-                        <span className="text-sm font-medium">Combined Parlay Probability</span>
-                      </div>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge className="bg-yellow-600 text-white font-bold text-sm cursor-help">
-                            {(lockPicks.reduce((acc, g) => acc * (g.hitProbability / 100), 1) * 100).toFixed(1)}%
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs p-3">
-                          <div className="text-xs space-y-2">
-                            <p className="font-semibold">How it's calculated:</p>
-                            <p className="text-muted-foreground">
-                              Combined probability = multiply each leg's probability together.
-                            </p>
-                            <div className="space-y-1 pt-1 border-t border-border/40">
-                              {lockPicks.map((g, i) => (
-                                <div key={g.game_id} className="flex justify-between">
-                                  <span>Leg {i + 1}:</span>
-                                  <span className="font-mono">{g.hitProbability.toFixed(1)}%</span>
+                {lockPicks.length >= 2 && (() => {
+                  const n = lockPicks.length;
+                  const probs = lockPicks.map(g => g.hitProbability / 100);
+                  const combinedProb = probs.reduce((acc, p) => acc * p, 1) * 100;
+                  const avgProb = probs.reduce((sum, p) => sum + p, 0) / n;
+                  
+                  // Calculate probability of hitting at least K legs using recursive calculation
+                  // This handles non-identical probabilities correctly
+                  const calcAtLeastK = (k: number): number => {
+                    if (k > n) return 0;
+                    if (k === 0) return 1;
+                    
+                    // Use dynamic programming for exact calculation with non-identical probs
+                    // dp[i][j] = probability of exactly j successes in first i picks
+                    const dp: number[][] = Array(n + 1).fill(null).map(() => Array(n + 1).fill(0));
+                    dp[0][0] = 1;
+                    
+                    for (let i = 0; i < n; i++) {
+                      for (let j = 0; j <= i; j++) {
+                        if (dp[i][j] > 0) {
+                          // This pick succeeds
+                          dp[i + 1][j + 1] += dp[i][j] * probs[i];
+                          // This pick fails
+                          dp[i + 1][j] += dp[i][j] * (1 - probs[i]);
+                        }
+                      }
+                    }
+                    
+                    // Sum probabilities of getting k or more successes
+                    let result = 0;
+                    for (let j = k; j <= n; j++) {
+                      result += dp[n][j];
+                    }
+                    return result * 100;
+                  };
+                  
+                  // Calculate key thresholds
+                  const atLeastAll = combinedProb;
+                  const atLeastAllButOne = n > 1 ? calcAtLeastK(n - 1) : 100;
+                  const atLeastHalf = calcAtLeastK(Math.ceil(n / 2));
+                  
+                  return (
+                    <div className="mt-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Target className="h-4 w-4 text-yellow-600" />
+                          <span className="text-sm font-medium">Combined Parlay Probability</span>
+                        </div>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge className="bg-yellow-600 text-white font-bold text-sm cursor-help">
+                              {combinedProb.toFixed(1)}%
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs p-3">
+                            <div className="text-xs space-y-2">
+                              <p className="font-semibold">How it's calculated:</p>
+                              <p className="text-muted-foreground">
+                                Combined probability = multiply each leg's probability together.
+                              </p>
+                              <div className="space-y-1 pt-1 border-t border-border/40">
+                                {lockPicks.map((g, i) => (
+                                  <div key={g.game_id} className="flex justify-between">
+                                    <span>Leg {i + 1}:</span>
+                                    <span className="font-mono">{g.hitProbability.toFixed(1)}%</span>
+                                  </div>
+                                ))}
+                                <div className="flex justify-between pt-1 border-t font-semibold">
+                                  <span>Combined:</span>
+                                  <span className="font-mono">{combinedProb.toFixed(1)}%</span>
                                 </div>
-                              ))}
-                              <div className="flex justify-between pt-1 border-t font-semibold">
-                                <span>Combined:</span>
-                                <span className="font-mono">
-                                  {(lockPicks.reduce((acc, g) => acc * (g.hitProbability / 100), 1) * 100).toFixed(1)}%
-                                </span>
                               </div>
                             </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      
+                      {/* Confidence Interval / Expected Outcomes */}
+                      <div className="space-y-2 pt-2 border-t border-yellow-500/20">
+                        <div className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                          <Shield className="h-3.5 w-3.5" />
+                          Expected Outcomes
+                        </div>
+                        <div className="grid gap-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">Hit all {n} legs:</span>
+                            <Badge variant="outline" className={cn(
+                              "font-mono text-xs",
+                              atLeastAll >= 80 ? "border-green-500/50 text-green-600" :
+                              atLeastAll >= 50 ? "border-yellow-500/50 text-yellow-600" :
+                              "border-muted text-muted-foreground"
+                            )}>
+                              {atLeastAll.toFixed(1)}%
+                            </Badge>
                           </div>
-                        </TooltipContent>
-                      </Tooltip>
+                          {n > 1 && (
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">Hit at least {n - 1} of {n}:</span>
+                              <Badge variant="outline" className={cn(
+                                "font-mono text-xs",
+                                atLeastAllButOne >= 80 ? "border-green-500/50 text-green-600" :
+                                atLeastAllButOne >= 50 ? "border-yellow-500/50 text-yellow-600" :
+                                "border-muted text-muted-foreground"
+                              )}>
+                                {atLeastAllButOne.toFixed(1)}%
+                              </Badge>
+                            </div>
+                          )}
+                          {n >= 3 && (
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">Hit at least {Math.ceil(n / 2)} of {n}:</span>
+                              <Badge variant="outline" className={cn(
+                                "font-mono text-xs",
+                                atLeastHalf >= 80 ? "border-green-500/50 text-green-600" :
+                                atLeastHalf >= 50 ? "border-yellow-500/50 text-yellow-600" :
+                                "border-muted text-muted-foreground"
+                              )}>
+                                {atLeastHalf.toFixed(1)}%
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground/70 pt-1">
+                          Based on individual leg probabilities ({n} legs × avg {(avgProb * 100).toFixed(0)}% per leg)
+                        </p>
+                      </div>
                     </div>
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      {lockPicks.length} legs × avg {(lockPicks.reduce((sum, g) => sum + g.hitProbability, 0) / lockPicks.length).toFixed(0)}% per leg
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="space-y-2">
