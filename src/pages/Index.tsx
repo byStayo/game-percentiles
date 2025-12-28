@@ -171,6 +171,11 @@ export default function Index() {
 
   const totalGames = allGames.length;
   const picksCount = filteredAndSortedGames.length;
+  
+  // Count games with detected edges
+  const edgesCount = useMemo(() => {
+    return allGames.filter((g) => g.best_over_edge || g.best_under_edge).length;
+  }, [allGames]);
 
   return (
     <>
@@ -195,6 +200,9 @@ export default function Index() {
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground">
               {totalGames} games today • {picksCount} picks
+              {edgesCount > 0 && (
+                <span className="text-status-edge"> • {edgesCount} edge{edgesCount !== 1 ? 's' : ''}</span>
+              )}
             </p>
           </div>
 
