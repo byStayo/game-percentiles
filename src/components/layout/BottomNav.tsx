@@ -23,6 +23,7 @@ import {
   Activity,
   Building2,
   Server,
+  Zap,
 } from "lucide-react";
 import {
   Sheet,
@@ -40,6 +41,8 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
+import { Badge } from "@/components/ui/badge";
+import { useOptimizerPicksCount } from "@/hooks/useOptimizerPicksCount";
 import { useState } from "react";
 
 const mainNavItems = [
@@ -96,6 +99,7 @@ export function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const optimizerCount = useOptimizerPicksCount();
 
   const isMoreActive = allMoreItems.some((item) => location.pathname === item.href);
 
@@ -112,23 +116,34 @@ export function BottomNav() {
           {mainNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.href;
+            const isOptimizer = item.href === "/parlay-optimizer";
+            const showBadge = isOptimizer && optimizerCount > 0;
 
             return (
               <Link
                 key={item.href}
                 to={item.href}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 px-2 py-2.5 rounded-2xl transition-all duration-200 min-w-[60px] min-h-[56px]",
+                  "relative flex flex-col items-center justify-center gap-1 px-2 py-2.5 rounded-2xl transition-all duration-200 min-w-[60px] min-h-[56px]",
                   "active:scale-90 touch-manipulation",
                   isActive 
                     ? "text-primary bg-primary/10" 
                     : "text-muted-foreground active:bg-muted/50",
                 )}
               >
-                <Icon className={cn(
-                  "h-6 w-6 transition-all duration-200",
-                  isActive && "scale-110"
-                )} />
+                <div className="relative">
+                  <Icon className={cn(
+                    "h-6 w-6 transition-all duration-200",
+                    isActive && "scale-110"
+                  )} />
+                  {showBadge && (
+                    <Badge 
+                      className="absolute -top-1.5 -right-2 h-4 min-w-4 px-1 text-[10px] bg-status-edge text-white border-0"
+                    >
+                      {optimizerCount}
+                    </Badge>
+                  )}
+                </div>
                 <span className={cn(
                   "text-[11px] font-medium leading-tight",
                   isActive && "font-semibold"
