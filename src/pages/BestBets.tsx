@@ -12,6 +12,8 @@ import { PickPill } from "@/components/game/PickPill";
 import { SegmentBadge } from "@/components/game/SegmentBadge";
 import { DkDistanceBadge, isDkBeyondExtremes, BeyondExtremesWarning } from "@/components/game/DkDistanceBadge";
 import { MiniPercentileChart } from "@/components/game/MiniPercentileChart";
+import { EdgeAccuracyCard } from "@/components/game/EdgeAccuracyCard";
+import { GameResultBadge } from "@/components/game/GameResultBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -40,6 +42,8 @@ import {
   Target,
   ArrowUpDown,
   AlertTriangle,
+  CheckCircle2,
+  History,
 } from "lucide-react";
 import type { SportId } from "@/types";
 import type { TodayGame } from "@/hooks/useApi";
@@ -91,6 +95,7 @@ export default function BestBets() {
   const [edgeFilter, setEdgeFilter] = useState<EdgeFilter>("any-edge");
   const [sortBy, setSortBy] = useState<SortOption>("edge-strength");
   const [beyondExtremesOnly, setBeyondExtremesOnly] = useState(false);
+  const [showFinalGames, setShowFinalGames] = useState(true);
   const [minConfidence, setMinConfidence] = useState(40);
   const [minSampleSize, setMinSampleSize] = useState(5);
 
@@ -110,7 +115,7 @@ export default function BestBets() {
   const isLoading = nflLoading || nbaLoading || mlbLoading || nhlLoading;
 
   // Combine and rank all games by edge strength
-  const rankedGames = useMemo(() => {
+  const { rankedGames, finalGames } = useMemo(() => {
     const allGames: TodayGame[] = [
       ...(nflData?.games || []),
       ...(nbaData?.games || []),
@@ -118,90 +123,108 @@ export default function BestBets() {
       ...(nhlData?.games || []),
     ];
 
-    // Calculate confidence and edge type for each game
-    const gamesWithEdges: RankedGame[] = allGames
-      .filter(game => game.status !== "final") // Only upcoming/live games
-      .map(game => {
-        const hasOverEdge = game.p95_over_line !== null && game.p95_over_line !== undefined;
-        const hasUnderEdge = game.p05_under_line !== null && game.p05_under_line !== undefined;
-        
-        let edgeType: RankedGame["edgeType"] = "none";
-        if (hasOverEdge && hasUnderEdge) edgeType = "both";
-        else if (hasOverEdge) edgeType = "over";
-        else if (hasUnderEdge) edgeType = "under";
-        
-        // Calculate edge strength (higher is better) - only use positive edges
-        const overEdge = Math.max(0, game.best_over_edge ?? 0);
-        const underEdge = Math.max(0, game.best_under_edge ?? 0);
-        const edgeStrength = Math.max(overEdge, underEdge);
-        
-        // Calculate DK distance from percentile (how close DK line is to p05 or p95)
-        // Lower distance = closer to extreme = more value
-        const dkLine = game.dk_total_line ?? 0;
-        const p05 = game.p05 ?? 0;
-        const p95 = game.p95 ?? 0;
-        const distanceToP05 = Math.abs(dkLine - p05);
-        const distanceToP95 = Math.abs(dkLine - p95);
-        const dkDistanceFromPercentile = Math.min(distanceToP05, distanceToP95);
-        
-        // Check if DK line extends beyond historical extremes
-        const isBeyondExtremes = dkLine < p05 || dkLine > p95;
-        
-        return {
-          ...game,
-          confidence: calculateConfidence({
-            nGames: game.n_h2h,
-            segment: game.segment_used,
-          }),
-          edgeType,
-          edgeStrength,
-          dkDistanceFromPercentile,
-          isBeyondExtremes,
-        };
-      })
+    // Helper function to process a game into RankedGame
+    const processGame = (game: TodayGame): RankedGame => {
+      const hasOverEdge = game.p95_over_line !== null && game.p95_over_line !== undefined;
+      const hasUnderEdge = game.p05_under_line !== null && game.p05_under_line !== undefined;
+      
+      let edgeType: RankedGame["edgeType"] = "none";
+      if (hasOverEdge && hasUnderEdge) edgeType = "both";
+      else if (hasOverEdge) edgeType = "over";
+      else if (hasUnderEdge) edgeType = "under";
+      
+      // Calculate edge strength (higher is better) - only use positive edges
+      const overEdge = Math.max(0, game.best_over_edge ?? 0);
+      const underEdge = Math.max(0, game.best_under_edge ?? 0);
+      const edgeStrength = Math.max(overEdge, underEdge);
+      
+      // Calculate DK distance from percentile (how close DK line is to p05 or p95)
+      // Lower distance = closer to extreme = more value
+      const dkLine = game.dk_total_line ?? 0;
+      const p05 = game.p05 ?? 0;
+      const p95 = game.p95 ?? 0;
+      const distanceToP05 = Math.abs(dkLine - p05);
+      const distanceToP95 = Math.abs(dkLine - p95);
+      const dkDistanceFromPercentile = Math.min(distanceToP05, distanceToP95);
+      
+      // Check if DK line extends beyond historical extremes
+      const isBeyondExtremes = dkLine < p05 || dkLine > p95;
+      
+      return {
+        ...game,
+        confidence: calculateConfidence({
+          nGames: game.n_h2h,
+          segment: game.segment_used,
+        }),
+        edgeType,
+        edgeStrength,
+        dkDistanceFromPercentile,
+        isBeyondExtremes,
+      };
+    };
+
+    // Filter function for edge criteria
+    const applyFilters = (game: RankedGame): boolean => {
+      if (game.confidence.score < minConfidence) return false;
+      if (game.n_h2h < minSampleSize) return false;
+      if (sportFilter !== "all" && game.sport_id !== sportFilter) return false;
+      
+      // Edge filter - also filter out zero/negative edges
+      if (edgeFilter === "over" && game.edgeType !== "over" && game.edgeType !== "both") return false;
+      if (edgeFilter === "under" && game.edgeType !== "under" && game.edgeType !== "both") return false;
+      if (edgeFilter === "any-edge" && (game.edgeType === "none" || game.edgeStrength <= 0)) return false;
+      
+      // Beyond extremes filter
+      if (beyondExtremesOnly && !game.isBeyondExtremes) return false;
+      
+      return true;
+    };
+
+    // Sort function
+    const sortGames = (a: RankedGame, b: RankedGame): number => {
+      switch (sortBy) {
+        case "edge-strength":
+          if (b.edgeStrength !== a.edgeStrength) {
+            return b.edgeStrength - a.edgeStrength;
+          }
+          return b.confidence.score - a.confidence.score;
+        case "dk-distance":
+          if (a.dkDistanceFromPercentile !== b.dkDistanceFromPercentile) {
+            return a.dkDistanceFromPercentile - b.dkDistanceFromPercentile;
+          }
+          return b.edgeStrength - a.edgeStrength;
+        case "confidence":
+          if (b.confidence.score !== a.confidence.score) {
+            return b.confidence.score - a.confidence.score;
+          }
+          return b.edgeStrength - a.edgeStrength;
+        case "time":
+          return new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime();
+        default:
+          return b.edgeStrength - a.edgeStrength;
+      }
+    };
+
+    // Process upcoming/live games
+    const upcomingGames = allGames
+      .filter(game => game.status !== "final")
+      .map(processGame)
+      .filter(applyFilters)
+      .sort(sortGames);
+
+    // Process final games with edges
+    const completedGames = allGames
+      .filter(game => game.status === "final" && game.final_total !== null)
+      .map(processGame)
+      .filter(game => game.edgeType !== "none" && game.edgeStrength > 0)
       .filter(game => {
-        // Apply filters
-        if (game.confidence.score < minConfidence) return false;
-        if (game.n_h2h < minSampleSize) return false;
+        // Apply sport filter to final games too
         if (sportFilter !== "all" && game.sport_id !== sportFilter) return false;
-        
-        // Edge filter - also filter out zero/negative edges
-        if (edgeFilter === "over" && game.edgeType !== "over" && game.edgeType !== "both") return false;
-        if (edgeFilter === "under" && game.edgeType !== "under" && game.edgeType !== "both") return false;
-        if (edgeFilter === "any-edge" && (game.edgeType === "none" || game.edgeStrength <= 0)) return false;
-        
-        // Beyond extremes filter
-        if (beyondExtremesOnly && !game.isBeyondExtremes) return false;
-        
         return true;
       })
-      // Sort based on selected option
-      .sort((a, b) => {
-        switch (sortBy) {
-          case "edge-strength":
-            if (b.edgeStrength !== a.edgeStrength) {
-              return b.edgeStrength - a.edgeStrength;
-            }
-            return b.confidence.score - a.confidence.score;
-          case "dk-distance":
-            // Lower distance = closer to percentile = better
-            if (a.dkDistanceFromPercentile !== b.dkDistanceFromPercentile) {
-              return a.dkDistanceFromPercentile - b.dkDistanceFromPercentile;
-            }
-            return b.edgeStrength - a.edgeStrength;
-          case "confidence":
-            if (b.confidence.score !== a.confidence.score) {
-              return b.confidence.score - a.confidence.score;
-            }
-            return b.edgeStrength - a.edgeStrength;
-          case "time":
-            return new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime();
-          default:
-            return b.edgeStrength - a.edgeStrength;
-        }
-      });
+      .sort((a, b) => new Date(b.start_time_utc).getTime() - new Date(a.start_time_utc).getTime());
 
-    return gamesWithEdges;
+    return { rankedGames: upcomingGames, finalGames: completedGames };
   }, [nflData, nbaData, mlbData, nhlData, sportFilter, edgeFilter, sortBy, minConfidence, minSampleSize, beyondExtremesOnly]);
 
   const topPicks = rankedGames.slice(0, 3);
@@ -459,8 +482,36 @@ export default function BestBets() {
             </div>
           )}
 
+          {/* Today's Final Games with Results */}
+          {showFinalGames && finalGames.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <History className="h-5 w-5 text-muted-foreground" />
+                  Today's Results ({finalGames.length})
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowFinalGames(false)}
+                  className="text-xs text-muted-foreground"
+                >
+                  Hide
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {finalGames.map((game) => (
+                  <FinalGameRow key={game.game_id} game={game} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Historical Accuracy Tracker */}
+          <EdgeAccuracyCard />
+
           {/* Empty State */}
-          {rankedGames.length === 0 && !isLoading && (
+          {rankedGames.length === 0 && finalGames.length === 0 && !isLoading && (
             <Card>
               <CardContent className="py-12 text-center">
                 <Shield className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
@@ -718,5 +769,103 @@ function EdgeStrengthBadge({ edgeStrength }: { edgeStrength: number }) {
     <Badge variant="outline" className={cn("px-1.5 py-0.5 text-2xs", color)}>
       {edgeStrength.toFixed(1)} pts • {label}
     </Badge>
+  );
+}
+
+// Component for displaying final games with results
+function FinalGameRow({ game }: { game: RankedGame }) {
+  const homeTeamName = getTeamDisplayName(game.home_team, game.sport_id);
+  const awayTeamName = getTeamDisplayName(game.away_team, game.sport_id);
+  
+  const finalTotal = game.final_total;
+  const dkLine = game.dk_total_line;
+  const isOver = finalTotal !== null && dkLine !== null && finalTotal > dkLine;
+  const isPush = finalTotal !== null && dkLine !== null && finalTotal === dkLine;
+  
+  // Determine if the edge pick hit
+  const overEdge = game.best_over_edge ?? 0;
+  const underEdge = game.best_under_edge ?? 0;
+  const predictedOver = overEdge > underEdge;
+  
+  let result: "hit" | "miss" | "push" = "push";
+  if (finalTotal !== null && dkLine !== null) {
+    if (isPush) {
+      result = "push";
+    } else if (predictedOver && isOver) {
+      result = "hit";
+    } else if (!predictedOver && !isOver) {
+      result = "hit";
+    } else {
+      result = "miss";
+    }
+  }
+
+  const ResultIcon = result === "hit" ? CheckCircle2 : result === "miss" ? AlertTriangle : Target;
+
+  return (
+    <Link
+      to={`/game/${game.game_id}`}
+      className={cn(
+        "flex items-center gap-3 p-3 rounded-xl border transition-colors group",
+        result === "hit" && "bg-status-over/5 border-status-over/30",
+        result === "miss" && "bg-status-live/5 border-status-live/30",
+        result === "push" && "bg-muted/30 border-border"
+      )}
+    >
+      {/* Result Icon */}
+      <ResultIcon className={cn(
+        "h-5 w-5 flex-shrink-0",
+        result === "hit" && "text-status-over",
+        result === "miss" && "text-status-live",
+        result === "push" && "text-muted-foreground"
+      )} />
+
+      {/* Teams & Info */}
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium truncate">
+          {awayTeamName} @ {homeTeamName}
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="uppercase">{game.sport_id}</span>
+          <span>•</span>
+          <span>Edge: {predictedOver ? "OVER" : "UNDER"}</span>
+          {game.isBeyondExtremes && (
+            <>
+              <span>•</span>
+              <AlertTriangle className="h-3 w-3 text-status-live" />
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Result Display */}
+      <div className="text-right flex-shrink-0">
+        <div className="flex items-center gap-2">
+          {finalTotal !== null && dkLine !== null && (
+            <div className="text-right">
+              <div className="text-sm font-bold tabular-nums">
+                {finalTotal}
+              </div>
+              <div className="text-2xs text-muted-foreground tabular-nums">
+                vs {dkLine}
+              </div>
+            </div>
+          )}
+          <Badge 
+            variant="outline" 
+            className={cn(
+              "text-xs px-2 py-0.5",
+              result === "hit" && "bg-status-over/10 text-status-over border-status-over/30",
+              result === "miss" && "bg-status-live/10 text-status-live border-status-live/30",
+              result === "push" && "bg-muted text-muted-foreground border-border"
+            )}
+          >
+            {result === "hit" ? "HIT" : result === "miss" ? "MISS" : "PUSH"}
+          </Badge>
+        </div>
+      </div>
+
+      <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors flex-shrink-0" />
+    </Link>
   );
 }
