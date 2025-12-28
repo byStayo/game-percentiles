@@ -24,6 +24,7 @@ import {
   Building2,
   Server,
   Zap,
+  Layers,
 } from "lucide-react";
 import {
   Sheet,
@@ -80,6 +81,7 @@ const moreNavGroups = [
       { href: "/ou-trends", label: "O/U Trends", icon: LineChart },
       { href: "/league-stats", label: "League Stats", icon: PieChart },
       { href: "/simulator", label: "Bet Simulator", icon: Dices },
+      { href: "/parlay-builder", label: "Parlay Builder", icon: Layers },
     ],
   },
   {
