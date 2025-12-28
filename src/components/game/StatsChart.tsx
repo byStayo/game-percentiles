@@ -1,5 +1,10 @@
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, AlertTriangle, Shield } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle, Shield, ArrowUp, ArrowDown } from "lucide-react";
+
+// Format odds with + for positive
+function formatOdds(odds: number): string {
+  return odds >= 0 ? `+${odds}` : `${odds}`;
+}
 
 interface StatsChartProps {
   p05: number;
@@ -14,6 +19,9 @@ interface StatsChartProps {
   nH2H?: number;
   segmentUsed?: string | null;
   className?: string;
+  // DK line range (extremes of what's offered)
+  dkHighestOver?: { line: number; odds: number } | null;
+  dkLowestUnder?: { line: number; odds: number } | null;
 }
 
 // Calculate confidence score based on sample size, recency, and data source type
@@ -90,6 +98,8 @@ export function StatsChart({
   nH2H,
   segmentUsed,
   className,
+  dkHighestOver,
+  dkLowestUnder,
 }: StatsChartProps) {
   // Calculate median as midpoint (approximate since we don't have actual median)
   const median = Math.round((p05 + p95) / 2);
@@ -292,6 +302,46 @@ export function StatsChart({
           <div className="text-2xs text-muted-foreground/70 mt-0.5">DK</div>
         </div>
       </div>
+
+      {/* DK Line Range - show extremes of what's offered */}
+      {(dkLowestUnder || dkHighestOver) && !isFinal && (
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-muted/30 border border-border/40">
+          <span className="text-2xs text-muted-foreground font-medium shrink-0">DK Range:</span>
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {dkLowestUnder && (
+              <div className="flex items-center gap-1">
+                <ArrowDown className="h-3 w-3 text-status-under" />
+                <span className="text-xs font-semibold text-status-under tabular-nums">
+                  U{dkLowestUnder.line}
+                </span>
+                <span className="text-2xs text-muted-foreground tabular-nums">
+                  ({formatOdds(dkLowestUnder.odds)})
+                </span>
+              </div>
+            )}
+            {dkLine && (
+              <span className="text-2xs text-muted-foreground/50">•</span>
+            )}
+            {dkLine && (
+              <span className="text-xs text-muted-foreground tabular-nums">{dkLine}</span>
+            )}
+            {dkHighestOver && (
+              <span className="text-2xs text-muted-foreground/50">•</span>
+            )}
+            {dkHighestOver && (
+              <div className="flex items-center gap-1">
+                <ArrowUp className="h-3 w-3 text-status-over" />
+                <span className="text-xs font-semibold text-status-over tabular-nums">
+                  O{dkHighestOver.line}
+                </span>
+                <span className="text-2xs text-muted-foreground tabular-nums">
+                  ({formatOdds(dkHighestOver.odds)})
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Visual bar chart */}
       <div className="relative pt-3 pb-1">

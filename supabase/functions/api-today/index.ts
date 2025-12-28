@@ -59,7 +59,8 @@ Deno.serve(async (req) => {
         p05_under_line,
         p05_under_odds,
         best_over_edge,
-        best_under_edge
+        best_under_edge,
+        alternate_lines
       `)
       .eq('date_local', date)
       .eq('is_visible', true)
@@ -113,6 +114,21 @@ Deno.serve(async (req) => {
       const homeTeam = game?.home_team_id ? teamsMap.get(game.home_team_id) : null
       const awayTeam = game?.away_team_id ? teamsMap.get(game.away_team_id) : null
       
+      // Calculate DK line range from alternate lines
+      const altLines = edge.alternate_lines as Array<{ point: number; over_price: number; under_price: number }> | null
+      let dkHighestOver: { line: number; odds: number } | null = null
+      let dkLowestUnder: { line: number; odds: number } | null = null
+      
+      if (altLines && altLines.length > 0) {
+        // Highest over line = max point value (betting over a higher total)
+        const maxLine = altLines.reduce((max, l) => l.point > max.point ? l : max, altLines[0])
+        dkHighestOver = { line: maxLine.point, odds: maxLine.over_price }
+        
+        // Lowest under line = min point value (betting under a lower total)
+        const minLine = altLines.reduce((min, l) => l.point < min.point ? l : min, altLines[0])
+        dkLowestUnder = { line: minLine.point, odds: minLine.under_price }
+      }
+      
       return {
         id: edge.id,
         game_id: edge.game_id,
@@ -141,6 +157,9 @@ Deno.serve(async (req) => {
         p05_under_odds: edge.p05_under_odds,
         best_over_edge: edge.best_over_edge,
         best_under_edge: edge.best_under_edge,
+        // DK line range (extremes of what's offered)
+        dk_highest_over: dkHighestOver,
+        dk_lowest_under: dkLowestUnder,
       }
     })
 
