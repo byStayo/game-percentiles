@@ -101,6 +101,7 @@ export default function BestBets() {
   const [showFinalGames, setShowFinalGames] = useState(true);
   const [minConfidence, setMinConfidence] = useState(40);
   const [minSampleSize, setMinSampleSize] = useState(5);
+  const [minHitProbability, setMinHitProbability] = useState(0);
 
   // Get today's date in ET
   const today = useMemo(() => {
@@ -238,6 +239,9 @@ export default function BestBets() {
       if (game.n_h2h < minSampleSize) return false;
       if (sportFilter !== "all" && game.sport_id !== sportFilter) return false;
       
+      // Hit probability filter
+      if (minHitProbability > 0 && game.hitProbability < minHitProbability) return false;
+      
       // Edge filter - also filter out zero/negative edges
       if (edgeFilter === "over" && game.edgeType !== "over" && game.edgeType !== "both") return false;
       if (edgeFilter === "under" && game.edgeType !== "under" && game.edgeType !== "both") return false;
@@ -300,7 +304,7 @@ export default function BestBets() {
       .sort((a, b) => new Date(b.start_time_utc).getTime() - new Date(a.start_time_utc).getTime());
 
     return { rankedGames: upcomingGames, finalGames: completedGames };
-  }, [nflData, nbaData, mlbData, nhlData, sportFilter, edgeFilter, sortBy, minConfidence, minSampleSize, beyondExtremesOnly]);
+  }, [nflData, nbaData, mlbData, nhlData, sportFilter, edgeFilter, sortBy, minConfidence, minSampleSize, minHitProbability, beyondExtremesOnly]);
 
   const topPicks = rankedGames.slice(0, 3);
   const otherPicks = rankedGames.slice(3);
@@ -496,6 +500,35 @@ export default function BestBets() {
                     step={1}
                     className="mt-2"
                   />
+                </div>
+              </div>
+              
+              {/* Hit Probability Filter */}
+              <div className="space-y-2 pt-3 border-t">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <Target className="h-3.5 w-3.5" />
+                    Min Hit Probability
+                  </label>
+                  <span className="text-xs font-medium">
+                    {minHitProbability === 0 ? "Any" : `${minHitProbability}%+`}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  {[0, 60, 70, 80, 90].map((threshold) => (
+                    <Button
+                      key={threshold}
+                      variant={minHitProbability === threshold ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setMinHitProbability(threshold)}
+                      className={cn(
+                        "flex-1 text-xs h-8",
+                        minHitProbability === threshold && "bg-primary"
+                      )}
+                    >
+                      {threshold === 0 ? "Any" : `${threshold}%+`}
+                    </Button>
+                  ))}
                 </div>
               </div>
               
