@@ -222,6 +222,7 @@ export function GameCard({ game }: GameCardProps) {
                 p95OverLine={game.p95_over_line}
                 p05UnderLine={game.p05_under_line}
                 nH2H={game.n_used ?? game.n_h2h}
+                segmentUsed={game.segment_used}
               />
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0 mt-3 group-active:translate-x-0.5 transition-transform" />

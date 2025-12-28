@@ -1,0 +1,111 @@
+import { useMemo } from "react";
+import { cn } from "@/lib/utils";
+import { CalendarDays } from "lucide-react";
+
+interface GameHistoryItem {
+  id: number;
+  played_at: string;
+  total: number;
+}
+
+interface GamesPerYearChartProps {
+  history: GameHistoryItem[];
+  className?: string;
+}
+
+export function GamesPerYearChart({ history, className }: GamesPerYearChartProps) {
+  // Group games by year
+  const yearData = useMemo(() => {
+    const byYear: Record<number, { count: number; totals: number[]; avg: number }> = {};
+    
+    history.forEach((game) => {
+      const year = new Date(game.played_at).getFullYear();
+      if (!byYear[year]) {
+        byYear[year] = { count: 0, totals: [], avg: 0 };
+      }
+      byYear[year].count++;
+      byYear[year].totals.push(game.total);
+    });
+    
+    // Calculate averages
+    Object.keys(byYear).forEach((year) => {
+      const data = byYear[Number(year)];
+      data.avg = data.totals.reduce((a, b) => a + b, 0) / data.totals.length;
+    });
+    
+    // Sort by year descending
+    const sorted = Object.entries(byYear)
+      .map(([year, data]) => ({ year: Number(year), ...data }))
+      .sort((a, b) => b.year - a.year);
+    
+    return sorted;
+  }, [history]);
+
+  const maxCount = Math.max(...yearData.map((d) => d.count), 1);
+  const currentYear = new Date().getFullYear();
+
+  if (yearData.length === 0) return null;
+
+  return (
+    <div className={cn("bg-card rounded-2xl border border-border/60 p-5", className)}>
+      <div className="flex items-center gap-2 mb-4">
+        <CalendarDays className="h-4 w-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold">Games by Year</h2>
+        <span className="text-xs text-muted-foreground ml-auto">
+          {history.length} total
+        </span>
+      </div>
+      
+      <div className="space-y-2">
+        {yearData.map((data) => {
+          const isRecent = currentYear - data.year <= 3;
+          const barWidth = (data.count / maxCount) * 100;
+          
+          return (
+            <div key={data.year} className="flex items-center gap-3">
+              <span className={cn(
+                "w-12 text-xs font-medium tabular-nums",
+                isRecent ? "text-foreground" : "text-muted-foreground"
+              )}>
+                {data.year}
+              </span>
+              
+              <div className="flex-1 h-6 bg-secondary/50 rounded-md overflow-hidden relative">
+                <div
+                  className={cn(
+                    "h-full rounded-md transition-all duration-300",
+                    isRecent ? "bg-primary/60" : "bg-muted-foreground/30"
+                  )}
+                  style={{ width: `${barWidth}%` }}
+                />
+                <div className="absolute inset-0 flex items-center justify-between px-2">
+                  <span className={cn(
+                    "text-2xs font-semibold",
+                    barWidth > 30 ? "text-primary-foreground" : "text-foreground"
+                  )}>
+                    {data.count} {data.count === 1 ? "game" : "games"}
+                  </span>
+                  <span className="text-2xs text-muted-foreground tabular-nums">
+                    avg: {data.avg.toFixed(1)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* Recency indicator */}
+      <div className="mt-4 pt-3 border-t border-border/40">
+        <div className="flex items-center justify-between text-2xs">
+          <span className="text-muted-foreground">
+            Recent (last 3 years): {yearData.filter(d => currentYear - d.year <= 3).reduce((sum, d) => sum + d.count, 0)} games
+          </span>
+          <span className="text-muted-foreground">
+            Historical: {yearData.filter(d => currentYear - d.year > 3).reduce((sum, d) => sum + d.count, 0)} games
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
