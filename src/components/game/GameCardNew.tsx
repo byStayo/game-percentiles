@@ -8,10 +8,15 @@ import { RecencyIndicator } from "@/components/game/RecencyIndicator";
 import { ConfidenceBadge } from "@/components/game/ConfidenceBadge";
 import { DataQualityIndicator } from "@/components/game/DataQualityIndicator";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
-import { Star, ChevronRight } from "lucide-react";
+import { Star, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { TodayGame } from "@/hooks/useApi";
 import type { SportId } from "@/types";
+
+// Format odds for display
+const formatOdds = (odds: number): string => {
+  return odds > 0 ? `+${odds}` : `${odds}`;
+};
 
 interface GameCardProps {
   game: TodayGame;
@@ -155,6 +160,34 @@ export function GameCard({ game }: GameCardProps) {
           isFinal={isFinal}
         />
       </div>
+
+      {/* Edge Indicators */}
+      {(game.best_over_edge || game.best_under_edge) && (
+        <div className="flex gap-2 mb-4">
+          {game.best_over_edge && game.p95_over_line && game.p95_over_odds && (
+            <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-status-over/10 border border-status-over/20">
+              <TrendingUp className="h-4 w-4 text-status-over flex-shrink-0" />
+              <div className="min-w-0">
+                <div className="text-xs font-medium text-status-over">Over Edge</div>
+                <div className="text-sm font-semibold text-foreground">
+                  O {game.p95_over_line} <span className="text-status-over">{formatOdds(game.p95_over_odds)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          {game.best_under_edge && game.p05_under_line && game.p05_under_odds && (
+            <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-status-under/10 border border-status-under/20">
+              <TrendingDown className="h-4 w-4 text-status-under flex-shrink-0" />
+              <div className="min-w-0">
+                <div className="text-xs font-medium text-status-under">Under Edge</div>
+                <div className="text-sm font-semibold text-foreground">
+                  U {game.p05_under_line} <span className="text-status-under">{formatOdds(game.p05_under_odds)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* PercentileBar */}
       {game.p05 !== null && game.p95 !== null && (
