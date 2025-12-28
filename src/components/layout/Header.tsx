@@ -36,6 +36,8 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useOptimizerPicksCount } from "@/hooks/useOptimizerPicksCount";
 import type { LucideIcon } from "lucide-react";
 
 interface NavItem {
@@ -191,6 +193,7 @@ export function Header() {
   const location = useLocation();
   const isTeamsActive = teamsGroup.items.some(item => location.pathname === item.href);
   const isAnalyticsActive = analyticsGroup.items.some(item => location.pathname === item.href);
+  const optimizerCount = useOptimizerPicksCount();
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80">
@@ -206,20 +209,32 @@ export function Header() {
 
         {/* Desktop Navigation - hidden on mobile, BottomNav handles mobile */}
         <nav className="hidden md:flex items-center gap-1 p-1 rounded-full bg-secondary/50">
-          {coreNav.slice(0, 5).map((item) => (
-            <Link
-              key={item.href}
-              to={item.href}
-              className={cn(
-                "px-4 py-2 text-sm font-medium rounded-full transition-all duration-200",
-                location.pathname === item.href
-                  ? "bg-foreground text-background shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {coreNav.slice(0, 5).map((item) => {
+            const isOptimizer = item.href === "/parlay-optimizer";
+            const showBadge = isOptimizer && optimizerCount > 0;
+            
+            return (
+              <Link
+                key={item.href}
+                to={item.href}
+                className={cn(
+                  "relative px-4 py-2 text-sm font-medium rounded-full transition-all duration-200",
+                  location.pathname === item.href
+                    ? "bg-foreground text-background shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                )}
+              >
+                {item.label}
+                {showBadge && (
+                  <Badge 
+                    className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] bg-status-edge text-white border-0"
+                  >
+                    {optimizerCount}
+                  </Badge>
+                )}
+              </Link>
+            );
+          })}
           
           <NavDropdown group={teamsGroup} isActive={isTeamsActive} />
           <NavDropdown group={analyticsGroup} isActive={isAnalyticsActive} />

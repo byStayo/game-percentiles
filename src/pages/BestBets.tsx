@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -263,10 +264,19 @@ export default function BestBets() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-2xl font-bold">Best Bets</h1>
                     {beyondExtremesCount > 0 && (
-                      <Badge className="bg-status-live text-white animate-pulse">
-                        <AlertTriangle className="h-3 w-3 mr-1" />
-                        {beyondExtremesCount} beyond extremes
-                      </Badge>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge className="bg-status-live text-white animate-pulse cursor-help">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            {beyondExtremesCount} beyond extremes
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="text-sm">
+                            <strong>Beyond Extremes:</strong> These games have DraftKings lines set outside the historical p05/p95 range — meaning the line is lower than the 5th percentile or higher than the 95th percentile of past matchup totals. This is rare and may indicate significant value.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
                     )}
                   </div>
                   <p className="text-muted-foreground text-sm">
