@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle, Shield } from "lucide-react";
 
 interface StatsChartProps {
   p05: number;
@@ -12,7 +12,40 @@ interface StatsChartProps {
   p95OverLine?: number | null;
   p05UnderLine?: number | null;
   nH2H?: number;
+  segmentUsed?: string | null;
   className?: string;
+}
+
+// Calculate confidence score based on sample size and recency
+function calculateConfidence(nGames: number, segment?: string | null): { score: number; label: string; color: string } {
+  // Base score from sample size (0-60 points)
+  let sampleScore = 0;
+  if (nGames >= 15) sampleScore = 60;
+  else if (nGames >= 10) sampleScore = 45;
+  else if (nGames >= 5) sampleScore = 30;
+  else if (nGames >= 3) sampleScore = 15;
+  else sampleScore = nGames * 4;
+
+  // Recency bonus (0-40 points based on segment)
+  let recencyScore = 20; // default
+  if (segment) {
+    if (segment.includes('1y') || segment === 'recency_weighted') recencyScore = 40;
+    else if (segment.includes('3y')) recencyScore = 34;
+    else if (segment.includes('5y') || segment === 'hybrid_form') recencyScore = 28;
+    else if (segment.includes('10y')) recencyScore = 20;
+    else if (segment.includes('all')) recencyScore = 12;
+  }
+
+  const score = Math.min(100, sampleScore + recencyScore);
+  
+  let label: string;
+  let color: string;
+  if (score >= 80) { label = 'High'; color = 'text-status-under'; }
+  else if (score >= 60) { label = 'Good'; color = 'text-foreground'; }
+  else if (score >= 40) { label = 'Fair'; color = 'text-status-over'; }
+  else { label = 'Low'; color = 'text-destructive'; }
+
+  return { score, label, color };
 }
 
 export function StatsChart({
@@ -26,6 +59,7 @@ export function StatsChart({
   p95OverLine,
   p05UnderLine,
   nH2H,
+  segmentUsed,
   className,
 }: StatsChartProps) {
   // Calculate median as midpoint (approximate since we don't have actual median)
@@ -87,9 +121,39 @@ export function StatsChart({
 
   // Low data warning
   const isLowData = (nH2H ?? 0) < 5;
+  
+  // Confidence score
+  const confidence = calculateConfidence(nH2H ?? 0, segmentUsed);
 
   return (
     <div className={cn("space-y-2", className)}>
+      {/* Confidence indicator */}
+      {!isFinal && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Shield className={cn("h-3 w-3", confidence.color)} />
+            <span className={cn("text-2xs font-medium", confidence.color)}>
+              {confidence.label} confidence
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="flex gap-0.5">
+              {[...Array(5)].map((_, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "w-1.5 h-1.5 rounded-full",
+                    i < Math.ceil(confidence.score / 20) 
+                      ? confidence.score >= 60 ? "bg-status-under" : confidence.score >= 40 ? "bg-status-over" : "bg-destructive"
+                      : "bg-muted"
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Low data warning */}
       {isLowData && !isFinal && (
         <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-status-over/10 border border-status-over/20">

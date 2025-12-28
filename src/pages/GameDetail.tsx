@@ -4,6 +4,7 @@ import { Helmet } from "react-helmet-async";
 import { format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Calendar, Clock, History, BarChart3, Star, Shield } from "lucide-react";
+import { GamesPerYearChart } from "@/components/game/GamesPerYearChart";
 import { Layout } from "@/components/layout/Layout";
 import { useGameDetail } from "@/hooks/useApi";
 import { supabase } from "@/integrations/supabase/client";
@@ -528,6 +529,11 @@ export default function GameDetail() {
                 dkLine={edge?.dk_total_line ?? null}
               />
             </div>
+          )}
+
+          {/* Games Per Year Chart */}
+          {history.length >= 2 && (
+            <GamesPerYearChart history={history} />
           )}
 
           {/* H2H History */}

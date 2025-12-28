@@ -42,13 +42,14 @@ const sports: { id: SportId; name: string }[] = [
 
 type ViewMode = "all" | "sport";
 type SortOption = "edge" | "edges-first" | "time";
+type FilterMode = "picks" | "best-bets" | "all";
 
 export default function Index() {
   const [selectedDate, setSelectedDate] = useState(getTodayInET);
   const [selectedSport, setSelectedSport] = useState<SportId>("nba");
   const [viewMode, setViewMode] = useState<ViewMode>("all");
   const [sortBy, setSortBy] = useState<SortOption>("edges-first");
-  const [onlyPicks, setOnlyPicks] = useState(true);
+  const [filterMode, setFilterMode] = useState<FilterMode>("picks");
   
   const [hideWeakData, setHideWeakData] = useState(true);
 
@@ -112,15 +113,25 @@ export default function Index() {
 
     // Filter: hide games with weak data quality (n < 5)
     if (hideWeakData) {
-      games = games.filter((g) => g.n_h2h >= 5);
+      games = games.filter((g) => (g.n_used ?? g.n_h2h) >= 5);
     }
 
-    // Filter: only show picks with actionable edges or strong percentile signal
-    if (onlyPicks) {
+    // Filter based on mode
+    if (filterMode === "best-bets") {
+      // Best Bets: Only qualified picks with edge available on DK alternate lines
       games = games.filter((g) => {
-        if (g.n_h2h < 5) return false;
+        if ((g.n_used ?? g.n_h2h) < 5) return false;
         if (!g.dk_offered || g.dk_total_line === null) return false;
-        // Has computed edge OR strong percentile signal
+        // Must have edge AND corresponding alt line on DK
+        const hasOverOnDK = g.p95_over_line != null && (g.best_over_edge ?? 0) > 0;
+        const hasUnderOnDK = g.p05_under_line != null && (g.best_under_edge ?? 0) > 0;
+        return hasOverOnDK || hasUnderOnDK;
+      });
+    } else if (filterMode === "picks") {
+      // Picks: actionable edges or strong percentile signal
+      games = games.filter((g) => {
+        if ((g.n_used ?? g.n_h2h) < 5) return false;
+        if (!g.dk_offered || g.dk_total_line === null) return false;
         const hasEdge = (g.best_over_edge ?? 0) > 0 || (g.best_under_edge ?? 0) > 0;
         const P = g.dk_line_percentile ?? 50;
         return hasEdge || P >= 70 || P <= 30;
@@ -129,12 +140,18 @@ export default function Index() {
 
     // Sort
     if (sortBy === "edges-first") {
-      // Prioritize games with over/under edges at the top
+      // Prioritize games with DK-qualified edges at the top
       games.sort((a, b) => {
+        const aQualified = ((a.p95_over_line != null && (a.best_over_edge ?? 0) > 0) || 
+                           (a.p05_under_line != null && (a.best_under_edge ?? 0) > 0)) ? 2 : 0;
+        const bQualified = ((b.p95_over_line != null && (b.best_over_edge ?? 0) > 0) || 
+                           (b.p05_under_line != null && (b.best_under_edge ?? 0) > 0)) ? 2 : 0;
+        if (bQualified !== aQualified) return bQualified - aQualified;
+        
         const aHasEdge = (a.best_over_edge || a.best_under_edge) ? 1 : 0;
         const bHasEdge = (b.best_over_edge || b.best_under_edge) ? 1 : 0;
         if (bHasEdge !== aHasEdge) return bHasEdge - aHasEdge;
-        // Secondary sort by percentile edge strength
+        
         const aEdge = a.dk_line_percentile !== null ? Math.abs(50 - a.dk_line_percentile) : 0;
         const bEdge = b.dk_line_percentile !== null ? Math.abs(50 - b.dk_line_percentile) : 0;
         return bEdge - aEdge;
@@ -156,7 +173,7 @@ export default function Index() {
     }
 
     return games;
-  }, [displayGames, sortBy, onlyPicks, hideWeakData]);
+  }, [displayGames, sortBy, filterMode, hideWeakData]);
 
   // Sport counts
   const sportCounts = useMemo(
@@ -259,27 +276,48 @@ export default function Index() {
               </SelectContent>
             </Select>
 
-            {/* Filters as compact toggles */}
-            <div className="flex items-center gap-2 ml-auto">
-              <label className="flex items-center gap-1.5 cursor-pointer touch-manipulation">
-                <Switch
-                  id="only-picks"
-                  checked={onlyPicks}
-                  onCheckedChange={setOnlyPicks}
-                  className="scale-75"
-                />
-                <span className="text-xs">Picks only</span>
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer touch-manipulation">
-                <Switch
-                  id="hide-weak"
-                  checked={hideWeakData}
-                  onCheckedChange={setHideWeakData}
-                  className="scale-75"
-                />
-                <span className="text-xs">5+ games</span>
-              </label>
+            {/* Filter mode selector */}
+            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted/50 ml-auto">
+              <button
+                onClick={() => setFilterMode("best-bets")}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                  filterMode === "best-bets" 
+                    ? "bg-status-edge/20 text-status-edge shadow-sm" 
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Zap className="h-3 w-3" />
+                Best
+              </button>
+              <button
+                onClick={() => setFilterMode("picks")}
+                className={cn(
+                  "px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                  filterMode === "picks" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                )}
+              >
+                Picks
+              </button>
+              <button
+                onClick={() => setFilterMode("all")}
+                className={cn(
+                  "px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                  filterMode === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                )}
+              >
+                All
+              </button>
             </div>
+            <label className="flex items-center gap-1.5 cursor-pointer touch-manipulation">
+              <Switch
+                id="hide-weak"
+                checked={hideWeakData}
+                onCheckedChange={setHideWeakData}
+                className="scale-75"
+              />
+              <span className="text-xs">5+</span>
+            </label>
           </div>
 
           {/* Sport tabs (only shown in sport view) */}
@@ -334,11 +372,13 @@ export default function Index() {
             </div>
           ) : (
             <EmptyState
-              title={onlyPicks ? "No picks today" : "No games today"}
+              title={filterMode === "best-bets" ? "No best bets" : filterMode === "picks" ? "No picks today" : "No games today"}
               description={
-                onlyPicks
-                  ? "No actionable edges found. Try disabling 'Picks only'."
-                  : `No games scheduled for ${format(selectedDate, "MMM d")}.`
+                filterMode === "best-bets"
+                  ? "No DK-qualified edges found. Try 'Picks' filter for more options."
+                  : filterMode === "picks"
+                    ? "No actionable edges found. Try 'All' filter."
+                    : `No games scheduled for ${format(selectedDate, "MMM d")}.`
               }
             />
           )}
