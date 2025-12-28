@@ -388,6 +388,50 @@ export default function GameDetail() {
               </div>
             )}
 
+            {/* DK Line Range - Highest Over / Lowest Under */}
+            {edge?.alternate_lines && Array.isArray(edge.alternate_lines) && edge.alternate_lines.length > 0 && (
+              <div className="px-5 py-3 border-t border-border/40">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 text-center">
+                    <div className="text-2xs text-muted-foreground uppercase tracking-wide mb-1">DK Lowest</div>
+                    {(() => {
+                      const lines = edge.alternate_lines as Array<{ point: number; over_price: number; under_price: number }>;
+                      const minLine = lines.reduce((min, l) => l.point < min.point ? l : min, lines[0]);
+                      return (
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span className="text-sm font-bold tabular-nums">{minLine.point}</span>
+                          <span className="text-xs text-status-under font-medium">
+                            U {minLine.under_price >= 0 ? `+${minLine.under_price}` : minLine.under_price}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div className="w-px h-8 bg-border/60" />
+                  <div className="flex-1 text-center">
+                    <div className="text-2xs text-muted-foreground uppercase tracking-wide mb-1">DK Main</div>
+                    <span className="text-sm font-bold tabular-nums">{edge.dk_total_line}</span>
+                  </div>
+                  <div className="w-px h-8 bg-border/60" />
+                  <div className="flex-1 text-center">
+                    <div className="text-2xs text-muted-foreground uppercase tracking-wide mb-1">DK Highest</div>
+                    {(() => {
+                      const lines = edge.alternate_lines as Array<{ point: number; over_price: number; under_price: number }>;
+                      const maxLine = lines.reduce((max, l) => l.point > max.point ? l : max, lines[0]);
+                      return (
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span className="text-sm font-bold tabular-nums">{maxLine.point}</span>
+                          <span className="text-xs text-status-over font-medium">
+                            O {maxLine.over_price >= 0 ? `+${maxLine.over_price}` : maxLine.over_price}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Footer with segment info and confidence */}
             <div className="px-5 py-3 border-t border-border/40 flex items-center justify-between">
               <div className="flex items-center gap-2">
