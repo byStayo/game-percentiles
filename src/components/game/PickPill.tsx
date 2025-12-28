@@ -6,6 +6,10 @@ interface PickPillProps {
   dkOffered: boolean;
   dkTotalLine: number | null;
   dkLinePercentile: number | null;
+  bestOverEdge?: number | null;
+  bestUnderEdge?: number | null;
+  p95OverLine?: number | null;
+  p05UnderLine?: number | null;
   isFinal?: boolean;
   className?: string;
 }
@@ -25,6 +29,10 @@ export function PickPill({
   dkOffered,
   dkTotalLine,
   dkLinePercentile,
+  bestOverEdge,
+  bestUnderEdge,
+  p95OverLine,
+  p05UnderLine,
   isFinal = false,
   className,
 }: PickPillProps) {
@@ -50,26 +58,70 @@ export function PickPill({
       };
     }
 
-    // Rule 3: Compute P and determine pick
-    const P = dkLinePercentile !== null ? Math.round(dkLinePercentile) : 50;
+    // Rule 3: Use edge detection data when available (most accurate)
+    const hasOverEdge = bestOverEdge && bestOverEdge > 0;
+    const hasUnderEdge = bestUnderEdge && bestUnderEdge > 0;
 
-    if (P >= 70) {
-      return {
-        type: "under",
-        label: `TAKE UNDER ${dkTotalLine}`,
-        sublabel: `P=${P}`,
-        icon: <TrendingDown className="h-4 w-4" />,
-        colors: "bg-status-under text-white",
-      };
+    // If we have edge data, use it to determine the pick
+    if (hasOverEdge || hasUnderEdge) {
+      // Pick the stronger edge
+      const overStrength = bestOverEdge ?? 0;
+      const underStrength = bestUnderEdge ?? 0;
+
+      if (overStrength > underStrength && p95OverLine) {
+        return {
+          type: "over",
+          label: `TAKE OVER ${p95OverLine}`,
+          sublabel: `+${overStrength.toFixed(1)}`,
+          icon: <TrendingUp className="h-4 w-4" />,
+          colors: "bg-status-over text-white",
+        };
+      }
+
+      if (underStrength > overStrength && p05UnderLine) {
+        return {
+          type: "under",
+          label: `TAKE UNDER ${p05UnderLine}`,
+          sublabel: `+${underStrength.toFixed(1)}`,
+          icon: <TrendingDown className="h-4 w-4" />,
+          colors: "bg-status-under text-white",
+        };
+      }
+
+      // If both are equal and non-zero, pick over (arbitrary tiebreaker)
+      if (overStrength > 0 && p95OverLine) {
+        return {
+          type: "over",
+          label: `TAKE OVER ${p95OverLine}`,
+          sublabel: `+${overStrength.toFixed(1)}`,
+          icon: <TrendingUp className="h-4 w-4" />,
+          colors: "bg-status-over text-white",
+        };
+      }
     }
 
+    // Rule 4: Fallback to percentile-based logic when no edge data
+    const P = dkLinePercentile !== null ? Math.round(dkLinePercentile) : 50;
+
+    // Low P means DK line is below most historical games → Over value
     if (P <= 30) {
       return {
         type: "over",
-        label: `TAKE OVER ${dkTotalLine}`,
+        label: `LEAN OVER ${dkTotalLine}`,
         sublabel: `P=${P}`,
         icon: <TrendingUp className="h-4 w-4" />,
-        colors: "bg-status-over text-white",
+        colors: "bg-status-over/80 text-white",
+      };
+    }
+
+    // High P means DK line is above most historical games → Under value
+    if (P >= 70) {
+      return {
+        type: "under",
+        label: `LEAN UNDER ${dkTotalLine}`,
+        sublabel: `P=${P}`,
+        icon: <TrendingDown className="h-4 w-4" />,
+        colors: "bg-status-under/80 text-white",
       };
     }
 

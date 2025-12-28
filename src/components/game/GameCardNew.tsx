@@ -175,6 +175,10 @@ export function GameCard({ game }: GameCardProps) {
           dkOffered={game.dk_offered}
           dkTotalLine={game.dk_total_line}
           dkLinePercentile={game.dk_line_percentile}
+          bestOverEdge={game.best_over_edge}
+          bestUnderEdge={game.best_under_edge}
+          p95OverLine={game.p95_over_line}
+          p05UnderLine={game.p05_under_line}
           isFinal={isFinal}
         />
       </div>

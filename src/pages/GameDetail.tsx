@@ -363,6 +363,10 @@ export default function GameDetail() {
                 dkOffered={edge?.dk_offered ?? false}
                 dkTotalLine={edge?.dk_total_line ?? null}
                 dkLinePercentile={edge?.dk_line_percentile ?? null}
+                bestOverEdge={edge?.best_over_edge ?? null}
+                bestUnderEdge={edge?.best_under_edge ?? null}
+                p95OverLine={edge?.p95_over_line ?? null}
+                p05UnderLine={edge?.p05_under_line ?? null}
                 isFinal={isFinal}
                 className="text-base px-6 py-3"
               />
