@@ -401,10 +401,25 @@ export default function BestBets() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-2xl font-bold">Best Bets</h1>
-                    {beyondExtremesCount > 0 && (
+                    {lockPicks.length > 0 && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Badge className="bg-status-live text-white animate-pulse cursor-help">
+                          <Badge className="bg-yellow-500 text-yellow-950 animate-pulse cursor-help font-bold">
+                            <Trophy className="h-3 w-3 mr-1" />
+                            {lockPicks.length} Lock{lockPicks.length !== 1 ? 's' : ''}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="text-sm">
+                            <strong>Lock Picks:</strong> {lockPicks.length} game{lockPicks.length !== 1 ? 's' : ''} with 95%+ hit probability based on DK lines beyond historical extremes.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                    {beyondExtremesCount > 0 && beyondExtremesCount !== lockPicks.length && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge className="bg-status-live text-white cursor-help">
                             <AlertTriangle className="h-3 w-3 mr-1" />
                             {beyondExtremesCount} beyond extremes
                           </Badge>
@@ -582,7 +597,7 @@ export default function BestBets() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <div className="p-1.5 rounded-lg bg-yellow-500/20">
+                    <div className="p-1.5 rounded-lg bg-yellow-500/20 animate-pulse">
                       <Trophy className="h-5 w-5 text-yellow-500" />
                     </div>
                     Lock Parlay
@@ -602,6 +617,50 @@ export default function BestBets() {
                 <p className="text-sm text-muted-foreground mt-1">
                   Games where the DK line is beyond historical extremes — statistically 95%+ likely to hit
                 </p>
+                
+                {/* Combined Probability Display */}
+                {lockPicks.length >= 2 && (
+                  <div className="mt-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Target className="h-4 w-4 text-yellow-600" />
+                        <span className="text-sm font-medium">Combined Parlay Probability</span>
+                      </div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge className="bg-yellow-600 text-white font-bold text-sm cursor-help">
+                            {(lockPicks.reduce((acc, g) => acc * (g.hitProbability / 100), 1) * 100).toFixed(1)}%
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs p-3">
+                          <div className="text-xs space-y-2">
+                            <p className="font-semibold">How it's calculated:</p>
+                            <p className="text-muted-foreground">
+                              Combined probability = multiply each leg's probability together.
+                            </p>
+                            <div className="space-y-1 pt-1 border-t border-border/40">
+                              {lockPicks.map((g, i) => (
+                                <div key={g.game_id} className="flex justify-between">
+                                  <span>Leg {i + 1}:</span>
+                                  <span className="font-mono">{g.hitProbability.toFixed(1)}%</span>
+                                </div>
+                              ))}
+                              <div className="flex justify-between pt-1 border-t font-semibold">
+                                <span>Combined:</span>
+                                <span className="font-mono">
+                                  {(lockPicks.reduce((acc, g) => acc * (g.hitProbability / 100), 1) * 100).toFixed(1)}%
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {lockPicks.length} legs × avg {(lockPicks.reduce((sum, g) => sum + g.hitProbability, 0) / lockPicks.length).toFixed(0)}% per leg
+                    </div>
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="space-y-2">
