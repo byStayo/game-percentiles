@@ -6,7 +6,7 @@ import { StatsChart } from "@/components/game/StatsChart";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useHapticFeedback } from "@/hooks/useHapticFeedback";
-import { Star, ChevronRight, Plus, Heart } from "lucide-react";
+import { Star, ChevronRight, Plus, Heart, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { TodayGame } from "@/hooks/useApi";
@@ -24,6 +24,11 @@ const sportColors: Record<SportId, string> = {
   mlb: "text-sport-mlb bg-sport-mlb/10",
   nhl: "text-muted-foreground bg-muted",
 };
+
+// Check if this is form-based data (not actual H2H)
+function isFormBasedSegment(segment?: string | null): boolean {
+  return segment === 'hybrid_form';
+}
 
 export function GameCard({ game }: GameCardProps) {
   const navigate = useNavigate();
@@ -168,12 +173,20 @@ export function GameCard({ game }: GameCardProps) {
                 {formatTimeET(startTime)}
               </span>
             )}
-            <span className={cn("px-1.5 py-0.5 rounded text-2xs font-bold uppercase", sportColors[game.sport_id])}>
+              <span className={cn("px-1.5 py-0.5 rounded text-2xs font-bold uppercase", sportColors[game.sport_id])}>
               {game.sport_id}
             </span>
-            <span className="text-2xs text-muted-foreground/70 tabular-nums">
-              {game.n_used ?? game.n_h2h} games
-            </span>
+            {/* Show data source indicator - form-based vs H2H */}
+            {isFormBasedSegment(game.segment_used) ? (
+              <span className="flex items-center gap-0.5 text-2xs text-status-over/80">
+                <Activity className="h-2.5 w-2.5" />
+                Form
+              </span>
+            ) : (
+              <span className="text-2xs text-muted-foreground/70 tabular-nums">
+                {game.n_h2h ?? game.n_used} H2H
+              </span>
+            )}
           </div>
 
           <Button
