@@ -13,6 +13,7 @@ interface PickPillProps {
   p05?: number | null;
   p95?: number | null;
   isFinal?: boolean;
+  compact?: boolean;
   className?: string;
 }
 
@@ -21,39 +22,26 @@ type PickType = "over" | "under" | "no-edge" | "insufficient" | "unavailable";
 interface PickData {
   type: PickType;
   label: string;
-  sublabel?: string;
-  confidence?: number;
+  line?: number | null;
+  edgePoints?: number;
   icon: React.ReactNode;
   colors: string;
 }
 
-// Calculate confidence based on edge strength and sample size
-function calculateEdgeConfidence(
-  edgePoints: number,
-  nH2H: number,
-  p05: number | null | undefined,
-  p95: number | null | undefined
-): number {
-  // Base confidence from sample size (0-40 points)
-  const sampleConfidence = Math.min(40, (nH2H / 20) * 40);
-
-  // Edge strength confidence (0-40 points)
-  // Stronger edges = higher confidence
-  const maxEdge = 5; // Consider 5+ points as maximum edge
-  const edgeConfidence = Math.min(40, (edgePoints / maxEdge) * 40);
-
-  // Historical range confidence (0-20 points)
-  // Wider historical range = more reliable percentiles
-  let rangeConfidence = 0;
-  if (p05 !== null && p05 !== undefined && p95 !== null && p95 !== undefined) {
-    const range = p95 - p05;
-    // Expect reasonable ranges based on sport (simplified)
-    const expectedRange = 15; // Rough average
-    rangeConfidence = Math.min(20, (range / expectedRange) * 10 + 10);
-  }
-
-  return Math.round(sampleConfidence + edgeConfidence + rangeConfidence);
-}
+/**
+ * RECOMMENDATION LOGIC:
+ * 
+ * 1. If nH2H < 5: "LOW DATA" - not enough historical games
+ * 2. If DK line not offered: "NO LINE" - can't compare
+ * 3. If we have edge data (bestOverEdge or bestUnderEdge > 0):
+ *    - Pick the direction with the stronger edge
+ *    - OVER = DK line is LOWER than historical p5 → games usually score MORE
+ *    - UNDER = DK line is HIGHER than historical p95 → games usually score LESS
+ * 4. Fallback to percentile if no edge data:
+ *    - P ≤ 30: DK line below 30% of historical games → LEAN OVER
+ *    - P ≥ 70: DK line above 70% of historical games → LEAN UNDER
+ * 5. Otherwise: "NO EDGE"
+ */
 
 export function PickPill({
   nH2H,
@@ -67,113 +55,90 @@ export function PickPill({
   p05,
   p95,
   isFinal = false,
+  compact = false,
   className,
 }: PickPillProps) {
   const getPickData = (): PickData => {
-    // Rule 1: Insufficient H2H data
+    // Rule 1: Insufficient data
     if (nH2H < 5) {
       return {
         type: "insufficient",
-        label: "INSUFFICIENT H2H",
-        sublabel: `n=${nH2H}`,
-        icon: <AlertTriangle className="h-4 w-4" />,
+        label: "LOW DATA",
+        icon: <AlertTriangle className={cn(compact ? "h-3 w-3" : "h-4 w-4")} />,
         colors: "bg-muted text-muted-foreground",
       };
     }
 
-    // Rule 2: DK line unavailable
+    // Rule 2: No DK line available
     if (!dkOffered || dkTotalLine === null) {
       return {
         type: "unavailable",
-        label: "DK LINE UNAVAILABLE",
-        icon: <XCircle className="h-4 w-4" />,
+        label: "NO LINE",
+        icon: <XCircle className={cn(compact ? "h-3 w-3" : "h-4 w-4")} />,
         colors: "bg-muted text-muted-foreground",
       };
     }
 
-    // Rule 3: Use edge detection data when available (most accurate)
-    const hasOverEdge = bestOverEdge && bestOverEdge > 0;
-    const hasUnderEdge = bestUnderEdge && bestUnderEdge > 0;
+    // Rule 3: Use edge data when available (computed by backend)
+    const overEdge = bestOverEdge ?? 0;
+    const underEdge = bestUnderEdge ?? 0;
 
-    // If we have edge data, use it to determine the pick
-    if (hasOverEdge || hasUnderEdge) {
-      // Pick the stronger edge
-      const overStrength = bestOverEdge ?? 0;
-      const underStrength = bestUnderEdge ?? 0;
-
-      if (overStrength > underStrength && p95OverLine) {
-        const confidence = calculateEdgeConfidence(overStrength, nH2H, p05, p95);
+    if (overEdge > 0 || underEdge > 0) {
+      if (overEdge > underEdge) {
+        // OVER recommendation: DK line is below the historical p5
+        // We bet the line won't go under (game will score more)
         return {
           type: "over",
-          label: `TAKE OVER ${p95OverLine}`,
-          sublabel: `+${overStrength.toFixed(1)}`,
-          confidence,
-          icon: <TrendingUp className="h-4 w-4" />,
+          label: "OVER",
+          line: dkTotalLine, // Bet the actual DK line
+          edgePoints: overEdge,
+          icon: <TrendingUp className={cn(compact ? "h-3 w-3" : "h-4 w-4")} />,
           colors: "bg-status-over text-white",
         };
-      }
-
-      if (underStrength > overStrength && p05UnderLine) {
-        const confidence = calculateEdgeConfidence(underStrength, nH2H, p05, p95);
+      } else {
+        // UNDER recommendation: DK line is above the historical p95
+        // We bet the line won't go over (game will score less)
         return {
           type: "under",
-          label: `TAKE UNDER ${p05UnderLine}`,
-          sublabel: `+${underStrength.toFixed(1)}`,
-          confidence,
-          icon: <TrendingDown className="h-4 w-4" />,
+          label: "UNDER",
+          line: dkTotalLine, // Bet the actual DK line
+          edgePoints: underEdge,
+          icon: <TrendingDown className={cn(compact ? "h-3 w-3" : "h-4 w-4")} />,
           colors: "bg-status-under text-white",
-        };
-      }
-
-      // If both are equal and non-zero, pick over (arbitrary tiebreaker)
-      if (overStrength > 0 && p95OverLine) {
-        const confidence = calculateEdgeConfidence(overStrength, nH2H, p05, p95);
-        return {
-          type: "over",
-          label: `TAKE OVER ${p95OverLine}`,
-          sublabel: `+${overStrength.toFixed(1)}`,
-          confidence,
-          icon: <TrendingUp className="h-4 w-4" />,
-          colors: "bg-status-over text-white",
         };
       }
     }
 
-    // Rule 4: Fallback to percentile-based logic when no edge data
+    // Rule 4: Fallback to percentile-based recommendation
     const P = dkLinePercentile !== null ? Math.round(dkLinePercentile) : 50;
 
-    // Low P means DK line is below most historical games → Over value
     if (P <= 30) {
-      // Lower confidence for percentile-only picks
-      const confidence = Math.round(30 + (30 - P) + Math.min(20, nH2H));
+      // DK line is low relative to history → LEAN OVER
       return {
         type: "over",
-        label: `LEAN OVER ${dkTotalLine}`,
-        sublabel: `P=${P}`,
-        confidence,
-        icon: <TrendingUp className="h-4 w-4" />,
+        label: "LEAN OVER",
+        line: dkTotalLine,
+        icon: <TrendingUp className={cn(compact ? "h-3 w-3" : "h-4 w-4")} />,
         colors: "bg-status-over/80 text-white",
       };
     }
 
-    // High P means DK line is above most historical games → Under value
     if (P >= 70) {
-      const confidence = Math.round(30 + (P - 70) + Math.min(20, nH2H));
+      // DK line is high relative to history → LEAN UNDER
       return {
         type: "under",
-        label: `LEAN UNDER ${dkTotalLine}`,
-        sublabel: `P=${P}`,
-        confidence,
-        icon: <TrendingDown className="h-4 w-4" />,
+        label: "LEAN UNDER",
+        line: dkTotalLine,
+        icon: <TrendingDown className={cn(compact ? "h-3 w-3" : "h-4 w-4")} />,
         colors: "bg-status-under/80 text-white",
       };
     }
 
+    // Rule 5: No edge detected
     return {
       type: "no-edge",
       label: "NO EDGE",
-      sublabel: `P=${P}`,
-      icon: <Minus className="h-4 w-4" />,
+      icon: <Minus className={cn(compact ? "h-3 w-3" : "h-4 w-4")} />,
       colors: "bg-secondary text-muted-foreground",
     };
   };
@@ -184,7 +149,8 @@ export function PickPill({
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all",
+        "inline-flex items-center gap-1.5 rounded-xl font-semibold transition-all",
+        compact ? "px-2.5 py-1.5 text-xs" : "px-3 py-2 text-sm",
         pick.colors,
         hasPick && !isFinal && "shadow-md",
         isFinal && "opacity-70",
@@ -192,25 +158,20 @@ export function PickPill({
       )}
     >
       {pick.icon}
-      <span>{pick.label}</span>
-      {pick.confidence !== undefined && (
+      <span className="whitespace-nowrap">
+        {pick.label}
+        {pick.line !== undefined && pick.line !== null && (
+          <span className="ml-1 font-bold">{pick.line}</span>
+        )}
+      </span>
+      {pick.edgePoints !== undefined && pick.edgePoints > 0 && (
         <span
           className={cn(
-            "px-1.5 py-0.5 rounded text-xs font-bold tabular-nums",
-            pick.confidence >= 70 ? "bg-white/30" : "bg-white/20"
+            "px-1.5 py-0.5 rounded font-bold tabular-nums bg-white/25",
+            compact ? "text-2xs" : "text-xs"
           )}
         >
-          {pick.confidence}%
-        </span>
-      )}
-      {pick.sublabel && !pick.confidence && (
-        <span
-          className={cn(
-            "ml-1 px-1.5 py-0.5 rounded text-xs font-medium",
-            hasPick ? "bg-white/20" : "bg-foreground/10"
-          )}
-        >
-          {pick.sublabel}
+          +{pick.edgePoints.toFixed(1)}
         </span>
       )}
     </div>
