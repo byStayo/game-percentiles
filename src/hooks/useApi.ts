@@ -45,6 +45,7 @@ export interface TodayGame {
   // DK line range (extremes of what's offered)
   dk_highest_over?: { line: number; odds: number } | null;
   dk_lowest_under?: { line: number; odds: number } | null;
+  alternate_lines?: Array<{ point: number; over_price: number; under_price: number }> | null;
 }
 
 export interface TodayResponse {

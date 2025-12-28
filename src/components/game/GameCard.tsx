@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 import { PercentileBar } from "@/components/ui/percentile-bar";
 import type { DailyEdge, Game, Team, SportId } from "@/types";
 import { Badge } from "@/components/ui/badge";
+import { DkDistanceBadge, isDkBeyondExtremes } from "./DkDistanceBadge";
+import { AlertTriangle } from "lucide-react";
 
 interface GameCardProps {
   edge: DailyEdge;
@@ -95,12 +97,23 @@ export function GameCard({ edge, game, homeTeam, awayTeam }: GameCardProps) {
         />
       )}
 
-      {/* DK Badge */}
+      {/* DK Badge with Distance Indicator */}
       {edge.dk_offered && (
-        <div className="mt-3 pt-3 border-t border-border">
+        <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-2">
           <Badge variant="secondary" className="text-2xs">
-            DraftKings Available
+            DraftKings
           </Badge>
+          <div className="flex items-center gap-1.5">
+            {isDkBeyondExtremes(edge.dk_total_line, edge.p05, edge.p95) && (
+              <AlertTriangle className="h-3.5 w-3.5 text-status-live animate-pulse" />
+            )}
+            <DkDistanceBadge 
+              dkLine={edge.dk_total_line} 
+              p05={edge.p05} 
+              p95={edge.p95}
+              compact
+            />
+          </div>
         </div>
       )}
     </Link>
