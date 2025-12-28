@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
+import { Link } from "react-router-dom";
 import { format, addDays, subDays } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { Layout } from "@/components/layout/Layout";
@@ -201,7 +202,7 @@ export default function Index() {
             <p className="text-sm sm:text-base text-muted-foreground">
               {totalGames} games today • {picksCount} picks
               {edgesCount > 0 && (
-                <span className="text-status-edge"> • {edgesCount} edge{edgesCount !== 1 ? 's' : ''}</span>
+                <Link to="/best-bets" className="text-status-edge hover:underline"> • {edgesCount} edge{edgesCount !== 1 ? 's' : ''}</Link>
               )}
             </p>
           </div>
