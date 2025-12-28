@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Helmet } from "react-helmet-async";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { Layout } from "@/components/layout/Layout";
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -31,9 +32,13 @@ import {
   ChevronRight,
   Star,
   Zap,
+  Target,
 } from "lucide-react";
 import type { SportId } from "@/types";
 import type { TodayGame } from "@/hooks/useApi";
+
+// Key for storing edge picks in localStorage for parlay
+const EDGE_PARLAY_KEY = 'edge-parlay-picks';
 
 const SPORTS: { id: SportId | "all"; label: string }[] = [
   { id: "all", label: "All Sports" },
@@ -64,6 +69,7 @@ function formatOdds(odds: number): string {
 }
 
 export default function BestBets() {
+  const navigate = useNavigate();
   const [sportFilter, setSportFilter] = useState<SportId | "all">("all");
   const [edgeFilter, setEdgeFilter] = useState<EdgeFilter>("any-edge");
   const [minConfidence, setMinConfidence] = useState(40);
@@ -146,6 +152,35 @@ export default function BestBets() {
 
   const topPicks = rankedGames.slice(0, 3);
   const otherPicks = rankedGames.slice(3);
+
+  // Calculate combined edge strength for top 3
+  const combinedEdgeStrength = useMemo(() => {
+    return topPicks.reduce((sum, game) => sum + game.edgeStrength, 0);
+  }, [topPicks]);
+
+  // Quick parlay handler - saves top edge picks to localStorage and navigates to parlay
+  const handleQuickParlay = () => {
+    if (topPicks.length === 0) {
+      toast.error("No edge picks available for parlay");
+      return;
+    }
+
+    // Store edge picks for parlay page to consume
+    const edgePicks = topPicks.map(game => ({
+      gameId: game.game_id,
+      sportId: game.sport_id,
+      pick: game.edgeType === "under" ? "under" : "over",
+      edgeStrength: game.edgeStrength,
+      line: game.edgeType === "under" ? game.p05_under_line : game.p95_over_line,
+      odds: game.edgeType === "under" ? game.p05_under_odds : game.p95_over_odds,
+      homeTeam: game.home_team,
+      awayTeam: game.away_team,
+    }));
+
+    localStorage.setItem(EDGE_PARLAY_KEY, JSON.stringify(edgePicks));
+    toast.success(`Added ${topPicks.length} edge picks to parlay`);
+    navigate("/parlay");
+  };
 
   return (
     <>
@@ -257,13 +292,26 @@ export default function BestBets() {
             </CardContent>
           </Card>
 
-          {/* Top Picks */}
+          {/* Top Picks with Quick Parlay */}
           {topPicks.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Star className="h-5 w-5 text-yellow-500" />
-                Top Edge Picks
-              </h2>
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <Star className="h-5 w-5 text-yellow-500" />
+                  Top Edge Picks
+                  <Badge variant="outline" className="ml-2 text-status-edge border-status-edge/30">
+                    {combinedEdgeStrength.toFixed(1)} pts combined
+                  </Badge>
+                </h2>
+                <Button
+                  onClick={handleQuickParlay}
+                  className="bg-status-edge hover:bg-status-edge/90 text-white"
+                  size="sm"
+                >
+                  <Target className="h-4 w-4 mr-2" />
+                  Quick Parlay ({topPicks.length})
+                </Button>
+              </div>
               <div className="grid md:grid-cols-3 gap-4">
                 {topPicks.map((game, idx) => (
                   <TopPickCard key={game.game_id} game={game} rank={idx + 1} />
