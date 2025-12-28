@@ -674,7 +674,13 @@ function TopPickCard({ game, rank }: { game: RankedGame; rank: number }) {
             </Badge>
           )}
         </div>
-        <HitProbabilityBadge probability={game.hitProbability} bestPick={game.bestPick} />
+        <HitProbabilityBadge 
+          probability={game.hitProbability} 
+          bestPick={game.bestPick}
+          dkLine={game.dk_total_line}
+          p05={game.p05}
+          p95={game.p95}
+        />
       </div>
 
       {/* Teams */}
@@ -787,7 +793,14 @@ function RankedGameRow({ game, rank }: { game: RankedGame; rank: number }) {
 
       {/* Hit Probability & Edge Info */}
       <div className="flex items-center gap-2 flex-shrink-0">
-        <HitProbabilityBadge probability={game.hitProbability} bestPick={game.bestPick} compact />
+        <HitProbabilityBadge 
+          probability={game.hitProbability} 
+          bestPick={game.bestPick}
+          dkLine={game.dk_total_line}
+          p05={game.p05}
+          p95={game.p95}
+          compact 
+        />
         <EdgeStrengthBadge edgeStrength={game.edgeStrength} />
       </div>
 
@@ -830,22 +843,110 @@ function EdgeTypeBadge({ edgeType }: { edgeType: RankedGame["edgeType"] }) {
   );
 }
 
-// Hit probability badge showing likelihood of pick hitting
-function HitProbabilityBadge({ probability, bestPick, compact = false }: { probability: number; bestPick: "over" | "under" | null; compact?: boolean }) {
-  const getColor = (prob: number) => {
-    if (prob >= 90) return "text-status-over bg-status-over/15 border-status-over/40";
-    if (prob >= 75) return "text-yellow-500 bg-yellow-500/15 border-yellow-500/40";
-    if (prob >= 60) return "text-blue-500 bg-blue-500/15 border-blue-500/40";
+// Hit probability badge showing likelihood of pick hitting with color-coded direction
+function HitProbabilityBadge({ 
+  probability, 
+  bestPick, 
+  compact = false,
+  dkLine,
+  p05,
+  p95,
+}: { 
+  probability: number; 
+  bestPick: "over" | "under" | null; 
+  compact?: boolean;
+  dkLine?: number | null;
+  p05?: number | null;
+  p95?: number | null;
+}) {
+  // Color based on pick direction - OVER = green, UNDER = blue
+  const getPickColor = () => {
+    if (bestPick === "over") {
+      if (probability >= 80) return "text-status-over bg-status-over/20 border-status-over/50";
+      if (probability >= 60) return "text-status-over bg-status-over/10 border-status-over/30";
+      return "text-status-over/70 bg-status-over/5 border-status-over/20";
+    }
+    if (bestPick === "under") {
+      if (probability >= 80) return "text-status-under bg-status-under/20 border-status-under/50";
+      if (probability >= 60) return "text-status-under bg-status-under/10 border-status-under/30";
+      return "text-status-under/70 bg-status-under/5 border-status-under/20";
+    }
     return "text-muted-foreground bg-muted/30 border-muted-foreground/30";
   };
   
-  const pickLabel = bestPick === "over" ? "O" : bestPick === "under" ? "U" : "";
+  const pickLabel = bestPick === "over" ? "OVER" : bestPick === "under" ? "UNDER" : "";
+  const pickIcon = bestPick === "over" ? <TrendingUp className="h-3 w-3" /> : bestPick === "under" ? <TrendingDown className="h-3 w-3" /> : null;
   
-  return (
-    <Badge variant="outline" className={cn("font-bold tabular-nums", getColor(probability), compact ? "px-1.5 py-0 text-2xs" : "px-2 py-0.5 text-xs")}>
-      {!compact && pickLabel && <span className="mr-1">{pickLabel}</span>}
-      {probability.toFixed(0)}%
+  // Calculate position info for tooltip
+  const getTooltipContent = () => {
+    const lineInfo = dkLine && p05 && p95 ? (
+      <div className="space-y-1.5 mt-2 pt-2 border-t border-border/40">
+        <div className="flex justify-between gap-4">
+          <span className="text-muted-foreground">DK Line:</span>
+          <span className="font-mono">{dkLine}</span>
+        </div>
+        <div className="flex justify-between gap-4">
+          <span className="text-muted-foreground">P5 (Low):</span>
+          <span className="font-mono">{p05}</span>
+        </div>
+        <div className="flex justify-between gap-4">
+          <span className="text-muted-foreground">P95 (High):</span>
+          <span className="font-mono">{p95}</span>
+        </div>
+        {dkLine < p05 && (
+          <div className="text-xs text-status-under font-medium">
+            Line is {(p05 - dkLine).toFixed(1)} pts below historical low
+          </div>
+        )}
+        {dkLine > p95 && (
+          <div className="text-xs text-status-over font-medium">
+            Line is {(dkLine - p95).toFixed(1)} pts above historical high
+          </div>
+        )}
+      </div>
+    ) : null;
+
+    return (
+      <div className="text-xs max-w-[280px]">
+        <div className="font-semibold mb-1.5">Hit Probability: {probability.toFixed(0)}%</div>
+        <div className="text-muted-foreground leading-relaxed">
+          Based on where the DK line sits relative to historical p05/p95:
+        </div>
+        <ul className="mt-1.5 space-y-0.5 text-muted-foreground text-2xs">
+          <li>• <strong>Near p05:</strong> High UNDER probability (~95%)</li>
+          <li>• <strong>Near p95:</strong> High OVER probability (~95%)</li>
+          <li>• <strong>At median:</strong> ~50% either way</li>
+          <li>• <strong>Beyond extremes:</strong> Up to 99%</li>
+        </ul>
+        {lineInfo}
+      </div>
+    );
+  };
+  
+  const badge = (
+    <Badge 
+      variant="outline" 
+      className={cn(
+        "font-bold tabular-nums cursor-help gap-1", 
+        getPickColor(), 
+        compact ? "px-1.5 py-0 text-2xs" : "px-2 py-0.5 text-xs"
+      )}
+    >
+      {pickIcon}
+      {!compact && pickLabel && <span>{pickLabel}</span>}
+      <span>{probability.toFixed(0)}%</span>
     </Badge>
+  );
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {badge}
+      </TooltipTrigger>
+      <TooltipContent side="top" className="p-3">
+        {getTooltipContent()}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
