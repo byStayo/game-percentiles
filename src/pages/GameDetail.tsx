@@ -19,6 +19,7 @@ import { RosterContinuityCard } from "@/components/game/RosterContinuityCard";
 import { SegmentComparison } from "@/components/game/SegmentComparison";
 import { SegmentTimeline } from "@/components/game/SegmentTimeline";
 import { SegmentAnalysis } from "@/components/game/SegmentAnalysis";
+import { EdgeDetectionCard } from "@/components/game/EdgeDetectionCard";
 import { Button } from "@/components/ui/button";
 import { HistoricalDistributionChart } from "@/components/game/HistoricalDistributionChart";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
@@ -441,6 +442,22 @@ export default function GameDetail() {
                 <div className="text-2xs text-muted-foreground">P95</div>
               </div>
             </div>
+          )}
+
+          {/* Edge Detection Card - alternate lines near p05/p95 */}
+          {edge && hasEnoughData && (
+            <EdgeDetectionCard
+              p05={stats?.p05 ?? null}
+              p95={stats?.p95 ?? null}
+              p95OverLine={edge.p95_over_line ?? null}
+              p95OverOdds={edge.p95_over_odds ?? null}
+              p05UnderLine={edge.p05_under_line ?? null}
+              p05UnderOdds={edge.p05_under_odds ?? null}
+              bestOverEdge={edge.best_over_edge ?? null}
+              bestUnderEdge={edge.best_under_edge ?? null}
+              alternateLines={edge.alternate_lines ?? null}
+              dkTotalLine={edge.dk_total_line ?? null}
+            />
           )}
 
           {/* Roster Continuity Card */}
