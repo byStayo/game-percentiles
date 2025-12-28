@@ -67,6 +67,7 @@ const EDGE_FILTERS = [
 ] as const;
 
 const SORT_OPTIONS = [
+  { id: "hit-probability", label: "Hit Probability" },
   { id: "edge-strength", label: "Edge Strength" },
   { id: "dk-distance", label: "DK Distance from P5/P95" },
   { id: "confidence", label: "Confidence" },
@@ -82,6 +83,8 @@ interface RankedGame extends TodayGame {
   edgeStrength: number;
   dkDistanceFromPercentile: number; // How close DK line is to p05 or p95
   isBeyondExtremes: boolean; // Whether DK line extends beyond p05/p95
+  hitProbability: number; // Estimated statistical probability of hitting (0-100)
+  bestPick: "over" | "under" | null; // Which side has better probability
 }
 
 function formatOdds(odds: number): string {
@@ -93,7 +96,7 @@ export default function BestBets() {
   const navigate = useNavigate();
   const [sportFilter, setSportFilter] = useState<SportId | "all">("all");
   const [edgeFilter, setEdgeFilter] = useState<EdgeFilter>("any-edge");
-  const [sortBy, setSortBy] = useState<SortOption>("edge-strength");
+  const [sortBy, setSortBy] = useState<SortOption>("hit-probability");
   const [beyondExtremesOnly, setBeyondExtremesOnly] = useState(false);
   const [showFinalGames, setShowFinalGames] = useState(true);
   const [minConfidence, setMinConfidence] = useState(40);
@@ -143,12 +146,76 @@ export default function BestBets() {
       const dkLine = game.dk_total_line ?? 0;
       const p05 = game.p05 ?? 0;
       const p95 = game.p95 ?? 0;
+      const range = p95 - p05;
       const distanceToP05 = Math.abs(dkLine - p05);
       const distanceToP95 = Math.abs(dkLine - p95);
       const dkDistanceFromPercentile = Math.min(distanceToP05, distanceToP95);
       
       // Check if DK line extends beyond historical extremes
       const isBeyondExtremes = dkLine < p05 || dkLine > p95;
+      
+      // Calculate hit probability based on DK line position relative to percentiles
+      // The closer DK is to an extreme (or beyond), the higher the probability
+      // For UNDER: DK line at/below p05 = ~95%+ hit rate
+      // For OVER: DK line at/above p95 = ~95%+ hit rate
+      let overHitProb = 50; // Default: 50% if DK is at median
+      let underHitProb = 50;
+      
+      if (range > 0 && dkLine > 0) {
+        // Position from 0 (at p05) to 1 (at p95)
+        const positionInRange = (dkLine - p05) / range;
+        
+        // UNDER probability: higher when DK is closer to/below p05
+        // If DK < p05 (beyond low extreme), under has >95% hit rate
+        // If DK = p05, under has ~95% hit rate
+        // If DK = median, under has ~50% hit rate
+        // If DK = p95, under has ~5% hit rate
+        if (dkLine <= p05) {
+          // Beyond the low extreme - very high under probability
+          const beyondAmount = (p05 - dkLine) / (range || 1);
+          underHitProb = Math.min(99, 95 + beyondAmount * 4);
+        } else if (dkLine >= p95) {
+          // Beyond the high extreme - very low under probability
+          underHitProb = 5;
+        } else {
+          // Within range - linear interpolation
+          underHitProb = 95 - (positionInRange * 90); // 95 at p05, 5 at p95
+        }
+        
+        // OVER probability is inverse of under
+        if (dkLine >= p95) {
+          // Beyond the high extreme - very high over probability
+          const beyondAmount = (dkLine - p95) / (range || 1);
+          overHitProb = Math.min(99, 95 + beyondAmount * 4);
+        } else if (dkLine <= p05) {
+          // Beyond the low extreme - very low over probability
+          overHitProb = 5;
+        } else {
+          // Within range - linear interpolation
+          overHitProb = 5 + (positionInRange * 90); // 5 at p05, 95 at p95
+        }
+      }
+      
+      // Determine best pick and its probability
+      let bestPick: "over" | "under" | null = null;
+      let hitProbability = 0;
+      
+      if (hasOverEdge && hasUnderEdge) {
+        // Both edges exist - pick the higher probability
+        if (overHitProb >= underHitProb) {
+          bestPick = "over";
+          hitProbability = overHitProb;
+        } else {
+          bestPick = "under";
+          hitProbability = underHitProb;
+        }
+      } else if (hasOverEdge) {
+        bestPick = "over";
+        hitProbability = overHitProb;
+      } else if (hasUnderEdge) {
+        bestPick = "under";
+        hitProbability = underHitProb;
+      }
       
       return {
         ...game,
@@ -160,6 +227,8 @@ export default function BestBets() {
         edgeStrength,
         dkDistanceFromPercentile,
         isBeyondExtremes,
+        hitProbability,
+        bestPick,
       };
     };
 
@@ -183,6 +252,12 @@ export default function BestBets() {
     // Sort function
     const sortGames = (a: RankedGame, b: RankedGame): number => {
       switch (sortBy) {
+        case "hit-probability":
+          if (b.hitProbability !== a.hitProbability) {
+            return b.hitProbability - a.hitProbability;
+          }
+          // Secondary sort by confidence for same probability
+          return b.confidence.score - a.confidence.score;
         case "edge-strength":
           if (b.edgeStrength !== a.edgeStrength) {
             return b.edgeStrength - a.edgeStrength;
@@ -201,7 +276,7 @@ export default function BestBets() {
         case "time":
           return new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime();
         default:
-          return b.edgeStrength - a.edgeStrength;
+          return b.hitProbability - a.hitProbability;
       }
     };
 
@@ -445,9 +520,9 @@ export default function BestBets() {
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <Star className="h-5 w-5 text-yellow-500" />
-                  Top Edge Picks
-                  <Badge variant="outline" className="ml-2 text-status-edge border-status-edge/30">
-                    {combinedEdgeStrength.toFixed(1)} pts combined
+                  Top Picks by Hit Probability
+                  <Badge variant="outline" className="ml-2 text-status-over border-status-over/30">
+                    avg {(topPicks.reduce((sum, g) => sum + g.hitProbability, 0) / topPicks.length).toFixed(0)}% hit rate
                   </Badge>
                 </h2>
                 <Button
@@ -579,7 +654,7 @@ function TopPickCard({ game, rank }: { game: RankedGame; rank: number }) {
         rankColors[rank as 1 | 2 | 3] || "from-muted/20 to-muted/5 border-border"
       )}
     >
-      {/* Rank Badge */}
+      {/* Rank & Probability Badge */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className={cn(
@@ -599,7 +674,7 @@ function TopPickCard({ game, rank }: { game: RankedGame; rank: number }) {
             </Badge>
           )}
         </div>
-        <EdgeTypeBadge edgeType={game.edgeType} />
+        <HitProbabilityBadge probability={game.hitProbability} bestPick={game.bestPick} />
       </div>
 
       {/* Teams */}
@@ -710,9 +785,9 @@ function RankedGameRow({ game, rank }: { game: RankedGame; rank: number }) {
         />
       </div>
 
-      {/* Edge Info */}
+      {/* Hit Probability & Edge Info */}
       <div className="flex items-center gap-2 flex-shrink-0">
-        <EdgeTypeBadge edgeType={game.edgeType} />
+        <HitProbabilityBadge probability={game.hitProbability} bestPick={game.bestPick} compact />
         <EdgeStrengthBadge edgeStrength={game.edgeStrength} />
       </div>
 
@@ -751,6 +826,25 @@ function EdgeTypeBadge({ edgeType }: { edgeType: RankedGame["edgeType"] }) {
     <Badge variant="outline" className="px-1.5 py-0.5 text-2xs bg-status-under/10 text-status-under border-status-under/20">
       <TrendingDown className="h-3 w-3 mr-0.5" />
       Under
+    </Badge>
+  );
+}
+
+// Hit probability badge showing likelihood of pick hitting
+function HitProbabilityBadge({ probability, bestPick, compact = false }: { probability: number; bestPick: "over" | "under" | null; compact?: boolean }) {
+  const getColor = (prob: number) => {
+    if (prob >= 90) return "text-status-over bg-status-over/15 border-status-over/40";
+    if (prob >= 75) return "text-yellow-500 bg-yellow-500/15 border-yellow-500/40";
+    if (prob >= 60) return "text-blue-500 bg-blue-500/15 border-blue-500/40";
+    return "text-muted-foreground bg-muted/30 border-muted-foreground/30";
+  };
+  
+  const pickLabel = bestPick === "over" ? "O" : bestPick === "under" ? "U" : "";
+  
+  return (
+    <Badge variant="outline" className={cn("font-bold tabular-nums", getColor(probability), compact ? "px-1.5 py-0 text-2xs" : "px-2 py-0.5 text-xs")}>
+      {!compact && pickLabel && <span className="mr-1">{pickLabel}</span>}
+      {probability.toFixed(0)}%
     </Badge>
   );
 }
