@@ -111,9 +111,9 @@ export default function BestBets() {
         else if (hasOverEdge) edgeType = "over";
         else if (hasUnderEdge) edgeType = "under";
         
-        // Calculate edge strength (higher is better)
-        const overEdge = game.best_over_edge ?? 0;
-        const underEdge = game.best_under_edge ?? 0;
+        // Calculate edge strength (higher is better) - only use positive edges
+        const overEdge = Math.max(0, game.best_over_edge ?? 0);
+        const underEdge = Math.max(0, game.best_under_edge ?? 0);
         const edgeStrength = Math.max(overEdge, underEdge);
         
         return {
@@ -132,10 +132,10 @@ export default function BestBets() {
         if (game.n_h2h < minSampleSize) return false;
         if (sportFilter !== "all" && game.sport_id !== sportFilter) return false;
         
-        // Edge filter
+        // Edge filter - also filter out zero/negative edges
         if (edgeFilter === "over" && game.edgeType !== "over" && game.edgeType !== "both") return false;
         if (edgeFilter === "under" && game.edgeType !== "under" && game.edgeType !== "both") return false;
-        if (edgeFilter === "any-edge" && game.edgeType === "none") return false;
+        if (edgeFilter === "any-edge" && (game.edgeType === "none" || game.edgeStrength <= 0)) return false;
         
         return true;
       })
@@ -166,16 +166,23 @@ export default function BestBets() {
     }
 
     // Store edge picks for parlay page to consume
-    const edgePicks = topPicks.map(game => ({
-      gameId: game.game_id,
-      sportId: game.sport_id,
-      pick: game.edgeType === "under" ? "under" : "over",
-      edgeStrength: game.edgeStrength,
-      line: game.edgeType === "under" ? game.p05_under_line : game.p95_over_line,
-      odds: game.edgeType === "under" ? game.p05_under_odds : game.p95_over_odds,
-      homeTeam: game.home_team,
-      awayTeam: game.away_team,
-    }));
+    // Always pick the strongest edge (over or under) for each game
+    const edgePicks = topPicks.map(game => {
+      const overEdge = Math.max(0, game.best_over_edge ?? 0);
+      const underEdge = Math.max(0, game.best_under_edge ?? 0);
+      const useUnder = underEdge > overEdge;
+      
+      return {
+        gameId: game.game_id,
+        sportId: game.sport_id,
+        pick: useUnder ? "under" : "over",
+        edgeStrength: game.edgeStrength,
+        line: useUnder ? game.p05_under_line : game.p95_over_line,
+        odds: useUnder ? game.p05_under_odds : game.p95_over_odds,
+        homeTeam: game.home_team,
+        awayTeam: game.away_team,
+      };
+    });
 
     localStorage.setItem(EDGE_PARLAY_KEY, JSON.stringify(edgePicks));
     toast.success(`Added ${topPicks.length} edge picks to parlay`);
@@ -462,9 +469,7 @@ function TopPickCard({ game, rank }: { game: RankedGame; rank: number }) {
             <SegmentBadge segment={game.segment_used} showTooltip={false} />
           )}
         </div>
-        <span className="text-xs font-medium text-status-live">
-          {game.edgeStrength.toFixed(1)} pts edge
-        </span>
+        <EdgeStrengthBadge edgeStrength={game.edgeStrength} />
       </div>
     </Link>
   );
@@ -502,9 +507,7 @@ function RankedGameRow({ game, rank }: { game: RankedGame; rank: number }) {
       {/* Edge Info */}
       <div className="flex items-center gap-2">
         <EdgeTypeBadge edgeType={game.edgeType} />
-        <span className="text-xs font-medium text-status-live tabular-nums">
-          {game.edgeStrength.toFixed(1)} pts
-        </span>
+        <EdgeStrengthBadge edgeStrength={game.edgeStrength} />
       </div>
 
       {/* Arrow */}
@@ -542,6 +545,23 @@ function EdgeTypeBadge({ edgeType }: { edgeType: RankedGame["edgeType"] }) {
     <Badge variant="outline" className="px-1.5 py-0.5 text-2xs bg-status-under/10 text-status-under border-status-under/20">
       <TrendingDown className="h-3 w-3 mr-0.5" />
       Under
+    </Badge>
+  );
+}
+
+// Edge strength visual indicator with color coding
+function EdgeStrengthBadge({ edgeStrength }: { edgeStrength: number }) {
+  const getEdgeInfo = (edge: number) => {
+    if (edge > 2) return { label: "Strong", color: "text-status-live bg-status-live/10 border-status-live/30" };
+    if (edge >= 1) return { label: "Moderate", color: "text-yellow-500 bg-yellow-500/10 border-yellow-500/30" };
+    return { label: "Weak", color: "text-muted-foreground bg-muted/30 border-muted-foreground/30" };
+  };
+  
+  const { label, color } = getEdgeInfo(edgeStrength);
+  
+  return (
+    <Badge variant="outline" className={cn("px-1.5 py-0.5 text-2xs", color)}>
+      {edgeStrength.toFixed(1)} pts • {label}
     </Badge>
   );
 }

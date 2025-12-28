@@ -32,6 +32,13 @@ function getOddsColor(odds: number): string {
   return "text-muted-foreground";
 }
 
+function getEdgeStrengthInfo(edge: number | null): { label: string; color: string } {
+  if (edge === null || edge <= 0) return { label: "", color: "" };
+  if (edge > 2) return { label: "Strong", color: "text-status-live" };
+  if (edge >= 1) return { label: "Moderate", color: "text-yellow-500" };
+  return { label: "Weak", color: "text-muted-foreground" };
+}
+
 export function EdgeDetectionCard({
   p05,
   p95,
@@ -93,8 +100,12 @@ export function EdgeDetectionCard({
                     {formatOdds(p95OverOdds)}
                   </span>
                 </div>
-                <div className="text-2xs text-muted-foreground mt-1">
-                  Near P95 ({p95?.toFixed(0)}) • {bestOverEdge?.toFixed(1) || 0} pts edge
+                <div className="text-2xs text-muted-foreground mt-1 flex items-center gap-1">
+                  <span>Near P95 ({p95?.toFixed(0)})</span>
+                  <span>•</span>
+                  <span className={getEdgeStrengthInfo(bestOverEdge).color}>
+                    {bestOverEdge?.toFixed(1) || 0} pts {getEdgeStrengthInfo(bestOverEdge).label}
+                  </span>
                 </div>
               </>
             ) : (
@@ -124,8 +135,12 @@ export function EdgeDetectionCard({
                     {formatOdds(p05UnderOdds)}
                   </span>
                 </div>
-                <div className="text-2xs text-muted-foreground mt-1">
-                  Near P05 ({p05?.toFixed(0)}) • {bestUnderEdge?.toFixed(1) || 0} pts edge
+                <div className="text-2xs text-muted-foreground mt-1 flex items-center gap-1">
+                  <span>Near P05 ({p05?.toFixed(0)})</span>
+                  <span>•</span>
+                  <span className={getEdgeStrengthInfo(bestUnderEdge).color}>
+                    {bestUnderEdge?.toFixed(1) || 0} pts {getEdgeStrengthInfo(bestUnderEdge).label}
+                  </span>
                 </div>
               </>
             ) : (
