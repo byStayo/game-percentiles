@@ -10,6 +10,8 @@ import { GameCardSkeleton } from "@/components/game/GameCardSkeleton";
 import { EmptyState } from "@/components/game/EmptyState";
 import { ErrorState } from "@/components/game/ErrorState";
 import { EdgeExplainer } from "@/components/game/EdgeExplainer";
+import { StickyFilters } from "@/components/ui/sticky-filters";
+import { SportBadge } from "@/components/ui/sport-icon";
 
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useTodayGames, TodayGame } from "@/hooks/useApi";
@@ -22,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Zap } from "lucide-react";
+import { Zap, ChevronLeft, ChevronRight as ChevronRightIcon } from "lucide-react";
 import type { SportId } from "@/types";
 
 const ET_TIMEZONE = "America/New_York";
@@ -232,119 +234,147 @@ export default function Index() {
             )}
           </div>
 
-          {/* Date picker - centered, more compact on mobile */}
-          <div className="flex justify-center -mx-4 sm:mx-0">
+          {/* Date picker with navigation hints */}
+          <div className="flex items-center justify-center gap-2 -mx-4 sm:mx-0">
+            <button 
+              onClick={goToPreviousDay}
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors touch-manipulation active:scale-95 md:hidden"
+              aria-label="Previous day"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
             <DatePickerInline
               date={selectedDate}
               onDateChange={setSelectedDate}
             />
+            <button 
+              onClick={goToNextDay}
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors touch-manipulation active:scale-95 md:hidden"
+              aria-label="Next day"
+            >
+              <ChevronRightIcon className="h-5 w-5" />
+            </button>
           </div>
 
-          {/* Controls - simplified for mobile */}
-          <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-card border border-border/50">
-            {/* View mode */}
-            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted/50">
-              <button
-                onClick={() => setViewMode("all")}
-                className={cn(
-                  "px-2.5 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
-                  viewMode === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-                )}
-              >
-                All
-              </button>
-              <button
-                onClick={() => setViewMode("sport")}
-                className={cn(
-                  "px-2.5 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
-                  viewMode === "sport" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-                )}
-              >
-                By Sport
-              </button>
-            </div>
-
-            {/* Sort */}
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-              <SelectTrigger className="w-24 h-7 text-xs bg-background border-border/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="edges-first">Best First</SelectItem>
-                <SelectItem value="edge">By Edge</SelectItem>
-                <SelectItem value="time">By Time</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Filter mode selector */}
-            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted/50 ml-auto">
-              <button
-                onClick={() => setFilterMode("best-bets")}
-                className={cn(
-                  "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
-                  filterMode === "best-bets" 
-                    ? "bg-status-edge/20 text-status-edge shadow-sm" 
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Zap className="h-3 w-3" />
-                Best
-              </button>
-              <button
-                onClick={() => setFilterMode("picks")}
-                className={cn(
-                  "px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
-                  filterMode === "picks" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-                )}
-              >
-                Picks
-              </button>
-              <button
-                onClick={() => setFilterMode("all")}
-                className={cn(
-                  "px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
-                  filterMode === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-                )}
-              >
-                All
-              </button>
-            </div>
-            <label className="flex items-center gap-1.5 cursor-pointer touch-manipulation">
-              <Switch
-                id="hide-weak"
-                checked={hideWeakData}
-                onCheckedChange={setHideWeakData}
-                className="scale-75"
-              />
-              <span className="text-xs">5+</span>
-            </label>
-          </div>
-
-          {/* Sport tabs (only shown in sport view) */}
-          {viewMode === "sport" && (
-            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide -mx-3 px-3">
-              {sports.map((sport) => (
+          {/* Controls with sticky behavior */}
+          <StickyFilters>
+            <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-card border border-border/50">
+              {/* View mode */}
+              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted/50">
                 <button
-                  key={sport.id}
-                  onClick={() => setSelectedSport(sport.id)}
+                  onClick={() => setViewMode("all")}
                   className={cn(
-                    "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap touch-manipulation active:scale-95",
-                    selectedSport === sport.id
-                      ? "bg-foreground text-background shadow-sm"
-                      : "bg-muted/50 text-muted-foreground"
+                    "px-2.5 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                    viewMode === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
                   )}
                 >
-                  {sport.name}
-                  <span className={cn(
-                    "px-1 rounded text-2xs tabular-nums",
-                    selectedSport === sport.id ? "bg-background/20" : "bg-muted"
-                  )}>
-                    {sportCounts[sport.id]}
-                  </span>
+                  All
                 </button>
+                <button
+                  onClick={() => setViewMode("sport")}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                    viewMode === "sport" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                  )}
+                >
+                  By Sport
+                </button>
+              </div>
+
+              {/* Sort */}
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                <SelectTrigger className="w-24 h-7 text-xs bg-background border-border/50">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="edges-first">Best First</SelectItem>
+                  <SelectItem value="edge">By Edge</SelectItem>
+                  <SelectItem value="time">By Time</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Filter mode selector */}
+              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted/50 ml-auto">
+                <button
+                  onClick={() => setFilterMode("best-bets")}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                    filterMode === "best-bets" 
+                      ? "bg-status-edge/20 text-status-edge shadow-sm" 
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Zap className="h-3 w-3" />
+                  Best
+                </button>
+                <button
+                  onClick={() => setFilterMode("picks")}
+                  className={cn(
+                    "px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                    filterMode === "picks" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                  )}
+                >
+                  Picks
+                </button>
+                <button
+                  onClick={() => setFilterMode("all")}
+                  className={cn(
+                    "px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                    filterMode === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                  )}
+                >
+                  All
+                </button>
+              </div>
+              <label className="flex items-center gap-1.5 cursor-pointer touch-manipulation">
+                <Switch
+                  id="hide-weak"
+                  checked={hideWeakData}
+                  onCheckedChange={setHideWeakData}
+                  className="scale-75"
+                />
+                <span className="text-xs">5+</span>
+              </label>
+            </div>
+          </StickyFilters>
+
+          {/* Sport tabs with icons (only shown in sport view) */}
+          {viewMode === "sport" && (
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-3 px-3">
+              {sports.map((sport) => (
+                <SportBadge
+                  key={sport.id}
+                  sport={sport.id}
+                  count={sportCounts[sport.id]}
+                  isActive={selectedSport === sport.id}
+                  onClick={() => setSelectedSport(sport.id)}
+                />
               ))}
             </div>
           )}
+
+          {/* Sport group dividers in All view */}
+          {viewMode === "all" && !isLoading && filteredAndSortedGames.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap">
+              {sports.map((sport) => {
+                const count = sportCounts[sport.id];
+                if (count === 0) return null;
+                return (
+                  <button
+                    key={sport.id}
+                    onClick={() => {
+                      setViewMode("sport");
+                      setSelectedSport(sport.id);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-2xs font-medium bg-muted/50 text-muted-foreground hover:bg-muted transition-colors"
+                  >
+                    <span className="uppercase">{sport.id}</span>
+                    <span className="tabular-nums">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )
 
           {/* Games list */}
           {isLoading ? (

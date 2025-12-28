@@ -612,9 +612,13 @@ export default function BestBets() {
             </CardContent>
           </Card>
 
-          {/* Lock Parlay - 95%+ Hit Probability */}
+          {/* Lock Parlay - 95%+ Hit Probability - Enhanced with glow */}
           {lockPicks.length > 0 && (
-            <Card className="border-2 border-yellow-500/50 bg-gradient-to-br from-yellow-500/10 to-yellow-500/5">
+            <div className="relative rounded-2xl overflow-hidden" id="lock-parlay">
+              {/* Gradient border effect */}
+              <div className="absolute inset-0 bg-gradient-to-br from-yellow-400 via-yellow-500 to-orange-500 opacity-20" />
+              <div className="absolute inset-[1px] rounded-2xl bg-card" />
+              <Card className="relative border-0 bg-transparent shadow-edge-glow">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <CardTitle className="flex items-center gap-2 text-lg">
@@ -779,6 +783,7 @@ export default function BestBets() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           )}
 
           {/* Same Game Parlay Mode */}
