@@ -9,6 +9,7 @@ import { GameCard } from "@/components/game/GameCardNew";
 import { GameCardSkeleton } from "@/components/game/GameCardSkeleton";
 import { EmptyState } from "@/components/game/EmptyState";
 import { ErrorState } from "@/components/game/ErrorState";
+import { EdgeExplainer } from "@/components/game/EdgeExplainer";
 
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useTodayGames, TodayGame } from "@/hooks/useApi";
@@ -196,9 +197,12 @@ export default function Index() {
           <div className="flex items-center justify-between pt-1 sm:pt-4">
             <div>
               <h1 className="text-lg sm:text-2xl font-bold">Today's Picks</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                {picksCount} of {totalGames} games have an edge
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {picksCount} of {totalGames} games
+                </p>
+                <EdgeExplainer compact />
+              </div>
             </div>
             {edgesCount > 0 && (
               <Link

@@ -456,7 +456,11 @@ Deno.serve(async (req) => {
         
         const response = await fetchWithRetry(url, {})
         if (!response.ok) {
-          console.error(`[ODDS-REFRESH] Odds API error for ${sportId}:`, response.status)
+          const errorBody = await response.text().catch(() => 'Unable to read error body')
+          console.error(`[ODDS-REFRESH] Odds API error for ${sportId}: status=${response.status}, body=${errorBody}`)
+          if (response.status === 401) {
+            console.error(`[ODDS-REFRESH] API key may be invalid or expired. Check ODDS_API_KEY secret.`)
+          }
           counters.errors++
           continue
         }
