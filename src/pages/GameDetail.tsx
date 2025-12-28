@@ -367,6 +367,8 @@ export default function GameDetail() {
                 bestUnderEdge={edge?.best_under_edge ?? null}
                 p95OverLine={edge?.p95_over_line ?? null}
                 p05UnderLine={edge?.p05_under_line ?? null}
+                p05={edge?.p05 ?? null}
+                p95={edge?.p95 ?? null}
                 isFinal={isFinal}
                 className="text-base px-6 py-3"
               />
