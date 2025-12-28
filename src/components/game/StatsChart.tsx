@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 
 interface StatsChartProps {
   p05: number;
@@ -9,6 +9,8 @@ interface StatsChartProps {
   finalTotal?: number | null;
   bestOverEdge?: number | null;
   bestUnderEdge?: number | null;
+  p95OverLine?: number | null;
+  p05UnderLine?: number | null;
   nH2H?: number;
   className?: string;
 }
@@ -21,27 +23,42 @@ export function StatsChart({
   finalTotal,
   bestOverEdge,
   bestUnderEdge,
+  p95OverLine,
+  p05UnderLine,
   nH2H,
   className,
 }: StatsChartProps) {
   // Calculate median as midpoint (approximate since we don't have actual median)
   const median = Math.round((p05 + p95) / 2);
   
-  // Determine recommendation
-  const hasOverEdge = (bestOverEdge ?? 0) > 0;
-  const hasUnderEdge = (bestUnderEdge ?? 0) > 0;
-  const P = dkPercentile ?? 50;
+  // Determine if p95 over/under line is available on DK
+  const hasOverOnDK = p95OverLine != null && (bestOverEdge ?? 0) > 0;
+  const hasUnderOnDK = p05UnderLine != null && (bestUnderEdge ?? 0) > 0;
   
+  // Only qualify picks if they're available on DK alternate lines
   const getRecommendation = () => {
-    if (hasOverEdge && (!hasUnderEdge || (bestOverEdge ?? 0) > (bestUnderEdge ?? 0))) {
-      return { type: "over", edge: bestOverEdge };
+    // Priority: Edge picks that are available on DK
+    if (hasOverOnDK && (!hasUnderOnDK || (bestOverEdge ?? 0) >= (bestUnderEdge ?? 0))) {
+      return { type: "over", edge: bestOverEdge, line: p95OverLine, isQualified: true };
     }
-    if (hasUnderEdge) {
-      return { type: "under", edge: bestUnderEdge };
+    if (hasUnderOnDK) {
+      return { type: "under", edge: bestUnderEdge, line: p05UnderLine, isQualified: true };
     }
-    if (P <= 30) return { type: "lean-over", edge: null };
-    if (P >= 70) return { type: "lean-under", edge: null };
-    return { type: "none", edge: null };
+    
+    // Disqualified: Has edge but not available on DK
+    if ((bestOverEdge ?? 0) > 0) {
+      return { type: "over", edge: bestOverEdge, line: null, isQualified: false };
+    }
+    if ((bestUnderEdge ?? 0) > 0) {
+      return { type: "under", edge: bestUnderEdge, line: null, isQualified: false };
+    }
+    
+    // No edge - show lean based on percentile
+    const P = dkPercentile ?? 50;
+    if (P <= 30) return { type: "lean-over", edge: null, line: dkLine, isQualified: false };
+    if (P >= 70) return { type: "lean-under", edge: null, line: dkLine, isQualified: false };
+    
+    return { type: "none", edge: null, line: null, isQualified: false };
   };
   
   const rec = getRecommendation();
@@ -68,42 +85,67 @@ export function StatsChart({
 
   const isFinal = finalTotal != null;
 
+  // Low data warning
+  const isLowData = (nH2H ?? 0) < 5;
+
   return (
     <div className={cn("space-y-2", className)}>
+      {/* Low data warning */}
+      {isLowData && !isFinal && (
+        <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-status-over/10 border border-status-over/20">
+          <AlertTriangle className="h-3.5 w-3.5 text-status-over" />
+          <span className="text-2xs font-medium text-status-over">
+            Low data: {nH2H ?? 0} games - use caution
+          </span>
+        </div>
+      )}
+
       {/* Main recommendation banner */}
-      {hasRec && dkLine != null && !isFinal && (
+      {hasRec && !isFinal && (
         <div
           className={cn(
             "flex items-center justify-between px-3 py-2 rounded-lg",
-            isOver && "bg-status-over/15 border border-status-over/30",
-            isUnder && "bg-status-under/15 border border-status-under/30"
+            rec.isQualified && isOver && "bg-status-over/15 border border-status-over/40",
+            rec.isQualified && isUnder && "bg-status-under/15 border border-status-under/40",
+            !rec.isQualified && "bg-muted/50 border border-border/60"
           )}
         >
           <div className="flex items-center gap-2">
             {isOver ? (
-              <TrendingUp className="h-4 w-4 text-status-over" />
+              <TrendingUp className={cn("h-4 w-4", rec.isQualified ? "text-status-over" : "text-muted-foreground")} />
             ) : (
-              <TrendingDown className="h-4 w-4 text-status-under" />
+              <TrendingDown className={cn("h-4 w-4", rec.isQualified ? "text-status-under" : "text-muted-foreground")} />
             )}
-            <span className={cn(
-              "text-sm font-semibold",
-              isOver ? "text-status-over" : "text-status-under"
-            )}>
-              {rec.type === "over" ? "OVER" : rec.type === "under" ? "UNDER" : 
-               rec.type === "lean-over" ? "LEAN OVER" : "LEAN UNDER"}
-            </span>
+            <div className="flex flex-col">
+              <span className={cn(
+                "text-sm font-semibold",
+                rec.isQualified && isOver ? "text-status-over" : 
+                rec.isQualified && isUnder ? "text-status-under" : "text-muted-foreground"
+              )}>
+                {rec.type === "over" ? "OVER" : rec.type === "under" ? "UNDER" : 
+                 rec.type === "lean-over" ? "LEAN OVER" : "LEAN UNDER"}
+              </span>
+              {!rec.isQualified && (
+                <span className="text-2xs text-muted-foreground">Not on DK alts</span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className={cn(
-              "text-lg font-bold tabular-nums",
-              isOver ? "text-status-over" : "text-status-under"
-            )}>
-              {dkLine}
-            </span>
+            {rec.line != null && (
+              <span className={cn(
+                "text-lg font-bold tabular-nums",
+                rec.isQualified && isOver ? "text-status-over" : 
+                rec.isQualified && isUnder ? "text-status-under" : "text-foreground"
+              )}>
+                {rec.line}
+              </span>
+            )}
             {rec.edge != null && rec.edge > 0 && (
               <span className={cn(
                 "text-xs font-semibold px-1.5 py-0.5 rounded",
-                isOver ? "bg-status-over/20 text-status-over" : "bg-status-under/20 text-status-under"
+                rec.isQualified && isOver ? "bg-status-over/20 text-status-over" : 
+                rec.isQualified && isUnder ? "bg-status-under/20 text-status-under" :
+                "bg-muted text-muted-foreground"
               )}>
                 +{rec.edge.toFixed(1)}
               </span>
@@ -112,19 +154,26 @@ export function StatsChart({
         </div>
       )}
 
-      {/* Stats grid - show key numbers */}
+      {/* Stats grid - show key numbers with game counts */}
       <div className="grid grid-cols-4 gap-1 text-center">
         <div className="px-1.5 py-1.5 rounded-md bg-status-under/10">
-          <div className="text-2xs text-status-under font-medium uppercase tracking-wide">5%ile</div>
+          <div className="text-2xs text-status-under font-medium uppercase tracking-wide">P5</div>
           <div className="text-sm font-bold text-status-under tabular-nums">{p05}</div>
+          {p05UnderLine != null && (
+            <div className="text-2xs text-muted-foreground mt-0.5">→{p05UnderLine}</div>
+          )}
         </div>
         <div className="px-1.5 py-1.5 rounded-md bg-muted/50">
-          <div className="text-2xs text-muted-foreground font-medium uppercase tracking-wide">Median</div>
+          <div className="text-2xs text-muted-foreground font-medium uppercase tracking-wide">Med</div>
           <div className="text-sm font-bold text-foreground tabular-nums">{median}</div>
+          <div className="text-2xs text-muted-foreground/70 mt-0.5">{nH2H ?? '?'} gms</div>
         </div>
         <div className="px-1.5 py-1.5 rounded-md bg-status-over/10">
-          <div className="text-2xs text-status-over font-medium uppercase tracking-wide">95%ile</div>
+          <div className="text-2xs text-status-over font-medium uppercase tracking-wide">P95</div>
           <div className="text-sm font-bold text-status-over tabular-nums">{p95}</div>
+          {p95OverLine != null && (
+            <div className="text-2xs text-muted-foreground mt-0.5">→{p95OverLine}</div>
+          )}
         </div>
         <div className={cn(
           "px-1.5 py-1.5 rounded-md",
@@ -137,6 +186,7 @@ export function StatsChart({
           )}>
             {dkLine ?? "—"}
           </div>
+          <div className="text-2xs text-muted-foreground/70 mt-0.5">DK</div>
         </div>
       </div>
 
@@ -185,9 +235,9 @@ export function StatsChart({
             <div
               className={cn(
                 "absolute top-1/2 w-4 h-4 rounded-full shadow-md ring-2 ring-background z-10",
-                isOver && "bg-status-over",
-                isUnder && "bg-status-under",
-                !hasRec && "bg-foreground"
+                rec.isQualified && isOver && "bg-status-over",
+                rec.isQualified && isUnder && "bg-status-under",
+                !rec.isQualified && "bg-foreground"
               )}
               style={{
                 left: `${dkPos}%`,
@@ -235,13 +285,6 @@ export function StatsChart({
           )}>
             {finalTotal! > dkLine ? "OVER ✓" : finalTotal! < dkLine ? "UNDER ✓" : "PUSH"}
           </span>
-        </div>
-      )}
-
-      {/* Sample size indicator */}
-      {nH2H != null && nH2H < 10 && (
-        <div className="text-center text-2xs text-muted-foreground/70">
-          Based on {nH2H} historical games
         </div>
       )}
     </div>

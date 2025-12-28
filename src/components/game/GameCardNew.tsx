@@ -172,7 +172,7 @@ export function GameCard({ game }: GameCardProps) {
               {game.sport_id}
             </span>
             <span className="text-2xs text-muted-foreground/70 tabular-nums">
-              {game.n_h2h} games
+              {game.n_used ?? game.n_h2h} games
             </span>
           </div>
 
@@ -219,7 +219,9 @@ export function GameCard({ game }: GameCardProps) {
                 finalTotal={isFinal ? game.final_total : undefined}
                 bestOverEdge={game.best_over_edge}
                 bestUnderEdge={game.best_under_edge}
-                nH2H={game.n_h2h}
+                p95OverLine={game.p95_over_line}
+                p05UnderLine={game.p05_under_line}
+                nH2H={game.n_used ?? game.n_h2h}
               />
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0 mt-3 group-active:translate-x-0.5 transition-transform" />
