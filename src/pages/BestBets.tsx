@@ -309,6 +309,11 @@ export default function BestBets() {
   const topPicks = rankedGames.slice(0, 3);
   const otherPicks = rankedGames.slice(3);
 
+  // Games with 95%+ hit probability for "Lock Parlay" section
+  const lockPicks = useMemo(() => {
+    return rankedGames.filter(game => game.hitProbability >= 95);
+  }, [rankedGames]);
+
   // Count games with DK lines beyond historical extremes
   const beyondExtremesCount = useMemo(() => {
     return rankedGames.filter(game => game.isBeyondExtremes).length;
@@ -347,6 +352,30 @@ export default function BestBets() {
 
     localStorage.setItem(EDGE_PARLAY_KEY, JSON.stringify(edgePicks));
     toast.success(`Added ${topPicks.length} edge picks to parlay`);
+    navigate("/parlay");
+  };
+
+  // Lock parlay handler - only 95%+ probability picks
+  const handleLockParlay = () => {
+    if (lockPicks.length === 0) {
+      toast.error("No 95%+ probability picks available");
+      return;
+    }
+
+    const edgePicks = lockPicks.map(game => ({
+      gameId: game.game_id,
+      sportId: game.sport_id,
+      pick: game.bestPick || "over",
+      edgeStrength: game.edgeStrength,
+      hitProbability: game.hitProbability,
+      line: game.bestPick === "under" ? game.p05_under_line : game.p95_over_line,
+      odds: game.bestPick === "under" ? game.p05_under_odds : game.p95_over_odds,
+      homeTeam: game.home_team,
+      awayTeam: game.away_team,
+    }));
+
+    localStorage.setItem(EDGE_PARLAY_KEY, JSON.stringify(edgePicks));
+    toast.success(`Added ${lockPicks.length} lock picks to parlay`);
     navigate("/parlay");
   };
 
@@ -546,6 +575,43 @@ export default function BestBets() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Lock Parlay - 95%+ Hit Probability */}
+          {lockPicks.length > 0 && (
+            <Card className="border-2 border-yellow-500/50 bg-gradient-to-br from-yellow-500/10 to-yellow-500/5">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <div className="p-1.5 rounded-lg bg-yellow-500/20">
+                      <Trophy className="h-5 w-5 text-yellow-500" />
+                    </div>
+                    Lock Parlay
+                    <Badge className="bg-yellow-500 text-yellow-950 hover:bg-yellow-500">
+                      95%+ Hits Only
+                    </Badge>
+                  </CardTitle>
+                  <Button
+                    onClick={handleLockParlay}
+                    className="bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold"
+                    size="sm"
+                  >
+                    <Target className="h-4 w-4 mr-2" />
+                    Build Lock Parlay ({lockPicks.length})
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Games where the DK line is beyond historical extremes — statistically 95%+ likely to hit
+                </p>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-2">
+                  {lockPicks.map((game, idx) => (
+                    <LockPickRow key={game.game_id} game={game} rank={idx + 1} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Top Picks with Quick Parlay */}
           {topPicks.length > 0 && (
@@ -1094,6 +1160,66 @@ function FinalGameRow({ game }: { game: RankedGame }) {
       </div>
 
       <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors flex-shrink-0" />
+    </Link>
+  );
+}
+
+// Lock Pick Row for 95%+ probability games
+function LockPickRow({ game, rank }: { game: RankedGame; rank: number }) {
+  const homeTeamName = getTeamDisplayName(game.home_team, game.sport_id);
+  const awayTeamName = getTeamDisplayName(game.away_team, game.sport_id);
+  const startTime = new Date(game.start_time_utc);
+  
+  const pickLabel = game.bestPick === "over" ? "OVER" : "UNDER";
+  const pickLine = game.bestPick === "under" ? game.p05_under_line : game.p95_over_line;
+  const pickOdds = game.bestPick === "under" ? game.p05_under_odds : game.p95_over_odds;
+
+  return (
+    <Link
+      to={`/game/${game.game_id}`}
+      className="flex items-center gap-3 p-3 rounded-xl bg-yellow-500/5 border border-yellow-500/30 hover:border-yellow-500/50 transition-colors group"
+    >
+      {/* Rank */}
+      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-yellow-500/20 text-yellow-500 font-bold text-sm">
+        {rank}
+      </div>
+
+      {/* Teams & Time */}
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium truncate">
+          {awayTeamName} @ {homeTeamName}
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="uppercase font-medium">{game.sport_id}</span>
+          <span>•</span>
+          <span>{formatTimeET(startTime)} ET</span>
+        </div>
+      </div>
+
+      {/* Pick Info */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <Badge 
+          className={cn(
+            "font-bold gap-1",
+            game.bestPick === "over" 
+              ? "bg-status-over text-white hover:bg-status-over" 
+              : "bg-status-under text-white hover:bg-status-under"
+          )}
+        >
+          {game.bestPick === "over" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+          {pickLabel} {pickLine}
+        </Badge>
+        <Badge className="bg-yellow-500 text-yellow-950 font-bold hover:bg-yellow-500">
+          {game.hitProbability.toFixed(0)}%
+        </Badge>
+        {pickOdds && (
+          <span className="text-xs font-medium text-muted-foreground tabular-nums">
+            {pickOdds >= 0 ? `+${pickOdds}` : pickOdds}
+          </span>
+        )}
+      </div>
+
+      <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-yellow-500 transition-colors flex-shrink-0" />
     </Link>
   );
 }
