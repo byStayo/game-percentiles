@@ -109,18 +109,20 @@ export default function Index() {
   const filteredAndSortedGames = useMemo(() => {
     let games = [...displayGames];
 
-    // Filter: hide games with weak data quality (low/insufficient = n < 5)
+    // Filter: hide games with weak data quality (n < 5)
     if (hideWeakData) {
       games = games.filter((g) => g.n_h2h >= 5);
     }
 
-    // Filter: only show picks (games with actionable edges)
+    // Filter: only show picks with actionable edges or strong percentile signal
     if (onlyPicks) {
       games = games.filter((g) => {
         if (g.n_h2h < 5) return false;
         if (!g.dk_offered || g.dk_total_line === null) return false;
+        // Has computed edge OR strong percentile signal
+        const hasEdge = (g.best_over_edge ?? 0) > 0 || (g.best_under_edge ?? 0) > 0;
         const P = g.dk_line_percentile ?? 50;
-        return P >= 70 || P <= 30;
+        return hasEdge || P >= 70 || P <= 30;
       });
     }
 
