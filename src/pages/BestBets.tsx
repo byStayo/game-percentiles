@@ -10,6 +10,7 @@ import { getTeamDisplayName, formatTimeET } from "@/lib/teamNames";
 import { ConfidenceBadge } from "@/components/game/ConfidenceBadge";
 import { PickPill } from "@/components/game/PickPill";
 import { SegmentBadge } from "@/components/game/SegmentBadge";
+import { DkDistanceBadge, isDkBeyondExtremes, BeyondExtremesWarning } from "@/components/game/DkDistanceBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -34,6 +35,7 @@ import {
   Zap,
   Target,
   ArrowUpDown,
+  AlertTriangle,
 } from "lucide-react";
 import type { SportId } from "@/types";
 import type { TodayGame } from "@/hooks/useApi";
@@ -71,6 +73,7 @@ interface RankedGame extends TodayGame {
   edgeType: "over" | "under" | "both" | "none";
   edgeStrength: number;
   dkDistanceFromPercentile: number; // How close DK line is to p05 or p95
+  isBeyondExtremes: boolean; // Whether DK line extends beyond p05/p95
 }
 
 function formatOdds(odds: number): string {
@@ -136,6 +139,9 @@ export default function BestBets() {
         const distanceToP95 = Math.abs(dkLine - p95);
         const dkDistanceFromPercentile = Math.min(distanceToP05, distanceToP95);
         
+        // Check if DK line extends beyond historical extremes
+        const isBeyondExtremes = dkLine < p05 || dkLine > p95;
+        
         return {
           ...game,
           confidence: calculateConfidence({
@@ -145,6 +151,7 @@ export default function BestBets() {
           edgeType,
           edgeStrength,
           dkDistanceFromPercentile,
+          isBeyondExtremes,
         };
       })
       .filter(game => {
@@ -483,6 +490,12 @@ function TopPickCard({ game, rank }: { game: RankedGame; rank: number }) {
           <span className="text-2xs uppercase font-semibold text-muted-foreground">
             {game.sport_id}
           </span>
+          {game.isBeyondExtremes && (
+            <Badge variant="outline" className="px-1.5 py-0 text-2xs bg-status-live/10 text-status-live border-status-live/30 animate-pulse">
+              <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
+              Beyond
+            </Badge>
+          )}
         </div>
         <EdgeTypeBadge edgeType={game.edgeType} />
       </div>
@@ -528,7 +541,15 @@ function TopPickCard({ game, rank }: { game: RankedGame; rank: number }) {
             <SegmentBadge segment={game.segment_used} showTooltip={false} />
           )}
         </div>
-        <EdgeStrengthBadge edgeStrength={game.edgeStrength} />
+        <div className="flex items-center gap-1.5">
+          <DkDistanceBadge 
+            dkLine={game.dk_total_line} 
+            p05={game.p05} 
+            p95={game.p95}
+            compact
+          />
+          <EdgeStrengthBadge edgeStrength={game.edgeStrength} />
+        </div>
       </div>
     </Link>
   );
@@ -542,11 +563,19 @@ function RankedGameRow({ game, rank }: { game: RankedGame; rank: number }) {
   return (
     <Link
       to={`/game/${game.game_id}`}
-      className="flex items-center gap-4 p-3 rounded-xl bg-card border border-border/60 hover:border-border transition-colors group"
+      className={cn(
+        "flex items-center gap-4 p-3 rounded-xl bg-card border border-border/60 hover:border-border transition-colors group",
+        game.isBeyondExtremes && "border-status-live/30 bg-status-live/5"
+      )}
     >
       {/* Rank */}
-      <div className="text-lg font-bold text-muted-foreground w-8 text-center">
-        #{rank}
+      <div className="flex items-center gap-2">
+        <span className="text-lg font-bold text-muted-foreground w-8 text-center">
+          #{rank}
+        </span>
+        {game.isBeyondExtremes && (
+          <AlertTriangle className="h-4 w-4 text-status-live animate-pulse" />
+        )}
       </div>
 
       {/* Teams */}
@@ -565,6 +594,12 @@ function RankedGameRow({ game, rank }: { game: RankedGame; rank: number }) {
 
       {/* Edge Info */}
       <div className="flex items-center gap-2">
+        <DkDistanceBadge 
+          dkLine={game.dk_total_line} 
+          p05={game.p05} 
+          p95={game.p95}
+          compact
+        />
         <EdgeTypeBadge edgeType={game.edgeType} />
         <EdgeStrengthBadge edgeStrength={game.edgeStrength} />
       </div>
