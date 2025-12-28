@@ -11,6 +11,7 @@ import { ConfidenceBadge } from "@/components/game/ConfidenceBadge";
 import { PickPill } from "@/components/game/PickPill";
 import { SegmentBadge } from "@/components/game/SegmentBadge";
 import { DkDistanceBadge, isDkBeyondExtremes, BeyondExtremesWarning } from "@/components/game/DkDistanceBadge";
+import { MiniPercentileChart } from "@/components/game/MiniPercentileChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -561,6 +562,14 @@ function TopPickCard({ game, rank }: { game: RankedGame; rank: number }) {
         {formatTimeET(startTime)} ET
       </div>
 
+      {/* Percentile Chart */}
+      <MiniPercentileChart
+        p05={game.p05}
+        p95={game.p95}
+        dkLine={game.dk_total_line}
+        className="mb-3"
+      />
+
       {/* Edge Info */}
       <div className="space-y-2 mb-3">
         {game.p95_over_line !== null && game.p95_over_odds !== null && (
@@ -628,34 +637,36 @@ function RankedGameRow({ game, rank }: { game: RankedGame; rank: number }) {
         )}
       </div>
 
-      {/* Teams */}
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate">
-          {awayTeamName} @ {homeTeamName}
+      {/* Teams & Chart */}
+      <div className="flex-1 min-w-0 space-y-2">
+        <div>
+          <div className="text-sm font-medium truncate">
+            {awayTeamName} @ {homeTeamName}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="uppercase">{game.sport_id}</span>
+            <span>•</span>
+            <span>{formatTimeET(startTime)} ET</span>
+            <span>•</span>
+            <span>n={game.n_h2h}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="uppercase">{game.sport_id}</span>
-          <span>•</span>
-          <span>{formatTimeET(startTime)} ET</span>
-          <span>•</span>
-          <span>n={game.n_h2h}</span>
-        </div>
+        {/* Mini Chart */}
+        <MiniPercentileChart
+          p05={game.p05}
+          p95={game.p95}
+          dkLine={game.dk_total_line}
+        />
       </div>
 
       {/* Edge Info */}
-      <div className="flex items-center gap-2">
-        <DkDistanceBadge 
-          dkLine={game.dk_total_line} 
-          p05={game.p05} 
-          p95={game.p95}
-          compact
-        />
+      <div className="flex items-center gap-2 flex-shrink-0">
         <EdgeTypeBadge edgeType={game.edgeType} />
         <EdgeStrengthBadge edgeStrength={game.edgeStrength} />
       </div>
 
       {/* Arrow */}
-      <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+      <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors flex-shrink-0" />
     </Link>
   );
 }
