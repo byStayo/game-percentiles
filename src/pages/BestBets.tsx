@@ -13,6 +13,8 @@ import { SegmentBadge } from "@/components/game/SegmentBadge";
 import { DkDistanceBadge, isDkBeyondExtremes, BeyondExtremesWarning } from "@/components/game/DkDistanceBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -87,6 +89,7 @@ export default function BestBets() {
   const [sportFilter, setSportFilter] = useState<SportId | "all">("all");
   const [edgeFilter, setEdgeFilter] = useState<EdgeFilter>("any-edge");
   const [sortBy, setSortBy] = useState<SortOption>("edge-strength");
+  const [beyondExtremesOnly, setBeyondExtremesOnly] = useState(false);
   const [minConfidence, setMinConfidence] = useState(40);
   const [minSampleSize, setMinSampleSize] = useState(5);
 
@@ -166,6 +169,9 @@ export default function BestBets() {
         if (edgeFilter === "under" && game.edgeType !== "under" && game.edgeType !== "both") return false;
         if (edgeFilter === "any-edge" && (game.edgeType === "none" || game.edgeStrength <= 0)) return false;
         
+        // Beyond extremes filter
+        if (beyondExtremesOnly && !game.isBeyondExtremes) return false;
+        
         return true;
       })
       // Sort based on selected option
@@ -195,7 +201,7 @@ export default function BestBets() {
       });
 
     return gamesWithEdges;
-  }, [nflData, nbaData, mlbData, nhlData, sportFilter, edgeFilter, sortBy, minConfidence, minSampleSize]);
+  }, [nflData, nbaData, mlbData, nhlData, sportFilter, edgeFilter, sortBy, minConfidence, minSampleSize, beyondExtremesOnly]);
 
   const topPicks = rankedGames.slice(0, 3);
   const otherPicks = rankedGames.slice(3);
@@ -392,6 +398,19 @@ export default function BestBets() {
                     className="mt-2"
                   />
                 </div>
+              </div>
+              
+              {/* Beyond Extremes Filter */}
+              <div className="flex items-center gap-3 pt-2 border-t">
+                <Switch
+                  id="beyond-extremes"
+                  checked={beyondExtremesOnly}
+                  onCheckedChange={setBeyondExtremesOnly}
+                />
+                <Label htmlFor="beyond-extremes" className="flex items-center gap-2 cursor-pointer">
+                  <AlertTriangle className="h-4 w-4 text-status-live" />
+                  <span className="text-sm">Show only games beyond historical extremes</span>
+                </Label>
               </div>
             </CardContent>
           </Card>
