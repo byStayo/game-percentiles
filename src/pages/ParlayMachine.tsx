@@ -13,8 +13,22 @@ import { useTodayGames, TodayGame } from "@/hooks/useApi";
 import { getTeamDisplayName } from "@/lib/teamNames";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Heart, Copy, Download, Trash2 } from "lucide-react";
+import { Heart, Copy, Download, Trash2, Zap, TrendingUp, TrendingDown } from "lucide-react";
 import type { SportId } from "@/types";
+
+// Key for edge picks from Best Bets page
+const EDGE_PARLAY_KEY = 'edge-parlay-picks';
+
+interface EdgePick {
+  gameId: string;
+  sportId: string;
+  pick: 'over' | 'under';
+  edgeStrength: number;
+  line: number | null;
+  odds: number | null;
+  homeTeam: string | { name: string; city?: string; abbrev?: string };
+  awayTeam: string | { name: string; city?: string; abbrev?: string };
+}
 
 const ET_TIMEZONE = 'America/New_York';
 
@@ -74,17 +88,30 @@ function generateParlayId(combo: ParlayCombo, date: string): string {
 
 export default function ParlayMachine() {
   const [selectedDate, setSelectedDate] = useState(getTodayInET);
-  const [selectedSports, setSelectedSports] = useState<Set<SportId>>(new Set(['nfl', 'nba', 'nhl']));
+  const [selectedSports, setSelectedSports] = useState<Set<SportId>>(new Set(['nfl', 'nba', 'nhl', 'mlb']));
   const [minConfidence, setMinConfidence] = useState(70);
   const [parlaySize, setParlaySize] = useState<2 | 3 | 4 | 5>(3);
   const [savedParlays, setSavedParlays] = useState<SavedParlay[]>([]);
+  const [edgePicks, setEdgePicks] = useState<EdgePick[]>([]);
   
-  // Load saved parlays from localStorage
+  // Load saved parlays and edge picks from localStorage
   useEffect(() => {
     try {
       const stored = localStorage.getItem(SAVED_PARLAYS_KEY);
       if (stored) {
         setSavedParlays(JSON.parse(stored));
+      }
+      
+      // Check for edge picks from Best Bets page
+      const edgeStored = localStorage.getItem(EDGE_PARLAY_KEY);
+      if (edgeStored) {
+        const picks = JSON.parse(edgeStored) as EdgePick[];
+        setEdgePicks(picks);
+        // Clear after reading so it doesn't persist on refresh
+        localStorage.removeItem(EDGE_PARLAY_KEY);
+        if (picks.length > 0) {
+          toast.success(`Loaded ${picks.length} edge picks from Best Bets`);
+        }
       }
     } catch (e) {
       console.error('Failed to load saved parlays:', e);
@@ -306,6 +333,56 @@ export default function ParlayMachine() {
               Build optimized parlays using extreme percentile picks
             </p>
           </div>
+
+          {/* Edge Picks from Best Bets */}
+          {edgePicks.length > 0 && (
+            <Card className="max-w-3xl mx-auto border-status-edge/30 bg-status-edge/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-status-edge" />
+                  Edge Picks Added
+                  <Badge className="bg-status-edge text-white">
+                    {edgePicks.reduce((sum, p) => sum + p.edgeStrength, 0).toFixed(1)} pts combined
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {edgePicks.map((pick, i) => (
+                    <div key={pick.gameId} className="flex items-center justify-between p-3 rounded-lg bg-background/50">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-muted-foreground">#{i + 1}</span>
+                        <Badge variant="outline" className="text-2xs">{pick.sportId.toUpperCase()}</Badge>
+                        <span className="text-sm font-medium">
+                          {typeof pick.awayTeam === 'object' ? getTeamDisplayName(pick.awayTeam, pick.sportId as SportId) : pick.awayTeam} @ {typeof pick.homeTeam === 'object' ? getTeamDisplayName(pick.homeTeam, pick.sportId as SportId) : pick.homeTeam}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold",
+                          pick.pick === 'over' ? "bg-status-over/20 text-status-over" : "bg-status-under/20 text-status-under"
+                        )}>
+                          {pick.pick === 'over' ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                          {pick.pick.toUpperCase()} {pick.line?.toFixed(1)}
+                        </div>
+                        <span className="text-sm font-bold text-status-edge">
+                          +{pick.edgeStrength.toFixed(1)} edge
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 text-muted-foreground"
+                  onClick={() => setEdgePicks([])}
+                >
+                  Clear edge picks
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Configuration */}
           <div className="max-w-3xl mx-auto space-y-8">
