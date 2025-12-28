@@ -118,6 +118,7 @@ const NHL_ABBREV_MAP: Record<string, string> = {
   'la': 'los angeles kings',
   'lak': 'los angeles kings',
   'min': 'minnesota wild',
+  'mon': 'montreal canadiens',  // Added: DB stores as MON
   'mtl': 'montreal canadiens',
   'nas': 'nashville predators',
   'nsh': 'nashville predators',
