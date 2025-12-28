@@ -729,24 +729,28 @@ Deno.serve(async (req) => {
             const p95 = matchupStats.p95 ? Number(matchupStats.p95) : null
 
             // Find lowest Over line >= p95 (edge on the high side)
+            // Edge = how far the alternate line is above p95 (positive = value)
             if (p95 !== null) {
               const overCandidates = alternateLines.filter(l => l.point >= p95)
               if (overCandidates.length > 0) {
                 const best = overCandidates[0] // Lowest point >= p95
                 p95OverLine = best.point
                 p95OverOdds = best.over_price
-                bestOverEdge = p95 - totalLine // How far above main line is p95
+                // Edge is the difference between the alt line and p95 (always positive when line >= p95)
+                bestOverEdge = best.point - p95
               }
             }
 
             // Find highest Under line <= p05 (edge on the low side)
+            // Edge = how far the alternate line is below p05 (positive = value)
             if (p05 !== null) {
               const underCandidates = alternateLines.filter(l => l.point <= p05).reverse()
               if (underCandidates.length > 0) {
                 const best = underCandidates[0] // Highest point <= p05
                 p05UnderLine = best.point
                 p05UnderOdds = best.under_price
-                bestUnderEdge = totalLine - p05 // How far below main line is p05
+                // Edge is the difference between p05 and the alt line (always positive when line <= p05)
+                bestUnderEdge = p05 - best.point
               }
             }
           }
