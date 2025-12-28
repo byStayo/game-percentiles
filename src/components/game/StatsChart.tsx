@@ -16,36 +16,65 @@ interface StatsChartProps {
   className?: string;
 }
 
-// Calculate confidence score based on sample size and recency
-function calculateConfidence(nGames: number, segment?: string | null): { score: number; label: string; color: string } {
-  // Base score from sample size (0-60 points)
+// Calculate confidence score based on sample size, recency, and data source type
+function calculateConfidence(nGames: number, segment?: string | null): { 
+  score: number; 
+  label: string; 
+  color: string;
+  isH2H: boolean;
+  sourceLabel: string;
+} {
+  // hybrid_form uses each team's recent games (not h2h) - lower reliability
+  const isH2H = segment !== 'hybrid_form';
+  
+  // For hybrid_form, the "n_games" is combined form data, not h2h
+  // H2H data is more reliable for predictions
+  let baseMultiplier = isH2H ? 1.0 : 0.5; // Halve the weight for form-based data
+  
+  // Effective sample size for confidence
+  const effectiveGames = Math.round(nGames * baseMultiplier);
+  
+  // Base score from effective sample size (0-50 points)
   let sampleScore = 0;
-  if (nGames >= 15) sampleScore = 60;
-  else if (nGames >= 10) sampleScore = 45;
-  else if (nGames >= 5) sampleScore = 30;
-  else if (nGames >= 3) sampleScore = 15;
-  else sampleScore = nGames * 4;
+  if (effectiveGames >= 20) sampleScore = 50;
+  else if (effectiveGames >= 15) sampleScore = 42;
+  else if (effectiveGames >= 10) sampleScore = 35;
+  else if (effectiveGames >= 5) sampleScore = 25;
+  else if (effectiveGames >= 3) sampleScore = 15;
+  else sampleScore = effectiveGames * 4;
 
-  // Recency bonus (0-40 points based on segment)
-  let recencyScore = 20; // default
+  // Data source quality (0-30 points)
+  let sourceScore = isH2H ? 30 : 10; // H2H is much more reliable
+
+  // Recency bonus (0-20 points based on segment)
+  let recencyScore = 10; // default
   if (segment) {
-    if (segment.includes('1y') || segment === 'recency_weighted') recencyScore = 40;
-    else if (segment.includes('3y')) recencyScore = 34;
-    else if (segment.includes('5y') || segment === 'hybrid_form') recencyScore = 28;
-    else if (segment.includes('10y')) recencyScore = 20;
-    else if (segment.includes('all')) recencyScore = 12;
+    if (segment.includes('1y') || segment === 'recency_weighted') recencyScore = 20;
+    else if (segment.includes('3y')) recencyScore = 17;
+    else if (segment.includes('5y')) recencyScore = 14;
+    else if (segment.includes('10y')) recencyScore = 10;
+    else if (segment.includes('20y') || segment.includes('all')) recencyScore = 6;
+    else if (segment === 'hybrid_form') recencyScore = 15; // Recent but not h2h
   }
 
-  const score = Math.min(100, sampleScore + recencyScore);
+  const score = Math.min(100, sampleScore + sourceScore + recencyScore);
   
   let label: string;
   let color: string;
-  if (score >= 80) { label = 'High'; color = 'text-status-under'; }
-  else if (score >= 60) { label = 'Good'; color = 'text-foreground'; }
-  else if (score >= 40) { label = 'Fair'; color = 'text-status-over'; }
+  if (score >= 75) { label = 'High'; color = 'text-status-under'; }
+  else if (score >= 55) { label = 'Good'; color = 'text-foreground'; }
+  else if (score >= 35) { label = 'Fair'; color = 'text-status-over'; }
   else { label = 'Low'; color = 'text-destructive'; }
 
-  return { score, label, color };
+  const sourceLabel = segment === 'hybrid_form' 
+    ? 'Form-based' 
+    : segment === 'recency_weighted' 
+      ? 'Recent H2H' 
+      : isH2H 
+        ? 'H2H' 
+        : 'Mixed';
+
+  return { score, label, color, isH2H, sourceLabel };
 }
 
 export function StatsChart({
@@ -135,6 +164,9 @@ export function StatsChart({
             <span className={cn("text-2xs font-medium", confidence.color)}>
               {confidence.label} confidence
             </span>
+            <span className="text-2xs text-muted-foreground">
+              ({confidence.sourceLabel})
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <div className="flex gap-0.5">
@@ -144,7 +176,7 @@ export function StatsChart({
                   className={cn(
                     "w-1.5 h-1.5 rounded-full",
                     i < Math.ceil(confidence.score / 20) 
-                      ? confidence.score >= 60 ? "bg-status-under" : confidence.score >= 40 ? "bg-status-over" : "bg-destructive"
+                      ? confidence.score >= 55 ? "bg-status-under" : confidence.score >= 35 ? "bg-status-over" : "bg-destructive"
                       : "bg-muted"
                   )}
                 />
@@ -154,12 +186,19 @@ export function StatsChart({
         </div>
       )}
 
-      {/* Low data warning */}
-      {isLowData && !isFinal && (
-        <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-status-over/10 border border-status-over/20">
-          <AlertTriangle className="h-3.5 w-3.5 text-status-over" />
-          <span className="text-2xs font-medium text-status-over">
-            Low data: {nH2H ?? 0} games - use caution
+      {/* Low data / Form-based warning */}
+      {!isFinal && (isLowData || !confidence.isH2H) && (
+        <div className={cn(
+          "flex items-center gap-1.5 px-2 py-1.5 rounded-lg",
+          !confidence.isH2H 
+            ? "bg-status-over/10 border border-status-over/20" 
+            : "bg-destructive/10 border border-destructive/20"
+        )}>
+          <AlertTriangle className={cn("h-3.5 w-3.5", !confidence.isH2H ? "text-status-over" : "text-destructive")} />
+          <span className={cn("text-2xs font-medium", !confidence.isH2H ? "text-status-over" : "text-destructive")}>
+            {!confidence.isH2H 
+              ? `Form-based: Using each team's recent games (not H2H matchup history)` 
+              : `Low H2H data: ${nH2H ?? 0} games - use caution`}
           </span>
         </div>
       )}
