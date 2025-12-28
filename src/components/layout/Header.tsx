@@ -193,16 +193,14 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80">
-      <div className="container flex h-14 sm:h-16 items-center justify-between px-4 sm:px-6">
-        <Link to="/" className="flex items-center gap-2 sm:gap-3 group">
-          <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 transition-transform duration-300 group-hover:scale-105">
-            <Percent className="h-4 w-4 sm:h-5 sm:w-5 text-primary-foreground" />
+      <div className="container flex h-12 sm:h-14 md:h-16 items-center justify-between px-4 sm:px-6">
+        <Link to="/" className="flex items-center gap-2 group">
+          <div className="flex h-7 w-7 sm:h-8 sm:w-8 md:h-9 md:w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 transition-transform duration-300 group-hover:scale-105">
+            <Percent className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 text-primary-foreground" />
           </div>
-          <div className="hidden xs:block sm:block">
-            <span className="text-base sm:text-lg font-semibold tracking-tight">
-              Game Percentiles
-            </span>
-          </div>
+          <span className="text-sm sm:text-base md:text-lg font-semibold tracking-tight">
+            Percentiles
+          </span>
         </Link>
 
         {/* Desktop Navigation - hidden on mobile, BottomNav handles mobile */}

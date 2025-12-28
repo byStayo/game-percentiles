@@ -75,7 +75,7 @@ export function GameCard({ game }: GameCardProps) {
     <Link
       to={`/game/${game.game_id}`}
       className={cn(
-        "group block p-4 sm:p-5 bg-card rounded-2xl border",
+        "group block p-3.5 sm:p-5 bg-card rounded-2xl border",
         "shadow-sm transition-all duration-200 ease-out touch-manipulation",
         "active:scale-[0.98] active:bg-muted/30",
         "md:hover:shadow-md md:hover:-translate-y-0.5 md:hover:border-border",
@@ -85,25 +85,25 @@ export function GameCard({ game }: GameCardProps) {
       )}
     >
       {/* Top row: time + league | n badge + favorite */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between mb-3 sm:mb-4">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {isLive ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-status-live/10 text-status-live">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs sm:text-xs font-semibold bg-status-live/10 text-status-live">
               <span className="w-1.5 h-1.5 rounded-full bg-status-live animate-pulse" />
               LIVE
             </span>
           ) : isFinal ? (
-            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+            <span className="px-2 py-0.5 rounded-full text-2xs sm:text-xs font-medium bg-muted text-muted-foreground">
               Final
             </span>
           ) : (
-            <span className="text-sm text-muted-foreground">
-              {formatTimeET(startTime)} ET
+            <span className="text-xs sm:text-sm text-muted-foreground">
+              {formatTimeET(startTime)}
             </span>
           )}
           <span
             className={cn(
-              "px-2 py-0.5 rounded-md text-2xs font-semibold uppercase",
+              "px-1.5 py-0.5 rounded text-2xs font-semibold uppercase",
               colors.bg,
               colors.text
             )}
@@ -112,11 +112,11 @@ export function GameCard({ game }: GameCardProps) {
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <DataQualityIndicator nGames={game.n_h2h} showLabel={false} />
           <span
             className={cn(
-              "px-2 py-1 rounded-md text-xs font-semibold tabular-nums",
+              "px-1.5 py-0.5 rounded text-2xs font-semibold tabular-nums",
               game.n_h2h >= 5
                 ? "bg-muted text-muted-foreground"
                 : "bg-status-over/10 text-status-over"
@@ -128,7 +128,7 @@ export function GameCard({ game }: GameCardProps) {
             variant="ghost"
             size="icon"
             className={cn(
-              "h-9 w-9 touch-target transition-colors",
+              "h-8 w-8 -mr-1 transition-colors",
               isFav && "text-yellow-500 hover:text-yellow-600"
             )}
             onClick={(e) => {
@@ -138,30 +138,30 @@ export function GameCard({ game }: GameCardProps) {
             }}
           >
             <Star
-              className={cn("h-5 w-5", isFav && "fill-current")}
+              className={cn("h-4 w-4 sm:h-5 sm:w-5", isFav && "fill-current")}
             />
           </Button>
         </div>
       </div>
 
-      {/* Teams */}
-      <div className="space-y-2 mb-4">
+      {/* Teams - more compact on mobile */}
+      <div className="space-y-1 sm:space-y-2 mb-3 sm:mb-4">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-base sm:text-lg font-semibold text-foreground truncate">
+          <span className="text-sm sm:text-lg font-semibold text-foreground truncate">
             {awayTeamName}
           </span>
           {(isFinal || isLive) && game.away_score !== null && (
-            <span className="text-xl sm:text-2xl font-bold tabular-nums flex-shrink-0">
+            <span className="text-lg sm:text-2xl font-bold tabular-nums flex-shrink-0">
               {game.away_score}
             </span>
           )}
         </div>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-base sm:text-lg font-semibold text-foreground truncate">
+          <span className="text-sm sm:text-lg font-semibold text-foreground truncate">
             {homeTeamName}
           </span>
           {(isFinal || isLive) && game.home_score !== null && (
-            <span className="text-xl sm:text-2xl font-bold tabular-nums flex-shrink-0">
+            <span className="text-lg sm:text-2xl font-bold tabular-nums flex-shrink-0">
               {game.home_score}
             </span>
           )}
@@ -169,7 +169,7 @@ export function GameCard({ game }: GameCardProps) {
       </div>
 
       {/* Hero: PickPill */}
-      <div className="flex justify-center mb-4">
+      <div className="flex justify-center mb-3 sm:mb-4">
         <PickPill
           nH2H={game.n_h2h}
           dkOffered={game.dk_offered}
@@ -179,40 +179,40 @@ export function GameCard({ game }: GameCardProps) {
         />
       </div>
 
-      {/* Edge Indicators */}
+      {/* Edge Indicators - stacked on very small screens */}
       {(game.best_over_edge || game.best_under_edge) && (
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-col xs:flex-row gap-1.5 sm:gap-2 mb-3 sm:mb-4">
           {game.best_over_edge && game.p95_over_line && game.p95_over_odds && (
-            <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-status-over/10 border border-status-over/20">
-              <TrendingUp className="h-4 w-4 text-status-over flex-shrink-0" />
+            <div className="flex-1 flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-status-over/10 border border-status-over/20">
+              <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-status-over flex-shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-medium text-status-over">Over Edge</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-2xs font-medium text-status-over">Over</span>
                   {overEdgeStrength && (
-                    <span className={cn("px-1.5 py-0.5 rounded text-2xs font-bold", overEdgeStrength.color)}>
+                    <span className={cn("px-1 py-0.5 rounded text-2xs font-bold", overEdgeStrength.color)}>
                       {overEdgeStrength.label}
                     </span>
                   )}
                 </div>
-                <div className="text-sm font-semibold text-foreground">
+                <div className="text-xs sm:text-sm font-semibold text-foreground">
                   O {game.p95_over_line} <span className="text-status-over">{formatOdds(game.p95_over_odds)}</span>
                 </div>
               </div>
             </div>
           )}
           {game.best_under_edge && game.p05_under_line && game.p05_under_odds && (
-            <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-status-under/10 border border-status-under/20">
-              <TrendingDown className="h-4 w-4 text-status-under flex-shrink-0" />
+            <div className="flex-1 flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-status-under/10 border border-status-under/20">
+              <TrendingDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-status-under flex-shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-medium text-status-under">Under Edge</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-2xs font-medium text-status-under">Under</span>
                   {underEdgeStrength && (
-                    <span className={cn("px-1.5 py-0.5 rounded text-2xs font-bold", underEdgeStrength.color)}>
+                    <span className={cn("px-1 py-0.5 rounded text-2xs font-bold", underEdgeStrength.color)}>
                       {underEdgeStrength.label}
                     </span>
                   )}
                 </div>
-                <div className="text-sm font-semibold text-foreground">
+                <div className="text-xs sm:text-sm font-semibold text-foreground">
                   U {game.p05_under_line} <span className="text-status-under">{formatOdds(game.p05_under_odds)}</span>
                 </div>
               </div>
@@ -223,7 +223,7 @@ export function GameCard({ game }: GameCardProps) {
 
       {/* PercentileBar */}
       {game.p05 !== null && game.p95 !== null && (
-        <div className="mb-4">
+        <div className="mb-3 sm:mb-4">
           <PercentileBar
             p05={game.p05}
             p95={game.p95}
@@ -235,9 +235,9 @@ export function GameCard({ game }: GameCardProps) {
       )}
 
       {/* Footer with segment info and confidence indicators */}
-      <div className="flex items-center justify-between pt-3 border-t border-border/40">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{getFooterText()}</span>
+      <div className="flex items-center justify-between pt-2.5 sm:pt-3 border-t border-border/40">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-2xs text-muted-foreground truncate">{getFooterText()}</span>
           {game.segment_used && game.segment_used !== 'insufficient' && (
             <SegmentBadge 
               segment={game.segment_used} 
@@ -246,7 +246,7 @@ export function GameCard({ game }: GameCardProps) {
             />
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <RecencyIndicator segment={game.segment_used} size="sm" />
           <ConfidenceBadge 
             nGames={game.n_h2h} 

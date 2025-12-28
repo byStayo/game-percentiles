@@ -108,7 +108,7 @@ export function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
       {/* Safe area background for notched devices */}
       <div className="bg-background/95 backdrop-blur-xl border-t border-border/60 pb-safe">
-        <div className="flex items-center justify-around h-16 px-2">
+        <div className="flex items-center justify-around h-[72px] px-1">
           {mainNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.href;
@@ -118,13 +118,21 @@ export function BottomNav() {
                 key={item.href}
                 to={item.href}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all duration-200 min-w-[64px]",
-                  "active:scale-95 touch-manipulation",
-                  isActive ? "text-primary" : "text-muted-foreground",
+                  "flex flex-col items-center justify-center gap-1 px-2 py-2.5 rounded-2xl transition-all duration-200 min-w-[60px] min-h-[56px]",
+                  "active:scale-90 touch-manipulation",
+                  isActive 
+                    ? "text-primary bg-primary/10" 
+                    : "text-muted-foreground active:bg-muted/50",
                 )}
               >
-                <Icon className={cn("h-6 w-6 transition-transform", isActive && "scale-110")} />
-                <span className={cn("text-[10px] font-medium", isActive && "font-semibold")}>
+                <Icon className={cn(
+                  "h-6 w-6 transition-all duration-200",
+                  isActive && "scale-110"
+                )} />
+                <span className={cn(
+                  "text-[11px] font-medium leading-tight",
+                  isActive && "font-semibold"
+                )}>
                   {item.label}
                 </span>
               </Link>
@@ -136,33 +144,51 @@ export function BottomNav() {
             <SheetTrigger asChild>
               <button
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all duration-200 min-w-[64px]",
-                  "active:scale-95 touch-manipulation",
-                  isMoreActive ? "text-primary" : "text-muted-foreground",
+                  "flex flex-col items-center justify-center gap-1 px-2 py-2.5 rounded-2xl transition-all duration-200 min-w-[60px] min-h-[56px]",
+                  "active:scale-90 touch-manipulation",
+                  isMoreActive 
+                    ? "text-primary bg-primary/10" 
+                    : "text-muted-foreground active:bg-muted/50",
                 )}
               >
-                <MoreHorizontal className={cn("h-6 w-6 transition-transform", isMoreActive && "scale-110")} />
-                <span className={cn("text-[10px] font-medium", isMoreActive && "font-semibold")}>
+                <MoreHorizontal className={cn(
+                  "h-6 w-6 transition-all duration-200",
+                  isMoreActive && "scale-110"
+                )} />
+                <span className={cn(
+                  "text-[11px] font-medium leading-tight",
+                  isMoreActive && "font-semibold"
+                )}>
                   More
                 </span>
               </button>
             </SheetTrigger>
 
-            <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl px-0">
-              <SheetHeader className="px-4 pb-2">
-                <SheetTitle>All Pages</SheetTitle>
+            <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl px-0">
+              {/* Pull indicator */}
+              <div className="flex justify-center pt-2 pb-3">
+                <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+              </div>
+              
+              <SheetHeader className="px-5 pb-3">
+                <SheetTitle className="text-left">All Pages</SheetTitle>
               </SheetHeader>
 
-              <div className="px-4 pb-safe">
-                <Command className="h-[calc(85vh-4rem)] rounded-2xl border border-border/60">
-                  <CommandInput placeholder="Search pages…" />
+              <div className="px-4 pb-safe overflow-hidden">
+                <Command className="h-[calc(80vh-6rem)] rounded-2xl border-0 bg-transparent">
+                  <div className="px-1 mb-3">
+                    <CommandInput 
+                      placeholder="Search pages…" 
+                      className="h-12 text-base rounded-xl bg-muted/50"
+                    />
+                  </div>
 
-                  <CommandList className="max-h-[calc(85vh-8rem)]">
+                  <CommandList className="max-h-[calc(80vh-10rem)] px-1">
                     <CommandEmpty>No pages found.</CommandEmpty>
 
                     {moreNavGroups.map((group, groupIndex) => (
                       <div key={group.label}>
-                        <CommandGroup heading={group.label}>
+                        <CommandGroup heading={group.label} className="pb-2">
                           {group.items.map((item) => {
                             const Icon = item.icon;
                             const isActive = location.pathname === item.href;
@@ -173,18 +199,24 @@ export function BottomNav() {
                                 value={`${group.label} ${item.label}`}
                                 onSelect={() => goTo(item.href)}
                                 className={cn(
-                                  "py-3",
-                                  isActive && "bg-accent text-accent-foreground",
+                                  "py-4 px-3 rounded-xl mb-1 cursor-pointer",
+                                  "active:scale-[0.98] touch-manipulation",
+                                  isActive && "bg-primary/10 text-primary",
                                 )}
                               >
-                                <Icon className="mr-2 h-4 w-4" />
-                                <span className="flex-1">{item.label}</span>
+                                <Icon className="mr-3 h-5 w-5" />
+                                <span className="flex-1 text-base">{item.label}</span>
+                                {isActive && (
+                                  <div className="w-2 h-2 rounded-full bg-primary" />
+                                )}
                               </CommandItem>
                             );
                           })}
                         </CommandGroup>
 
-                        {groupIndex < moreNavGroups.length - 1 && <CommandSeparator />}
+                        {groupIndex < moreNavGroups.length - 1 && (
+                          <CommandSeparator className="my-2" />
+                        )}
                       </div>
                     ))}
                   </CommandList>
