@@ -46,6 +46,7 @@ export default function Index() {
   const [viewMode, setViewMode] = useState<ViewMode>("all");
   const [sortBy, setSortBy] = useState<SortOption>("edges-first");
   const [onlyPicks, setOnlyPicks] = useState(true);
+  const [onlyEdges, setOnlyEdges] = useState(false);
   const [hideWeakData, setHideWeakData] = useState(true);
 
   // Swipe gesture handlers for date navigation
@@ -121,6 +122,11 @@ export default function Index() {
       });
     }
 
+    // Filter: only show games with detected over/under edges
+    if (onlyEdges) {
+      games = games.filter((g) => g.best_over_edge || g.best_under_edge);
+    }
+
     // Sort
     if (sortBy === "edges-first") {
       // Prioritize games with over/under edges at the top
@@ -150,7 +156,7 @@ export default function Index() {
     }
 
     return games;
-  }, [displayGames, sortBy, onlyPicks, hideWeakData]);
+  }, [displayGames, sortBy, onlyPicks, onlyEdges, hideWeakData]);
 
   // Sport counts
   const sportCounts = useMemo(
@@ -268,6 +274,16 @@ export default function Index() {
                   className="scale-110"
                 />
                 <span className="text-sm font-medium">Good data only</span>
+              </label>
+
+              <label className="flex items-center gap-3 cursor-pointer touch-manipulation">
+                <Switch
+                  id="only-edges"
+                  checked={onlyEdges}
+                  onCheckedChange={setOnlyEdges}
+                  className="scale-110"
+                />
+                <span className="text-sm font-medium">Edges only</span>
               </label>
 
               <div className="ml-auto">
