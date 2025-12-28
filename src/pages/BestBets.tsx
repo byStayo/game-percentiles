@@ -33,6 +33,7 @@ import {
   Star,
   Zap,
   Target,
+  ArrowUpDown,
 } from "lucide-react";
 import type { SportId } from "@/types";
 import type { TodayGame } from "@/hooks/useApi";
@@ -55,12 +56,21 @@ const EDGE_FILTERS = [
   { id: "any-edge", label: "Any Edge" },
 ] as const;
 
+const SORT_OPTIONS = [
+  { id: "edge-strength", label: "Edge Strength" },
+  { id: "dk-distance", label: "DK Distance from P5/P95" },
+  { id: "confidence", label: "Confidence" },
+  { id: "time", label: "Game Time" },
+] as const;
+
 type EdgeFilter = typeof EDGE_FILTERS[number]["id"];
+type SortOption = typeof SORT_OPTIONS[number]["id"];
 
 interface RankedGame extends TodayGame {
   confidence: ConfidenceResult;
   edgeType: "over" | "under" | "both" | "none";
   edgeStrength: number;
+  dkDistanceFromPercentile: number; // How close DK line is to p05 or p95
 }
 
 function formatOdds(odds: number): string {
@@ -72,6 +82,7 @@ export default function BestBets() {
   const navigate = useNavigate();
   const [sportFilter, setSportFilter] = useState<SportId | "all">("all");
   const [edgeFilter, setEdgeFilter] = useState<EdgeFilter>("any-edge");
+  const [sortBy, setSortBy] = useState<SortOption>("edge-strength");
   const [minConfidence, setMinConfidence] = useState(40);
   const [minSampleSize, setMinSampleSize] = useState(5);
 
@@ -116,6 +127,15 @@ export default function BestBets() {
         const underEdge = Math.max(0, game.best_under_edge ?? 0);
         const edgeStrength = Math.max(overEdge, underEdge);
         
+        // Calculate DK distance from percentile (how close DK line is to p05 or p95)
+        // Lower distance = closer to extreme = more value
+        const dkLine = game.dk_total_line ?? 0;
+        const p05 = game.p05 ?? 0;
+        const p95 = game.p95 ?? 0;
+        const distanceToP05 = Math.abs(dkLine - p05);
+        const distanceToP95 = Math.abs(dkLine - p95);
+        const dkDistanceFromPercentile = Math.min(distanceToP05, distanceToP95);
+        
         return {
           ...game,
           confidence: calculateConfidence({
@@ -124,6 +144,7 @@ export default function BestBets() {
           }),
           edgeType,
           edgeStrength,
+          dkDistanceFromPercentile,
         };
       })
       .filter(game => {
@@ -139,16 +160,34 @@ export default function BestBets() {
         
         return true;
       })
-      // Sort by edge strength first, then confidence
+      // Sort based on selected option
       .sort((a, b) => {
-        if (b.edgeStrength !== a.edgeStrength) {
-          return b.edgeStrength - a.edgeStrength;
+        switch (sortBy) {
+          case "edge-strength":
+            if (b.edgeStrength !== a.edgeStrength) {
+              return b.edgeStrength - a.edgeStrength;
+            }
+            return b.confidence.score - a.confidence.score;
+          case "dk-distance":
+            // Lower distance = closer to percentile = better
+            if (a.dkDistanceFromPercentile !== b.dkDistanceFromPercentile) {
+              return a.dkDistanceFromPercentile - b.dkDistanceFromPercentile;
+            }
+            return b.edgeStrength - a.edgeStrength;
+          case "confidence":
+            if (b.confidence.score !== a.confidence.score) {
+              return b.confidence.score - a.confidence.score;
+            }
+            return b.edgeStrength - a.edgeStrength;
+          case "time":
+            return new Date(a.start_time_utc).getTime() - new Date(b.start_time_utc).getTime();
+          default:
+            return b.edgeStrength - a.edgeStrength;
         }
-        return b.confidence.score - a.confidence.score;
       });
 
     return gamesWithEdges;
-  }, [nflData, nbaData, mlbData, nhlData, sportFilter, edgeFilter, minConfidence, minSampleSize]);
+  }, [nflData, nbaData, mlbData, nhlData, sportFilter, edgeFilter, sortBy, minConfidence, minSampleSize]);
 
   const topPicks = rankedGames.slice(0, 3);
   const otherPicks = rankedGames.slice(3);
@@ -225,7 +264,7 @@ export default function BestBets() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 {/* Sport Filter */}
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground">Sport</label>
@@ -260,6 +299,26 @@ export default function BestBets() {
                       {EDGE_FILTERS.map((f) => (
                         <SelectItem key={f.id} value={f.id}>
                           {f.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Sort By */}
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Sort By</label>
+                  <Select
+                    value={sortBy}
+                    onValueChange={(v) => setSortBy(v as SortOption)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SORT_OPTIONS.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
