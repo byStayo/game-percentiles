@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { useState, useCallback } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { getTeamDisplayName, formatTimeET } from "@/lib/teamNames";
 import { PercentileBar } from "@/components/ui/percentile-bar";
@@ -8,8 +9,11 @@ import { RecencyIndicator } from "@/components/game/RecencyIndicator";
 import { ConfidenceBadge } from "@/components/game/ConfidenceBadge";
 import { DataQualityIndicator } from "@/components/game/DataQualityIndicator";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
-import { Star, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
+import { useSwipeGesture } from "@/hooks/useSwipeGesture";
+import { useHapticFeedback } from "@/hooks/useHapticFeedback";
+import { Star, ChevronRight, TrendingUp, TrendingDown, Plus, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import type { TodayGame } from "@/hooks/useApi";
 import type { SportId } from "@/types";
 
@@ -26,6 +30,9 @@ const getEdgeStrength = (edge: number | null | undefined): { label: string; colo
   return { label: "Mild", color: "bg-status-edge/40 text-foreground" };
 };
 
+// Parlay storage key
+const PARLAY_STORAGE_KEY = 'parlay-picks';
+
 interface GameCardProps {
   game: TodayGame;
 }
@@ -38,11 +45,14 @@ const sportColors: Record<SportId, { bg: string; text: string }> = {
 };
 
 export function GameCard({ game }: GameCardProps) {
+  const navigate = useNavigate();
   const startTime = new Date(game.start_time_utc);
   const isLive = game.status === "live";
   const isFinal = game.status === "final";
   const colors = sportColors[game.sport_id];
   const { isFavorite, toggleFavorite } = useFavoriteMatchups();
+  const { lightTap, success, warning } = useHapticFeedback();
+  const [swipeState, setSwipeState] = useState<"none" | "left" | "right">("none");
   
   // Determine if this game has a strong edge
   const hasStrongEdge = game.best_over_edge || game.best_under_edge;
@@ -63,6 +73,68 @@ export function GameCard({ game }: GameCardProps) {
 
   const isFav = isFavorite(game.game_id);
 
+  // Add to parlay handler
+  const addToParlay = useCallback(() => {
+    try {
+      const stored = localStorage.getItem(PARLAY_STORAGE_KEY);
+      const picks = stored ? JSON.parse(stored) : [];
+      
+      // Check if already in parlay
+      if (picks.some((p: { gameId: string }) => p.gameId === game.game_id)) {
+        warning();
+        toast.info("Already in parlay");
+        return;
+      }
+      
+      // Determine pick type based on edge
+      const overEdge = game.best_over_edge ?? 0;
+      const underEdge = game.best_under_edge ?? 0;
+      const pickType = overEdge > underEdge ? "over" : "under";
+      const line = pickType === "over" ? game.p95_over_line : game.p05_under_line;
+      
+      picks.push({
+        gameId: game.game_id,
+        homeTeam: matchupData.homeTeamAbbrev,
+        awayTeam: matchupData.awayTeamAbbrev,
+        sportId: game.sport_id,
+        pickType,
+        line,
+      });
+      
+      localStorage.setItem(PARLAY_STORAGE_KEY, JSON.stringify(picks));
+      success();
+      toast.success("Added to parlay", {
+        action: {
+          label: "View",
+          onClick: () => navigate("/parlay"),
+        },
+      });
+    } catch (e) {
+      toast.error("Could not add to parlay");
+    }
+  }, [game, matchupData, navigate, success, warning]);
+
+  // Swipe handlers
+  const handleSwipeLeft = useCallback(() => {
+    lightTap();
+    setSwipeState("left");
+    addToParlay();
+    setTimeout(() => setSwipeState("none"), 300);
+  }, [addToParlay, lightTap]);
+
+  const handleSwipeRight = useCallback(() => {
+    lightTap();
+    setSwipeState("right");
+    toggleFavorite(matchupData);
+    setTimeout(() => setSwipeState("none"), 300);
+  }, [toggleFavorite, matchupData, lightTap]);
+
+  const { onTouchStart, onTouchEnd } = useSwipeGesture({
+    onSwipeLeft: handleSwipeLeft,
+    onSwipeRight: handleSwipeRight,
+    threshold: 60,
+  });
+
   // Determine footer text
   const getFooterText = () => {
     if (!game.dk_offered || game.dk_total_line === null) {
@@ -71,19 +143,50 @@ export function GameCard({ game }: GameCardProps) {
     return `O/U ${game.dk_total_line} • DraftKings`;
   };
 
+  // Handle card click with haptic
+  const handleCardClick = (e: React.MouseEvent) => {
+    lightTap();
+  };
+
   return (
-    <Link
-      to={`/game/${game.game_id}`}
-      className={cn(
-        "group block p-3.5 sm:p-5 bg-card rounded-2xl border",
-        "shadow-sm transition-all duration-200 ease-out touch-manipulation",
-        "active:scale-[0.98] active:bg-muted/30",
-        "md:hover:shadow-md md:hover:-translate-y-0.5 md:hover:border-border",
-        hasStrongEdge
-          ? "border-status-edge/40 ring-1 ring-status-edge/20 shadow-edge-glow"
-          : "border-border/60"
-      )}
+    <div 
+      className="relative overflow-hidden rounded-2xl"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
+      {/* Swipe indicator overlays */}
+      <div 
+        className={cn(
+          "absolute inset-y-0 left-0 w-16 flex items-center justify-center bg-primary/20 transition-opacity duration-200 z-10 pointer-events-none",
+          swipeState === "right" ? "opacity-100" : "opacity-0"
+        )}
+      >
+        <Heart className="h-6 w-6 text-primary" />
+      </div>
+      <div 
+        className={cn(
+          "absolute inset-y-0 right-0 w-16 flex items-center justify-center bg-status-edge/20 transition-opacity duration-200 z-10 pointer-events-none",
+          swipeState === "left" ? "opacity-100" : "opacity-0"
+        )}
+      >
+        <Plus className="h-6 w-6 text-status-edge" />
+      </div>
+      
+      <Link
+        to={`/game/${game.game_id}`}
+        onClick={handleCardClick}
+        className={cn(
+          "group block p-3.5 sm:p-5 bg-card rounded-2xl border",
+          "shadow-sm transition-all duration-200 ease-out touch-manipulation",
+          "active:scale-[0.98] active:bg-muted/30",
+          "md:hover:shadow-md md:hover:-translate-y-0.5 md:hover:border-border",
+          hasStrongEdge
+            ? "border-status-edge/40 ring-1 ring-status-edge/20 shadow-edge-glow"
+            : "border-border/60",
+          swipeState === "left" && "-translate-x-4",
+          swipeState === "right" && "translate-x-4"
+        )}
+      >
       {/* Top row: time + league | n badge + favorite */}
       <div className="flex items-center justify-between mb-3 sm:mb-4">
         <div className="flex items-center gap-1.5 sm:gap-2">
@@ -179,6 +282,8 @@ export function GameCard({ game }: GameCardProps) {
           bestUnderEdge={game.best_under_edge}
           p95OverLine={game.p95_over_line}
           p05UnderLine={game.p05_under_line}
+          p05={game.p05}
+          p95={game.p95}
           isFinal={isFinal}
         />
       </div>
@@ -260,6 +365,7 @@ export function GameCard({ game }: GameCardProps) {
           <ChevronRight className="h-4 w-4 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
         </div>
       </div>
-    </Link>
+      </Link>
+    </div>
   );
 }
