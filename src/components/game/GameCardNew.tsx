@@ -18,6 +18,14 @@ const formatOdds = (odds: number): string => {
   return odds > 0 ? `+${odds}` : `${odds}`;
 };
 
+// Get edge strength label and color based on edge value
+const getEdgeStrength = (edge: number | null | undefined): { label: string; color: string } | null => {
+  if (!edge || edge <= 0) return null;
+  if (edge >= 3) return { label: "Strong", color: "bg-status-edge text-background" };
+  if (edge >= 1.5) return { label: "Good", color: "bg-status-edge/70 text-background" };
+  return { label: "Mild", color: "bg-status-edge/40 text-foreground" };
+};
+
 interface GameCardProps {
   game: TodayGame;
 }
@@ -38,6 +46,10 @@ export function GameCard({ game }: GameCardProps) {
   
   // Determine if this game has a strong edge
   const hasStrongEdge = game.best_over_edge || game.best_under_edge;
+  
+  // Calculate edge strengths
+  const overEdgeStrength = getEdgeStrength(game.best_over_edge);
+  const underEdgeStrength = getEdgeStrength(game.best_under_edge);
 
   const homeTeamName = getTeamDisplayName(game.home_team, game.sport_id);
   const awayTeamName = getTeamDisplayName(game.away_team, game.sport_id);
@@ -173,8 +185,15 @@ export function GameCard({ game }: GameCardProps) {
           {game.best_over_edge && game.p95_over_line && game.p95_over_odds && (
             <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-status-over/10 border border-status-over/20">
               <TrendingUp className="h-4 w-4 text-status-over flex-shrink-0" />
-              <div className="min-w-0">
-                <div className="text-xs font-medium text-status-over">Over Edge</div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium text-status-over">Over Edge</span>
+                  {overEdgeStrength && (
+                    <span className={cn("px-1.5 py-0.5 rounded text-2xs font-bold", overEdgeStrength.color)}>
+                      {overEdgeStrength.label}
+                    </span>
+                  )}
+                </div>
                 <div className="text-sm font-semibold text-foreground">
                   O {game.p95_over_line} <span className="text-status-over">{formatOdds(game.p95_over_odds)}</span>
                 </div>
@@ -184,8 +203,15 @@ export function GameCard({ game }: GameCardProps) {
           {game.best_under_edge && game.p05_under_line && game.p05_under_odds && (
             <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-status-under/10 border border-status-under/20">
               <TrendingDown className="h-4 w-4 text-status-under flex-shrink-0" />
-              <div className="min-w-0">
-                <div className="text-xs font-medium text-status-under">Under Edge</div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium text-status-under">Under Edge</span>
+                  {underEdgeStrength && (
+                    <span className={cn("px-1.5 py-0.5 rounded text-2xs font-bold", underEdgeStrength.color)}>
+                      {underEdgeStrength.label}
+                    </span>
+                  )}
+                </div>
                 <div className="text-sm font-semibold text-foreground">
                   U {game.p05_under_line} <span className="text-status-under">{formatOdds(game.p05_under_odds)}</span>
                 </div>
