@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.deep-backfill]
 verify_jwt = false
+
+[functions.data-health-check]
+verify_jwt = false
