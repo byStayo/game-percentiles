@@ -10,11 +10,55 @@ interface CoverageDashboardProps {
 export function CoverageDashboard({ debug, isFetching }: CoverageDashboardProps) {
   if (isFetching) {
     return (
-      <div className="p-3 rounded-lg bg-muted/30 border border-border/50 animate-pulse">
-        <div className="h-4 w-32 bg-muted rounded mb-2" />
+      <div className="p-3 rounded-lg bg-card/50 border border-border/50">
+        <div className="flex items-center gap-1.5 mb-2">
+          <div className="h-3.5 w-3.5 rounded bg-muted/60 animate-pulse" />
+          <div className="h-3 w-24 rounded bg-muted/60 animate-pulse" />
+          <div className="h-3 w-16 rounded bg-muted/40 ml-auto animate-pulse" style={{ animationDelay: '150ms' }} />
+        </div>
         <div className="grid grid-cols-2 gap-2">
-          <div className="h-16 bg-muted rounded" />
-          <div className="h-16 bg-muted rounded" />
+          {/* NFL skeleton */}
+          <div className="p-2.5 rounded-lg bg-muted/10 border border-border/30">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="h-3 w-8 rounded bg-muted/50 animate-pulse" />
+              <div className="h-3 w-6 rounded bg-muted/40 animate-pulse" style={{ animationDelay: '100ms' }} />
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="p-1 rounded bg-background/30">
+                  <div 
+                    className="h-4 w-6 mx-auto rounded bg-muted/50 animate-pulse mb-0.5" 
+                    style={{ animationDelay: `${i * 75}ms` }} 
+                  />
+                  <div 
+                    className="h-2 w-8 mx-auto rounded bg-muted/30 animate-pulse" 
+                    style={{ animationDelay: `${i * 75 + 50}ms` }} 
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* NBA skeleton */}
+          <div className="p-2.5 rounded-lg bg-muted/10 border border-border/30">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="h-3 w-8 rounded bg-muted/50 animate-pulse" style={{ animationDelay: '50ms' }} />
+              <div className="h-3 w-6 rounded bg-muted/40 animate-pulse" style={{ animationDelay: '150ms' }} />
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="p-1 rounded bg-background/30">
+                  <div 
+                    className="h-4 w-6 mx-auto rounded bg-muted/50 animate-pulse mb-0.5" 
+                    style={{ animationDelay: `${i * 75 + 200}ms` }} 
+                  />
+                  <div 
+                    className="h-2 w-8 mx-auto rounded bg-muted/30 animate-pulse" 
+                    style={{ animationDelay: `${i * 75 + 250}ms` }} 
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );
