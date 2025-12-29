@@ -25,6 +25,9 @@ interface PrewarmCounters {
 }
 
 async function getTodayMatchups(date: string, sportId: string) {
+  const startOfDayET = new Date(`${date}T00:00:00-05:00`).toISOString();
+  const endOfDayET = new Date(`${date}T23:59:59-05:00`).toISOString();
+
   const { data: games, error } = await supabase
     .from("games")
     .select(`
@@ -36,8 +39,8 @@ async function getTodayMatchups(date: string, sportId: string) {
       sport_id
     `)
     .eq("sport_id", sportId)
-    .gte("start_time_utc", `${date}T00:00:00Z`)
-    .lt("start_time_utc", `${date}T23:59:59Z`);
+    .gte("start_time_utc", startOfDayET)
+    .lte("start_time_utc", endOfDayET);
 
   if (error) {
     console.error(`[PREWARM] Error fetching games for ${sportId}:`, error.message);

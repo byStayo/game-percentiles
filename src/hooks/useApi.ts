@@ -54,7 +54,39 @@ export interface TodayResponse {
   total: number;
   games: TodayGame[];
   by_sport: Record<string, TodayGame[]>;
+  debug?: TodayDebugInfo;
   error?: string;
+}
+
+export interface TodayDebugEdge {
+  sport_id: SportId;
+  is_visible: boolean;
+  segment_used: string | null;
+  n_h2h: number;
+  n_used: number | null;
+  dk_offered: boolean;
+  dk_total_line: number | null;
+  dk_line_percentile: number | null;
+  best_over_edge: number | null;
+  best_under_edge: number | null;
+  p95_over_line: number | null;
+  p05_under_line: number | null;
+}
+
+export interface TodayDebugSportInfo {
+  games_in_db: number;
+  edges_total: number;
+  edges_visible: number;
+  with_dk_odds: number;
+  with_n5: number;
+  segments: Record<string, number>;
+}
+
+export interface TodayDebugInfo {
+  date: string;
+  totals: TodayDebugSportInfo;
+  by_sport: Record<string, TodayDebugSportInfo>;
+  edges: TodayDebugEdge[];
 }
 
 export interface GameDetailResponse {
@@ -203,6 +235,18 @@ export function useTodayGames(date: Date, sportId: SportId) {
     queryFn: () => fetchApi<TodayResponse>(`api-today?date=${dateString}&sport_id=${sportId}`),
     staleTime: 30000,
     retry: 2,
+  });
+}
+
+export function useTodayDebug(date: Date, sportId?: SportId) {
+  const dateString = format(date, 'yyyy-MM-dd');
+  const sportPart = sportId ? `&sport_id=${sportId}` : '';
+
+  return useQuery<TodayResponse>({
+    queryKey: ['api-today-debug', dateString, sportId ?? 'all'],
+    queryFn: () => fetchApi<TodayResponse>(`api-today?date=${dateString}${sportPart}&debug=1`),
+    staleTime: 15000,
+    retry: 1,
   });
 }
 

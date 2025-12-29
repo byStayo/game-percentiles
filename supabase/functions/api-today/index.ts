@@ -33,10 +33,11 @@ Deno.serve(async (req) => {
     const url = new URL(req.url)
     const date = url.searchParams.get('date') || getTodayET()
     const sportId = url.searchParams.get('sport_id')
+    const debug = url.searchParams.get('debug') === '1'
 
-    console.log(`[API/TODAY] Fetching edges for ${date}, sport: ${sportId || 'all'}`)
+    console.log(`[API/TODAY] Fetching edges for ${date}, sport: ${sportId || 'all'} (debug=${debug})`)
 
-    // Build query for daily_edges
+    // Build query for daily_edges (visible-only for the main UI payload)
     let query = supabase
       .from('daily_edges')
       .select(`
@@ -70,6 +71,103 @@ Deno.serve(async (req) => {
     }
 
     const { data: edges, error } = await query.order('sport_id')
+
+    // Optional debug payload to explain "0 games" cases
+    let debugPayload: any = undefined
+    if (debug) {
+      // Fetch ALL edges (visible + hidden) for the date
+      let debugEdgesQuery = supabase
+        .from('daily_edges')
+        .select(`
+          sport_id,
+          is_visible,
+          segment_used,
+          n_h2h,
+          n_used,
+          dk_offered,
+          dk_total_line,
+          dk_line_percentile,
+          best_over_edge,
+          best_under_edge,
+          p95_over_line,
+          p05_under_line
+        `)
+        .eq('date_local', date)
+
+      if (sportId) {
+        debugEdgesQuery = debugEdgesQuery.eq('sport_id', sportId)
+      }
+
+      const { data: debugEdges, error: debugEdgesError } = await debugEdgesQuery
+
+      if (debugEdgesError) {
+        console.error('[API/TODAY] Debug edges query error:', debugEdgesError)
+      }
+
+      const edgesAll = debugEdges || []
+
+      // Build sport list
+      const sportsToCheck = sportId
+        ? [sportId]
+        : Array.from(new Set(edgesAll.map((e: any) => e.sport_id)))
+
+      // If no edges exist yet, still check the premium sports so we can say "X games ingested, 0 computed"
+      if (!sportId && sportsToCheck.length === 0) {
+        sportsToCheck.push('nfl', 'nba')
+      }
+
+      const startOfDayET = new Date(`${date}T00:00:00-05:00`)
+      const endOfDayET = new Date(`${date}T23:59:59-05:00`)
+
+      const bySport: Record<string, any> = {}
+      for (const s of sportsToCheck) {
+        const sportEdges = edgesAll.filter((e: any) => e.sport_id === s)
+        const edgesTotal = sportEdges.length
+        const edgesVisible = sportEdges.filter((e: any) => e.is_visible).length
+        const withOdds = sportEdges.filter((e: any) => e.dk_offered && e.dk_total_line !== null).length
+        const withN5 = sportEdges.filter((e: any) => (e.n_used ?? e.n_h2h) >= 5).length
+        const segments: Record<string, number> = {}
+        for (const e of sportEdges) {
+          const key = e.segment_used || 'none'
+          segments[key] = (segments[key] || 0) + 1
+        }
+
+        const { count: gamesInDb } = await supabase
+          .from('games')
+          .select('id', { count: 'exact', head: true })
+          .eq('sport_id', s)
+          .gte('start_time_utc', startOfDayET.toISOString())
+          .lte('start_time_utc', endOfDayET.toISOString())
+
+        bySport[s] = {
+          games_in_db: gamesInDb || 0,
+          edges_total: edgesTotal,
+          edges_visible: edgesVisible,
+          with_dk_odds: withOdds,
+          with_n5: withN5,
+          segments,
+        }
+      }
+
+      const totals = Object.values(bySport).reduce(
+        (acc: any, v: any) => {
+          acc.games_in_db += v.games_in_db
+          acc.edges_total += v.edges_total
+          acc.edges_visible += v.edges_visible
+          acc.with_dk_odds += v.with_dk_odds
+          acc.with_n5 += v.with_n5
+          return acc
+        },
+        { games_in_db: 0, edges_total: 0, edges_visible: 0, with_dk_odds: 0, with_n5: 0, segments: {} as Record<string, number> }
+      )
+
+      debugPayload = {
+        date,
+        totals,
+        by_sport: bySport,
+        edges: edgesAll,
+      }
+    }
 
     if (error) {
       console.error('[API/TODAY] Query error:', error)
@@ -179,6 +277,7 @@ Deno.serve(async (req) => {
         total: games.length,
         games,
         by_sport: bySport,
+        ...(debug ? { debug: debugPayload } : {}),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

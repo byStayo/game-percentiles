@@ -14,7 +14,7 @@ import { StickyFilters } from "@/components/ui/sticky-filters";
 import { SportBadge } from "@/components/ui/sport-icon";
 
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
-import { useTodayGames, TodayGame } from "@/hooks/useApi";
+import { useTodayGames, useTodayDebug, TodayGame } from "@/hooks/useApi";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -44,8 +44,6 @@ function getTodayInET(): Date {
 const sports: { id: SportId; name: string }[] = [
   { id: "nfl", name: "NFL" },
   { id: "nba", name: "NBA" },
-  { id: "nhl", name: "NHL" },
-  { id: "mlb", name: "MLB" },
 ];
 
 type ViewMode = "all" | "sport";
@@ -55,12 +53,12 @@ type ConfidenceFilter = "all" | "h2h-only";
 
 export default function Index() {
   const [selectedDate, setSelectedDate] = useState(getTodayInET);
-  const [selectedSport, setSelectedSport] = useState<SportId>("nba");
+  const [selectedSport, setSelectedSport] = useState<SportId>("nfl");
   const [viewMode, setViewMode] = useState<ViewMode>("all");
   const [sortBy, setSortBy] = useState<SortOption>("edges-first");
   const [filterMode, setFilterMode] = useState<FilterMode>("picks");
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("all");
-  
+
   const [hideWeakData, setHideWeakData] = useState(true);
 
   // Swipe gesture handlers for date navigation
@@ -78,41 +76,33 @@ export default function Index() {
     threshold: 60,
   });
 
-  // Fetch all sports data
+  // Fetch NFL + NBA data
   const nflQuery = useTodayGames(selectedDate, "nfl");
   const nbaQuery = useTodayGames(selectedDate, "nba");
-  const nhlQuery = useTodayGames(selectedDate, "nhl");
-  const mlbQuery = useTodayGames(selectedDate, "mlb");
 
-  const isLoading =
-    nflQuery.isLoading ||
-    nbaQuery.isLoading ||
-    nhlQuery.isLoading ||
-    mlbQuery.isLoading;
-  const hasError =
-    nflQuery.error || nbaQuery.error || nhlQuery.error || mlbQuery.error;
+  // Debug info (why 0 games)
+  const debugQuery = useTodayDebug(selectedDate);
 
-  // Combine all games
+  const isLoading = nflQuery.isLoading || nbaQuery.isLoading;
+  const hasError = nflQuery.error || nbaQuery.error;
+
+  // Combine games
   const allGames = useMemo(() => {
     const games: TodayGame[] = [
       ...(nflQuery.data?.games || []),
       ...(nbaQuery.data?.games || []),
-      ...(nhlQuery.data?.games || []),
-      ...(mlbQuery.data?.games || []),
     ];
     return games;
-  }, [nflQuery.data, nbaQuery.data, nhlQuery.data, mlbQuery.data]);
+  }, [nflQuery.data, nbaQuery.data]);
 
   // Get games for selected sport
   const sportGames = useMemo(() => {
     const queryMap: Record<SportId, typeof nflQuery> = {
       nfl: nflQuery,
       nba: nbaQuery,
-      nhl: nhlQuery,
-      mlb: mlbQuery,
     };
     return queryMap[selectedSport].data?.games || [];
-  }, [selectedSport, nflQuery, nbaQuery, nhlQuery, mlbQuery]);
+  }, [selectedSport, nflQuery, nbaQuery]);
 
   // Games to display based on view mode
   const displayGames = viewMode === "all" ? allGames : sportGames;
@@ -131,7 +121,7 @@ export default function Index() {
       games = games.filter((g) => {
         const segment = g.segment_used;
         // Form-based segments to filter out
-        if (segment === 'hybrid_form' || segment === 'recency_weighted' || segment === 'insufficient') {
+        if (segment === "hybrid_form" || segment === "insufficient") {
           return false;
         }
         return true;
@@ -202,10 +192,8 @@ export default function Index() {
     () => ({
       nfl: nflQuery.data?.games?.length || 0,
       nba: nbaQuery.data?.games?.length || 0,
-      nhl: nhlQuery.data?.games?.length || 0,
-      mlb: mlbQuery.data?.games?.length || 0,
     }),
-    [nflQuery.data, nbaQuery.data, nhlQuery.data, mlbQuery.data]
+    [nflQuery.data, nbaQuery.data]
   );
 
   const totalGames = allGames.length;
@@ -222,9 +210,10 @@ export default function Index() {
     let formCount = 0;
     allGames.forEach((g) => {
       const segment = g.segment_used;
-      if (segment === 'hybrid_form' || segment === 'recency_weighted' || segment === 'insufficient') {
+      if (segment === "hybrid_form" || segment === "insufficient") {
         formCount++;
       } else {
+        // h2h_* and recency_weighted both count as H2H-derived
         h2hCount++;
       }
     });
@@ -234,10 +223,10 @@ export default function Index() {
   return (
     <>
       <Helmet>
-        <title>Game Percentiles | Historical H2H Analysis</title>
+        <title>NFL & NBA Picks | H2H Totals Percentiles</title>
         <meta
           name="description"
-          content="Analyze head-to-head historical totals for NFL, NBA, MLB, and NHL. View P05/P95 percentile bounds and line analysis."
+          content="Today's NFL and NBA totals picks using head-to-head percentiles, recency weighting, and DraftKings line analysis."
         />
       </Helmet>
 
@@ -443,6 +432,21 @@ export default function Index() {
             </div>
           </StickyFilters>
 
+          {/* "Why 0 games" debug strip */}
+          {!isLoading && !hasError && (
+            <ZeroGamesDebugStrip
+              date={format(selectedDate, "yyyy-MM-dd")}
+              viewMode={viewMode}
+              selectedSport={selectedSport}
+              filterMode={filterMode}
+              confidenceFilter={confidenceFilter}
+              hideWeakData={hideWeakData}
+              visibleGamesCount={filteredAndSortedGames.length}
+              debug={debugQuery.data?.debug}
+              isFetching={debugQuery.isFetching}
+            />
+          )}
+
           {/* Sport tabs with icons (only shown in sport view) */}
           {viewMode === "sport" && (
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-3 px-3">
@@ -457,7 +461,6 @@ export default function Index() {
               ))}
             </div>
           )}
-
           {/* Sport group dividers in All view */}
           {viewMode === "all" && !isLoading && filteredAndSortedGames.length > 0 && (
             <div className="flex gap-1.5 flex-wrap">
