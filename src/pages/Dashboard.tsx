@@ -187,9 +187,12 @@ export default function Dashboard() {
 
       todayEdges?.forEach((edge: any) => {
         const segment = edge.segment_used;
+        // Prefer n_used (segment-specific sample) and fall back to n_h2h
         const nUsed = edge.n_used ?? edge.n_h2h;
-        
-        if (segment === 'hybrid_form' || segment === 'recency_weighted' || segment === 'insufficient') {
+
+        // Only true "form" sources should count as form-based.
+        // recency_weighted is still H2H data (just weighted), so classify by sample size.
+        if (segment === 'hybrid_form' || segment === 'insufficient') {
           dataQuality.formBased++;
         } else if (nUsed >= 10) {
           dataQuality.h2hStrong++;
