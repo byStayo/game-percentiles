@@ -6,8 +6,10 @@ import { StatsChart } from "@/components/game/StatsChart";
 import { useFavoriteMatchups } from "@/hooks/useFavoriteMatchups";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useHapticFeedback } from "@/hooks/useHapticFeedback";
+import { useGameInjuries } from "@/hooks/useGameInjuries";
 import { Star, ChevronRight, Plus, Heart } from "lucide-react";
 import { DataSourceIndicator } from "@/components/game/DataSourceIndicator";
+import { InjuryIndicator } from "@/components/game/InjuryIndicator";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { TodayGame } from "@/hooks/useApi";
@@ -34,6 +36,13 @@ export function GameCard({ game }: GameCardProps) {
   const { isFavorite, toggleFavorite } = useFavoriteMatchups();
   const { lightTap, success, warning } = useHapticFeedback();
   const [swipeState, setSwipeState] = useState<"none" | "left" | "right">("none");
+
+  // Fetch injuries for both teams
+  const { data: injuries } = useGameInjuries(
+    game.home_team?.id,
+    game.away_team?.id,
+    game.sport_id
+  );
 
   const hasEdge = (game.best_over_edge ?? 0) > 0 || (game.best_under_edge ?? 0) > 0;
   
@@ -195,16 +204,34 @@ export function GameCard({ game }: GameCardProps) {
           </Button>
         </div>
 
-        {/* Row 2: Teams */}
+        {/* Row 2: Teams with injury indicators */}
         <div className="mb-2.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold truncate">{awayTeamName}</span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm font-semibold truncate">{awayTeamName}</span>
+              {injuries?.away && injuries.away.length > 0 && (
+                <InjuryIndicator 
+                  injuries={injuries.away} 
+                  teamAbbrev={game.away_team?.abbrev || "AWAY"} 
+                  size="xs" 
+                />
+              )}
+            </div>
             {(isFinal || isLive) && game.away_score !== null && (
               <span className="text-base font-bold tabular-nums">{game.away_score}</span>
             )}
           </div>
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold truncate">{homeTeamName}</span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm font-semibold truncate">{homeTeamName}</span>
+              {injuries?.home && injuries.home.length > 0 && (
+                <InjuryIndicator 
+                  injuries={injuries.home} 
+                  teamAbbrev={game.home_team?.abbrev || "HOME"} 
+                  size="xs" 
+                />
+              )}
+            </div>
             {(isFinal || isLive) && game.home_score !== null && (
               <span className="text-base font-bold tabular-nums">{game.home_score}</span>
             )}
