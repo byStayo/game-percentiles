@@ -450,9 +450,10 @@ Deno.serve(async (req) => {
           p05 = result.p05
           p95 = result.p95
 
-          // ONLY show games with real H2H data - hybrid_form is NOT sufficient
-          // hybrid_form uses each team's recent games against ANY opponent, not actual matchup history
-          isVisible = segmentUsed !== 'hybrid_form' && segmentUsed !== 'insufficient'
+          // Show ALL games that have computed stats, including hybrid_form
+          // hybrid_form uses each team's recent games against ANY opponent - less precise but still useful
+          // The UI will indicate when hybrid_form is used so users understand the data quality
+          isVisible = segmentUsed !== 'insufficient'
 
           // Track which segment was used
           if (segmentUsed in counters) {
