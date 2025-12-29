@@ -83,3 +83,6 @@ verify_jwt = false
 
 [functions.premium-week-refresh]
 verify_jwt = false
+
+[functions.bdl-sync]
+verify_jwt = false

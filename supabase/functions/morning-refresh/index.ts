@@ -100,24 +100,28 @@ Deno.serve(async (req) => {
     const jobRunId = jobRun?.id
 
     // ================================================================
-    // STEP 1: Ingest games using BallDontLie API (maximizing paid tier)
+    // STEP 1: Unified BDL sync - games, odds, injuries, standings
+    // Maximizes BallDontLie GOAT tier (600 req/min)
     // ================================================================
-    console.log(`[MORNING] Step 1: Ingesting games via BallDontLie for ${daysAhead} days`)
+    console.log(`[MORNING] Step 1: Unified BDL sync for ${daysAhead} days`)
     
-    // Use the new BDL-based ingestion that fetches games + odds in one call
-    results['ingest_bdl'] = await callEdgeFunction('ingest-bdl', {
+    results['bdl_sync'] = await callEdgeFunction('bdl-sync', {
       days_ahead: daysAhead,
+      days_back: 1, // Include yesterday for score updates
       sports: ['nfl', 'nba'],
-      include_odds: true, // Fetch betting odds from BDL (GOAT tier feature)
+      sync_games: true,
+      sync_odds: true,
+      sync_injuries: true,
+      sync_standings: true,
     })
     
     await sleep(1000)
 
     // ================================================================
-    // STEP 2: Refresh odds (only for today and tomorrow - where odds exist)
+    // STEP 2: Refresh odds for NHL/MLB (fallback to The Odds API)
     // ================================================================
     if (!skipOdds) {
-      console.log(`[MORNING] Step 2: Refreshing odds`)
+      console.log(`[MORNING] Step 2: Refreshing NHL/MLB odds`)
       results['refresh_odds'] = await callEdgeFunction('refresh-odds', {})
       await sleep(1000)
     }
