@@ -100,20 +100,18 @@ Deno.serve(async (req) => {
     const jobRunId = jobRun?.id
 
     // ================================================================
-    // STEP 1: Ingest games for today through 7 days ahead
+    // STEP 1: Ingest games using BallDontLie API (maximizing paid tier)
     // ================================================================
-    console.log(`[MORNING] Step 1: Ingesting games for ${daysAhead} days`)
+    console.log(`[MORNING] Step 1: Ingesting games via BallDontLie for ${daysAhead} days`)
     
-    for (let i = 0; i < daysAhead; i++) {
-      const date = getDateOffset(i)
-      const key = `ingest_day_${i}`
-      results[key] = await callEdgeFunction('ingest-games', { date })
-      
-      // Small delay between API calls to respect rate limits
-      if (i < daysAhead - 1) {
-        await sleep(500)
-      }
-    }
+    // Use the new BDL-based ingestion that fetches games + odds in one call
+    results['ingest_bdl'] = await callEdgeFunction('ingest-bdl', {
+      days_ahead: daysAhead,
+      sports: ['nfl', 'nba'],
+      include_odds: true, // Fetch betting odds from BDL (GOAT tier feature)
+    })
+    
+    await sleep(1000)
 
     // ================================================================
     // STEP 2: Refresh odds (only for today and tomorrow - where odds exist)
