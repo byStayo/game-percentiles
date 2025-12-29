@@ -77,3 +77,9 @@ verify_jwt = false
 
 [functions.sync-matchup-games]
 verify_jwt = false
+
+[functions.ingest-bdl]
+verify_jwt = false
+
+[functions.premium-week-refresh]
+verify_jwt = false
