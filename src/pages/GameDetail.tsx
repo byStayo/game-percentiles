@@ -7,6 +7,7 @@ import { ArrowLeft, Calendar, Clock, History, BarChart3, Star, Shield } from "lu
 import { GamesPerYearChart } from "@/components/game/GamesPerYearChart";
 import { Layout } from "@/components/layout/Layout";
 import { useGameDetail } from "@/hooks/useApi";
+import { useGameInjuries } from "@/hooks/useGameInjuries";
 import { supabase } from "@/integrations/supabase/client";
 import { PercentileBar } from "@/components/ui/percentile-bar";
 import { PickPill } from "@/components/game/PickPill";
@@ -21,6 +22,7 @@ import { SegmentComparison } from "@/components/game/SegmentComparison";
 import { SegmentTimeline } from "@/components/game/SegmentTimeline";
 import { SegmentAnalysis } from "@/components/game/SegmentAnalysis";
 import { EdgeDetectionCard } from "@/components/game/EdgeDetectionCard";
+import { InjuryCard } from "@/components/game/InjuryCard";
 import { ParlayFAB } from "@/components/game/ParlayFAB";
 import { Button } from "@/components/ui/button";
 import { HistoricalDistributionChart } from "@/components/game/HistoricalDistributionChart";
@@ -41,6 +43,13 @@ export default function GameDetail() {
   const [selectedSegment, setSelectedSegment] = useState<SegmentKey>("h2h_all");
   const { data, isLoading, error } = useGameDetail(id || "", selectedSegment);
   const { isFavorite, toggleFavorite } = useFavoriteMatchups();
+
+  // Fetch injuries for both teams
+  const { data: injuryData } = useGameInjuries(
+    data?.game?.home_team?.id,
+    data?.game?.away_team?.id,
+    data?.game?.sport_id || "nfl"
+  );
 
   // Fetch roster continuity for both teams
   const { data: rosterData } = useQuery({
@@ -509,6 +518,18 @@ export default function GameDetail() {
               bestUnderEdge={edge.best_under_edge ?? null}
               alternateLines={edge.alternate_lines ?? null}
               dkTotalLine={edge.dk_total_line ?? null}
+            />
+          )}
+
+          {/* Injury Report Card */}
+          {injuryData && (injuryData.home.length > 0 || injuryData.away.length > 0) && (
+            <InjuryCard
+              homeTeamName={homeTeamName}
+              awayTeamName={awayTeamName}
+              homeTeamAbbrev={game.home_team?.abbrev || "HOME"}
+              awayTeamAbbrev={game.away_team?.abbrev || "AWAY"}
+              homeInjuries={injuryData.home}
+              awayInjuries={injuryData.away}
             />
           )}
 
