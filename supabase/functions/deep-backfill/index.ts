@@ -324,6 +324,90 @@ async function backfillSeason(
   return counters;
 }
 
+// Background task to run the actual backfill
+async function runBackfill(
+  supabase: any,
+  bdlApiKey: string,
+  sport: string,
+  startYear: number,
+  endYear: number,
+  singleSeason?: number
+) {
+  const { data: jobRun } = await supabase
+    .from("job_runs")
+    .insert({
+      job_name: `deep-backfill-${sport}`,
+      status: "running",
+      details: { sport, startYear, endYear },
+    })
+    .select("id")
+    .single();
+
+  const totals = { fetched: 0, upserted: 0, errors: 0, seasons: 0 };
+
+  try {
+    if (singleSeason) {
+      const result = await backfillSeason(supabase, bdlApiKey, sport, singleSeason);
+      totals.fetched += result.fetched;
+      totals.upserted += result.upserted;
+      totals.errors += result.errors;
+      totals.seasons = 1;
+    } else {
+      for (let season = endYear; season >= startYear; season--) {
+        const result = await backfillSeason(supabase, bdlApiKey, sport, season);
+        totals.fetched += result.fetched;
+        totals.upserted += result.upserted;
+        totals.errors += result.errors;
+        totals.seasons++;
+
+        if (totals.seasons % 5 === 0) {
+          console.log(`[DEEP-BACKFILL] Progress: ${totals.seasons} seasons, ${totals.upserted} games`);
+          
+          // Update job with progress
+          if (jobRun?.id) {
+            await supabase
+              .from("job_runs")
+              .update({ details: { sport, startYear, endYear, ...totals, status: "in_progress" } })
+              .eq("id", jobRun.id);
+          }
+        }
+
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
+
+    if (jobRun?.id) {
+      await supabase
+        .from("job_runs")
+        .update({
+          status: "success",
+          finished_at: new Date().toISOString(),
+          details: { sport, startYear, endYear, ...totals },
+        })
+        .eq("id", jobRun.id);
+    }
+
+    console.log(`[DEEP-BACKFILL] Complete: ${totals.seasons} seasons, ${totals.fetched} fetched, ${totals.upserted} upserted, ${totals.errors} errors`);
+  } catch (error) {
+    console.error("[DEEP-BACKFILL] Background error:", error);
+    if (jobRun?.id) {
+      await supabase
+        .from("job_runs")
+        .update({
+          status: "failed",
+          finished_at: new Date().toISOString(),
+          details: { sport, startYear, endYear, ...totals, error: String(error) },
+        })
+        .eq("id", jobRun.id);
+    }
+  }
+}
+
+// Handle shutdown gracefully
+addEventListener('beforeunload', (ev: any) => {
+  console.log('[DEEP-BACKFILL] Shutdown:', ev.detail?.reason);
+});
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -337,72 +421,31 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const sport = body.sport || "nba"; // nba or nfl
+    const sport = body.sport || "nba";
     const startYear = body.startYear || HISTORICAL_RANGES[sport as keyof typeof HISTORICAL_RANGES]?.start || 2002;
     const endYear = body.endYear || new Date().getFullYear();
-    const singleSeason = body.season; // Optional: backfill just one season
+    const singleSeason = body.season;
 
-    console.log(`[DEEP-BACKFILL] Starting ${sport} backfill from ${startYear} to ${endYear}`);
+    console.log(`[DEEP-BACKFILL] Starting background ${sport} backfill from ${startYear} to ${endYear}`);
 
-    // Record job start
-    const { data: jobRun } = await supabase
-      .from("job_runs")
-      .insert({
-        job_name: `deep-backfill-${sport}`,
-        status: "running",
-        details: { sport, startYear, endYear },
-      })
-      .select("id")
-      .single();
-
-    const totals = { fetched: 0, upserted: 0, errors: 0, seasons: 0 };
-
-    if (singleSeason) {
-      // Backfill single season
-      const result = await backfillSeason(supabase, bdlApiKey, sport, singleSeason);
-      totals.fetched += result.fetched;
-      totals.upserted += result.upserted;
-      totals.errors += result.errors;
-      totals.seasons = 1;
+    // Use EdgeRuntime.waitUntil for background processing
+    // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(runBackfill(supabase, bdlApiKey, sport, startYear, endYear, singleSeason));
     } else {
-      // Backfill range of seasons - start from most recent for immediate value
-      for (let season = endYear; season >= startYear; season--) {
-        const result = await backfillSeason(supabase, bdlApiKey, sport, season);
-        totals.fetched += result.fetched;
-        totals.upserted += result.upserted;
-        totals.errors += result.errors;
-        totals.seasons++;
-
-        // Log progress every 5 seasons
-        if (totals.seasons % 5 === 0) {
-          console.log(`[DEEP-BACKFILL] Progress: ${totals.seasons} seasons, ${totals.upserted} games`);
-        }
-
-        // Small delay between seasons to avoid overwhelming the API
-        await new Promise(r => setTimeout(r, 200));
-      }
+      // Fallback: run in background without blocking
+      runBackfill(supabase, bdlApiKey, sport, startYear, endYear, singleSeason).catch(console.error);
     }
 
-    // Update job status
-    if (jobRun?.id) {
-      await supabase
-        .from("job_runs")
-        .update({
-          status: "success",
-          finished_at: new Date().toISOString(),
-          details: { sport, startYear, endYear, ...totals },
-        })
-        .eq("id", jobRun.id);
-    }
-
-    console.log(`[DEEP-BACKFILL] Complete: ${totals.seasons} seasons, ${totals.fetched} fetched, ${totals.upserted} upserted, ${totals.errors} errors`);
-
+    // Return immediately
     return new Response(JSON.stringify({
       success: true,
+      message: `Background backfill started for ${sport} (${startYear}-${endYear})`,
       sport,
       startYear,
       endYear,
-      ...totals,
+      status: "started",
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
