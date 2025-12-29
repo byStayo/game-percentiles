@@ -508,7 +508,8 @@ async function syncGames(
       last_seen_at: new Date().toISOString(),
     };
 
-    const { data: existingGame } = await supabase
+    // First check for existing BDL game by provider key
+    const { data: existingBdlGame } = await supabase
       .from("games")
       .select("id")
       .eq("sport_id", sport)
@@ -517,7 +518,8 @@ async function syncGames(
 
     let gameId: string | null = null;
 
-    if (existingGame) {
+    if (existingBdlGame) {
+      // Update existing BDL game
       const { error: updateError } = await supabase
         .from("games")
         .update({
@@ -525,16 +527,57 @@ async function syncGames(
           home_score: isFinal ? homeScore : null,
           away_score: isFinal ? awayScore : null,
           status: gameData.status,
+          home_franchise_id: home.franchiseId,
+          away_franchise_id: away.franchiseId,
           last_seen_at: new Date().toISOString(),
         })
-        .eq("id", existingGame.id);
+        .eq("id", existingBdlGame.id);
 
       if (updateError) {
         counters.errors++;
         continue;
       }
-      gameId = existingGame.id;
+      gameId = existingBdlGame.id;
     } else {
+      // Check if an equivalent game exists from another provider (ESPN, etc.)
+      // Match by same teams, same date (within 1 hour window)
+      const gameDate = new Date(startTimeUtc);
+      const windowStart = new Date(gameDate.getTime() - 2 * 60 * 60 * 1000).toISOString();
+      const windowEnd = new Date(gameDate.getTime() + 2 * 60 * 60 * 1000).toISOString();
+      
+      const { data: existingOtherGame } = await supabase
+        .from("games")
+        .select("id, provider_game_key")
+        .eq("sport_id", sport)
+        .eq("home_team_id", home.teamId)
+        .eq("away_team_id", away.teamId)
+        .gte("start_time_utc", windowStart)
+        .lte("start_time_utc", windowEnd)
+        .maybeSingle();
+
+      if (existingOtherGame) {
+        // Game already exists from another provider - update it with BDL data (scores, franchise IDs)
+        const { error: updateError } = await supabase
+          .from("games")
+          .update({
+            home_score: isFinal ? homeScore : existingOtherGame.home_score,
+            away_score: isFinal ? awayScore : existingOtherGame.away_score,
+            status: isFinal ? "final" : gameData.status,
+            home_franchise_id: home.franchiseId,
+            away_franchise_id: away.franchiseId,
+            last_seen_at: new Date().toISOString(),
+          })
+          .eq("id", existingOtherGame.id);
+
+        if (!updateError && existingOtherGame.id) {
+          counters.upserted++;
+          bdlToDbMap.set(game.id, existingOtherGame.id);
+          console.log(`[BDL-SYNC] Linked BDL game ${game.id} to existing ${existingOtherGame.provider_game_key}`);
+        }
+        continue; // Skip creating a duplicate
+      }
+
+      // No existing game - create new one
       const { data: created, error: insertError } = await supabase
         .from("games")
         .insert(gameData)
