@@ -86,3 +86,6 @@ verify_jwt = false
 
 [functions.bdl-sync]
 verify_jwt = false
+
+[functions.deep-backfill]
+verify_jwt = false
