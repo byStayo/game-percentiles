@@ -74,3 +74,6 @@ verify_jwt = false
 
 [functions.balldontlie-backfill]
 verify_jwt = false
+
+[functions.sync-matchup-games]
+verify_jwt = false

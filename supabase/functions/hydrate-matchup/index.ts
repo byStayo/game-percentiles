@@ -13,12 +13,17 @@ const ESPN_SCHEDULE_URLS: Record<string, string> = {
   mlb: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams",
 };
 
-// ESPN abbreviation normalization
+// ESPN abbreviation normalization - CRITICAL: Map internal abbrevs TO ESPN format and vice versa
 const ESPN_ABBREV_MAP: Record<string, Record<string, string>> = {
-  nba: { "GS": "GSW", "NY": "NYK", "NO": "NOP", "SA": "SAS", "UTAH": "UTA", "WSH": "WAS", "PHO": "PHX" },
-  nfl: { "JAX": "JAC", "WSH": "WAS" },
-  nhl: { "LA": "LAK", "UTAH": "UTA", "WSH": "WAS", "VGK": "VEG", "NAS": "NSH" },
-  mlb: { "CHW": "CWS", "WSH": "WAS" },
+  nba: { 
+    // Internal -> ESPN
+    "GSW": "GS", "NYK": "NY", "NOP": "NO", "SAS": "SA", "UTA": "UTAH", "WAS": "WSH", "PHX": "PHO",
+    // ESPN -> Internal (for normalization)
+    "GS": "GSW", "NY": "NYK", "NO": "NOP", "SA": "SAS", "UTAH": "UTA", "WSH": "WAS", "PHO": "PHX" 
+  },
+  nfl: { "JAX": "JAC", "JAC": "JAX", "WSH": "WAS", "WAS": "WSH" },
+  nhl: { "LA": "LAK", "LAK": "LA", "UTAH": "UTA", "UTA": "UTAH", "WSH": "WAS", "WAS": "WSH", "VGK": "VEG", "VEG": "VGK", "NAS": "NSH", "NSH": "NAS" },
+  mlb: { "CHW": "CWS", "CWS": "CHW", "WSH": "WAS", "WAS": "WSH" },
 };
 
 // Canonical names for franchises
@@ -96,10 +101,37 @@ function computeDecade(year: number): string {
   return `${decadeStart}s`;
 }
 
-// Get ESPN team ID from teams list
+// Get ESPN team ID from teams list - try multiple abbreviation variants
 async function getEspnTeamId(sport: string, teamAbbrev: string): Promise<string | null> {
   const baseUrl = ESPN_SCHEDULE_URLS[sport];
   if (!baseUrl) return null;
+
+  // Build list of abbreviation variants to try
+  const abbrevMap = ESPN_ABBREV_MAP[sport] || {};
+  const abbrevsToTry = new Set([teamAbbrev]);
+  if (abbrevMap[teamAbbrev]) abbrevsToTry.add(abbrevMap[teamAbbrev]);
+  
+  // Common variant mappings
+  const commonVariants: Record<string, string[]> = {
+    "SAS": ["SA", "SAN"],
+    "SA": ["SAS"],
+    "GSW": ["GS", "GST"],
+    "GS": ["GSW"],
+    "NYK": ["NY"],
+    "NY": ["NYK"],
+    "NOP": ["NO", "NOH"],
+    "NO": ["NOP"],
+    "PHX": ["PHO", "PHOENIX"],
+    "PHO": ["PHX"],
+    "WAS": ["WSH"],
+    "WSH": ["WAS"],
+    "UTA": ["UTAH"],
+    "UTAH": ["UTA"],
+  };
+  
+  if (commonVariants[teamAbbrev]) {
+    for (const v of commonVariants[teamAbbrev]) abbrevsToTry.add(v);
+  }
 
   try {
     const response = await fetch(baseUrl, { headers: { Accept: "application/json" } });
@@ -107,11 +139,23 @@ async function getEspnTeamId(sport: string, teamAbbrev: string): Promise<string 
 
     const data = await response.json();
     for (const team of data.sports?.[0]?.leagues?.[0]?.teams || []) {
-      const abbrev = normalizeAbbrev(sport, team.team?.abbreviation);
-      if (abbrev === teamAbbrev) {
+      const espnAbbrev = team.team?.abbreviation?.toUpperCase();
+      
+      // Check if ESPN abbreviation matches any of our variants
+      for (const tryAbbrev of abbrevsToTry) {
+        if (espnAbbrev === tryAbbrev.toUpperCase()) {
+          return team.team?.id;
+        }
+      }
+      
+      // Also normalize ESPN abbrev and compare
+      const normalizedEspn = normalizeAbbrev(sport, espnAbbrev);
+      if (normalizedEspn === teamAbbrev) {
         return team.team?.id;
       }
     }
+    
+    console.log(`[HYDRATE] Could not find ESPN ID for ${teamAbbrev}, tried: ${[...abbrevsToTry].join(", ")}`);
   } catch (e) {
     console.log(`[HYDRATE] Error fetching ESPN teams: ${e}`);
   }
