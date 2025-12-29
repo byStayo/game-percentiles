@@ -213,16 +213,30 @@ async function selectBestSegment(
   return null
 }
 
+// Recency weights for hybrid form - more recent games matter more
+const HYBRID_RECENCY_WEIGHTS: Record<number, number> = {
+  0: 1.0,   // Most recent games
+  1: 0.95,
+  2: 0.90,
+  3: 0.85,
+  4: 0.80,
+  5: 0.75,
+  6: 0.70,
+  7: 0.65,
+  8: 0.60,
+  9: 0.55,
+}
+
 async function computeHybridForm(
   supabase: any,
   sportId: string,
   homeTeamId: string,
   awayTeamId: string
 ): Promise<SegmentResult | null> {
-  // Get last N games for each team (regardless of opponent)
+  // Get last N games for each team (regardless of opponent) with order
   const { data: homeGames } = await supabase
     .from('games')
-    .select('final_total')
+    .select('final_total, start_time_utc')
     .eq('sport_id', sportId)
     .eq('status', 'final')
     .not('final_total', 'is', null)
@@ -232,7 +246,7 @@ async function computeHybridForm(
 
   const { data: awayGames } = await supabase
     .from('games')
-    .select('final_total')
+    .select('final_total, start_time_utc')
     .eq('sport_id', sportId)
     .eq('status', 'final')
     .not('final_total', 'is', null)
@@ -247,25 +261,63 @@ async function computeHybridForm(
     return null
   }
 
-  // Combine totals from both teams' recent games
-  const allTotals = [
-    ...(homeGames?.map((g: any) => Number(g.final_total)) || []),
-    ...(awayGames?.map((g: any) => Number(g.final_total)) || []),
-  ].sort((a, b) => a - b)
+  // Apply recency weights to each team's games (index 0 = most recent)
+  const homeWeighted = homeGames.map((g: any, i: number) => ({
+    total: Number(g.final_total),
+    weight: HYBRID_RECENCY_WEIGHTS[Math.min(i, 9)],
+  }))
+  
+  const awayWeighted = awayGames.map((g: any, i: number) => ({
+    total: Number(g.final_total),
+    weight: HYBRID_RECENCY_WEIGHTS[Math.min(i, 9)],
+  }))
 
-  const n = allTotals.length
+  // Combine all weighted games
+  const allWeightedGames = [...homeWeighted, ...awayWeighted]
+  
+  // Calculate weighted percentiles
+  const sorted = [...allWeightedGames].sort((a, b) => a.total - b.total)
+  const totalWeight = sorted.reduce((sum, g) => sum + g.weight, 0)
+  
+  let cumWeight = 0
+  let p05 = sorted[0].total
+  let p95 = sorted[sorted.length - 1].total
+  let median = sorted[Math.floor(sorted.length / 2)].total
+  let p05Found = false
+  let medianFound = false
+  
+  for (let i = 0; i < sorted.length; i++) {
+    cumWeight += sorted[i].weight
+    const percentile = cumWeight / totalWeight
+    
+    if (!p05Found && percentile >= 0.05) {
+      p05 = sorted[i].total
+      p05Found = true
+    }
+    if (!medianFound && percentile >= 0.5) {
+      median = sorted[i].total
+      medianFound = true
+    }
+    if (percentile >= 0.95) {
+      p95 = sorted[i].total
+      break
+    }
+  }
 
-  const p05Index = Math.max(0, Math.ceil(0.05 * n) - 1)
-  const p95Index = Math.min(n - 1, Math.ceil(0.95 * n) - 1)
-  const medianIndex = Math.floor(n / 2)
+  const totals = sorted.map(g => g.total)
+  
+  // Log weight distribution for debugging
+  const avgHomeWeight = homeWeighted.reduce((s: number, g: { weight: number }) => s + g.weight, 0) / homeWeighted.length
+  const avgAwayWeight = awayWeighted.reduce((s: number, g: { weight: number }) => s + g.weight, 0) / awayWeighted.length
+  console.log(`[COMPUTE] Hybrid form: ${homeCount}+${awayCount} games, avg weights: home=${avgHomeWeight.toFixed(2)}, away=${avgAwayWeight.toFixed(2)}`)
 
   return {
     segment_used: 'hybrid_form',
-    n_used: n,
-    p05: allTotals[p05Index],
-    p95: allTotals[p95Index],
-    median: n % 2 === 0 ? (allTotals[medianIndex - 1] + allTotals[medianIndex]) / 2 : allTotals[medianIndex],
-    totals: allTotals,
+    n_used: homeCount + awayCount,
+    p05,
+    p95,
+    median,
+    totals,
   }
 }
 
