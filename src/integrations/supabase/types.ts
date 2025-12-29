@@ -686,6 +686,138 @@ export type Database = {
           },
         ]
       }
+      player_injuries: {
+        Row: {
+          created_at: string
+          game_date: string | null
+          id: string
+          injury_details: string | null
+          injury_status: string
+          injury_type: string | null
+          player_external_id: string
+          player_name: string
+          position: string | null
+          report_date: string | null
+          season_year: number | null
+          sport_id: string
+          team_id: string | null
+          updated_at: string
+          week_round: number | null
+        }
+        Insert: {
+          created_at?: string
+          game_date?: string | null
+          id?: string
+          injury_details?: string | null
+          injury_status: string
+          injury_type?: string | null
+          player_external_id: string
+          player_name: string
+          position?: string | null
+          report_date?: string | null
+          season_year?: number | null
+          sport_id: string
+          team_id?: string | null
+          updated_at?: string
+          week_round?: number | null
+        }
+        Update: {
+          created_at?: string
+          game_date?: string | null
+          id?: string
+          injury_details?: string | null
+          injury_status?: string
+          injury_type?: string | null
+          player_external_id?: string
+          player_name?: string
+          position?: string | null
+          report_date?: string | null
+          season_year?: number | null
+          sport_id?: string
+          team_id?: string | null
+          updated_at?: string
+          week_round?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_injuries_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_injuries_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_props: {
+        Row: {
+          bookmaker: string | null
+          created_at: string
+          fetched_at: string
+          game_id: string | null
+          id: string
+          line: number
+          market_type: string
+          over_odds: number | null
+          player_external_id: string
+          player_name: string
+          sport_id: string
+          team_abbrev: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker?: string | null
+          created_at?: string
+          fetched_at?: string
+          game_id?: string | null
+          id?: string
+          line: number
+          market_type: string
+          over_odds?: number | null
+          player_external_id: string
+          player_name: string
+          sport_id: string
+          team_abbrev?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker?: string | null
+          created_at?: string
+          fetched_at?: string
+          game_id?: string | null
+          id?: string
+          line?: number
+          market_type?: string
+          over_odds?: number | null
+          player_external_id?: string
+          player_name?: string
+          sport_id?: string
+          team_abbrev?: string | null
+          under_odds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_props_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_props_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       provider_raw: {
         Row: {
           endpoint: string
@@ -898,6 +1030,111 @@ export type Database = {
           },
           {
             foreignKeyName: "team_seasons_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_standings: {
+        Row: {
+          away_losses: number | null
+          away_wins: number | null
+          conf_losses: number | null
+          conf_wins: number | null
+          conference: string | null
+          created_at: string
+          div_losses: number | null
+          div_wins: number | null
+          division: string | null
+          games_back: number | null
+          home_losses: number | null
+          home_wins: number | null
+          id: string
+          last_10: string | null
+          losses: number
+          point_diff: number | null
+          points_against: number | null
+          points_for: number | null
+          season_year: number
+          sport_id: string
+          streak: string | null
+          team_abbrev: string
+          team_id: string | null
+          ties: number | null
+          updated_at: string
+          win_pct: number | null
+          wins: number
+        }
+        Insert: {
+          away_losses?: number | null
+          away_wins?: number | null
+          conf_losses?: number | null
+          conf_wins?: number | null
+          conference?: string | null
+          created_at?: string
+          div_losses?: number | null
+          div_wins?: number | null
+          division?: string | null
+          games_back?: number | null
+          home_losses?: number | null
+          home_wins?: number | null
+          id?: string
+          last_10?: string | null
+          losses?: number
+          point_diff?: number | null
+          points_against?: number | null
+          points_for?: number | null
+          season_year: number
+          sport_id: string
+          streak?: string | null
+          team_abbrev: string
+          team_id?: string | null
+          ties?: number | null
+          updated_at?: string
+          win_pct?: number | null
+          wins?: number
+        }
+        Update: {
+          away_losses?: number | null
+          away_wins?: number | null
+          conf_losses?: number | null
+          conf_wins?: number | null
+          conference?: string | null
+          created_at?: string
+          div_losses?: number | null
+          div_wins?: number | null
+          division?: string | null
+          games_back?: number | null
+          home_losses?: number | null
+          home_wins?: number | null
+          id?: string
+          last_10?: string | null
+          losses?: number
+          point_diff?: number | null
+          points_against?: number | null
+          points_for?: number | null
+          season_year?: number
+          sport_id?: string
+          streak?: string | null
+          team_abbrev?: string
+          team_id?: string | null
+          ties?: number | null
+          updated_at?: string
+          win_pct?: number | null
+          wins?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_standings_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_standings_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
