@@ -233,197 +233,172 @@ export default function Index() {
 
       <Layout>
         <div 
-          className="space-y-6 animate-fade-in"
+          className="space-y-4 animate-fade-in"
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
-          {/* Hero section - minimal on mobile */}
-          <div className="flex items-center justify-between pt-1 sm:pt-4">
-            <div>
-              <h1 className="text-lg sm:text-2xl font-bold">Today's Picks</h1>
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  {picksCount} of {totalGames} games
-                </p>
-                <EdgeExplainer compact />
-                {/* Data Quality Summary */}
-                {totalGames > 0 && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className={cn(
-                          "hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium",
-                          dataQualityCounts.h2h / totalGames >= 0.7
-                            ? "bg-status-live/10 text-status-live"
-                            : dataQualityCounts.h2h / totalGames >= 0.4
-                              ? "bg-yellow-500/10 text-yellow-600"
-                              : "bg-muted/50 text-muted-foreground"
-                        )}>
-                          <Database className="h-3 w-3" />
-                          <span>{dataQualityCounts.h2h} H2H</span>
-                          {dataQualityCounts.form > 0 && (
-                            <span className="text-yellow-600">· {dataQualityCounts.form} Form</span>
-                          )}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <div className="text-sm">
-                          <strong>{dataQualityCounts.h2h}</strong> games use direct head-to-head history.
-                          <br />
-                          <strong>{dataQualityCounts.form}</strong> use recent form (any opponent).
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-              </div>
+          {/* Compact header with date picker */}
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <div className="flex items-center gap-3 min-w-0">
+              <h1 className="text-lg font-bold whitespace-nowrap">Picks</h1>
+              <DatePickerInline
+                date={selectedDate}
+                onDateChange={setSelectedDate}
+              />
             </div>
-            {edgesCount > 0 && (
-              <Link
-                to="/best-bets"
-                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-status-edge/10 text-status-edge border border-status-edge/30 hover:bg-status-edge/20 transition-colors touch-manipulation active:scale-95"
-              >
-                <Zap className="h-3.5 w-3.5" />
-                {edgesCount}
-              </Link>
-            )}
+            <div className="flex items-center gap-2">
+              {totalGames > 0 && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {picksCount}/{totalGames}
+                </span>
+              )}
+              <EdgeExplainer compact />
+              {edgesCount > 0 && (
+                <Link
+                  to="/best-bets"
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-md bg-status-edge/10 text-status-edge border border-status-edge/30 hover:bg-status-edge/20 transition-colors touch-manipulation active:scale-95"
+                >
+                  <Zap className="h-3 w-3" />
+                  {edgesCount}
+                </Link>
+              )}
+            </div>
           </div>
 
-          {/* Date picker */}
-          <div className="flex justify-center">
-            <DatePickerInline
-              date={selectedDate}
-              onDateChange={setSelectedDate}
-            />
-          </div>
-
-          {/* Coverage Dashboard */}
+          {/* Coverage Dashboard - more compact */}
           <CoverageDashboard 
             debug={debugQuery.data?.debug} 
             isFetching={debugQuery.isFetching} 
           />
 
-          {/* Controls */}
-          <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-card border border-border/50">
-              {/* View mode */}
-              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted/50">
-                <button
-                  onClick={() => setViewMode("all")}
-                  className={cn(
-                    "px-2.5 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
-                    viewMode === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-                  )}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setViewMode("sport")}
-                  className={cn(
-                    "px-2.5 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
-                    viewMode === "sport" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-                  )}
-                >
-                  By Sport
-                </button>
-              </div>
+          {/* Unified filter bar */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Filter mode - primary action */}
+            <div className="flex items-center p-0.5 rounded-lg bg-muted/50">
+              <button
+                onClick={() => setFilterMode("best-bets")}
+                className={cn(
+                  "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                  filterMode === "best-bets" 
+                    ? "bg-status-edge/20 text-status-edge shadow-sm" 
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Zap className="h-3 w-3" />
+                Best
+              </button>
+              <button
+                onClick={() => setFilterMode("picks")}
+                className={cn(
+                  "px-2.5 py-1.5 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                  filterMode === "picks" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                )}
+              >
+                Picks
+              </button>
+              <button
+                onClick={() => setFilterMode("all")}
+                className={cn(
+                  "px-2.5 py-1.5 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                  filterMode === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                )}
+              >
+                All
+              </button>
+            </div>
 
-              {/* Sort */}
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Secondary controls */}
+            <div className="flex items-center gap-1.5">
+              {/* Sort dropdown */}
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-                <SelectTrigger className="w-24 h-7 text-xs bg-background border-border/50">
+                <SelectTrigger className="h-7 w-auto gap-1 px-2 text-xs bg-muted/50 border-0 hover:bg-muted">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-popover border border-border shadow-lg">
                   <SelectItem value="edges-first">Best First</SelectItem>
                   <SelectItem value="edge">By Edge</SelectItem>
                   <SelectItem value="time">By Time</SelectItem>
                 </SelectContent>
               </Select>
 
-              {/* Filter mode selector */}
-              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted/50 ml-auto">
-                <button
-                  onClick={() => setFilterMode("best-bets")}
-                  className={cn(
-                    "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
-                    filterMode === "best-bets" 
-                      ? "bg-status-edge/20 text-status-edge shadow-sm" 
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Zap className="h-3 w-3" />
-                  Best
-                </button>
-                <button
-                  onClick={() => setFilterMode("picks")}
-                  className={cn(
-                    "px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
-                    filterMode === "picks" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-                  )}
-                >
-                  Picks
-                </button>
-                <button
-                  onClick={() => setFilterMode("all")}
-                  className={cn(
-                    "px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
-                    filterMode === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-                  )}
-                >
-                  All
-                </button>
-              </div>
-              
-              {/* H2H Only toggle */}
+              {/* View toggle */}
+              <button
+                onClick={() => setViewMode(viewMode === "all" ? "sport" : "all")}
+                className={cn(
+                  "h-7 px-2 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                  viewMode === "sport" 
+                    ? "bg-primary/10 text-primary" 
+                    : "bg-muted/50 text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {viewMode === "all" ? "All" : selectedSport.toUpperCase()}
+              </button>
+
+              {/* H2H filter */}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
                       onClick={() => setConfidenceFilter(confidenceFilter === "all" ? "h2h-only" : "all")}
                       className={cn(
-                        "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                        "flex items-center gap-1 h-7 px-2 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
                         confidenceFilter === "h2h-only"
-                          ? "bg-status-live/20 text-status-live shadow-sm border border-status-live/30"
-                          : "text-muted-foreground hover:text-foreground bg-muted/50"
+                          ? "bg-status-live/20 text-status-live"
+                          : "bg-muted/50 text-muted-foreground hover:text-foreground"
                       )}
                     >
                       <Database className="h-3 w-3" />
-                      H2H
                       {confidenceFilter === "all" && dataQualityCounts.form > 0 && (
-                        <span className="flex items-center gap-0.5 text-yellow-600">
-                          <AlertTriangle className="h-2.5 w-2.5" />
-                          {dataQualityCounts.form}
-                        </span>
+                        <AlertTriangle className="h-2.5 w-2.5 text-yellow-500" />
                       )}
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <div className="text-sm">
-                      {confidenceFilter === "h2h-only" ? (
-                        <span>Showing only H2H data. Click to show all.</span>
-                      ) : (
-                        <span>
-                          <span className="font-medium">{dataQualityCounts.h2h}</span> H2H games, {" "}
-                          <span className="font-medium text-yellow-600">{dataQualityCounts.form}</span> form-based.
-                          Click to hide form-based.
-                        </span>
-                      )}
-                    </div>
+                  <TooltipContent side="bottom" className="bg-popover border border-border">
+                    {confidenceFilter === "h2h-only" 
+                      ? "Showing H2H only" 
+                      : `${dataQualityCounts.h2h} H2H, ${dataQualityCounts.form} form-based`}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
 
-            <label className="flex items-center gap-1.5 cursor-pointer touch-manipulation">
-              <Switch
-                id="hide-weak"
-                checked={hideWeakData}
-                onCheckedChange={setHideWeakData}
-                className="scale-75"
-              />
-              <span className="text-xs">5+</span>
-            </label>
+              {/* Min games toggle */}
+              <label className="flex items-center gap-1 h-7 px-2 rounded-md bg-muted/50 cursor-pointer touch-manipulation">
+                <Switch
+                  id="hide-weak"
+                  checked={hideWeakData}
+                  onCheckedChange={setHideWeakData}
+                  className="scale-[0.6]"
+                />
+                <span className="text-xs text-muted-foreground">5+</span>
+              </label>
+            </div>
           </div>
 
-          {/* "Why 0 games" debug strip */}
+          {/* Sport selector (only in sport view) */}
+          {viewMode === "sport" && (
+            <div className="flex gap-1.5">
+              {sports.map((sport) => (
+                <button
+                  key={sport.id}
+                  onClick={() => setSelectedSport(sport.id)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all touch-manipulation active:scale-95",
+                    selectedSport === sport.id
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  <span className="uppercase">{sport.id}</span>
+                  <span className="tabular-nums opacity-70">{sportCounts[sport.id]}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Debug strip */}
           {!isLoading && !hasError && (
             <ZeroGamesDebugStrip
               date={format(selectedDate, "yyyy-MM-dd")}
@@ -436,43 +411,6 @@ export default function Index() {
               debug={debugQuery.data?.debug}
               isFetching={debugQuery.isFetching}
             />
-          )}
-
-          {/* Sport tabs with icons (only shown in sport view) */}
-          {viewMode === "sport" && (
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-3 px-3">
-              {sports.map((sport) => (
-                <SportBadge
-                  key={sport.id}
-                  sport={sport.id}
-                  count={sportCounts[sport.id]}
-                  isActive={selectedSport === sport.id}
-                  onClick={() => setSelectedSport(sport.id)}
-                />
-              ))}
-            </div>
-          )}
-          {/* Sport group dividers in All view */}
-          {viewMode === "all" && !isLoading && filteredAndSortedGames.length > 0 && (
-            <div className="flex gap-1.5 flex-wrap">
-              {sports.map((sport) => {
-                const count = sportCounts[sport.id];
-                if (count === 0) return null;
-                return (
-                  <button
-                    key={sport.id}
-                    onClick={() => {
-                      setViewMode("sport");
-                      setSelectedSport(sport.id);
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md text-2xs font-medium bg-muted/50 text-muted-foreground hover:bg-muted transition-colors"
-                  >
-                    <span className="uppercase">{sport.id}</span>
-                    <span className="tabular-nums">{count}</span>
-                  </button>
-                );
-              })}
-            </div>
           )}
 
           {/* Games list */}
