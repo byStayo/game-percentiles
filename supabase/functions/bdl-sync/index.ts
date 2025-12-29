@@ -9,9 +9,11 @@ const corsHeaders = {
 const BDL_ENDPOINTS = {
   nba: "https://api.balldontlie.io/v1",
   nfl: "https://api.balldontlie.io/nfl/v1",
+  nhl: "https://api.balldontlie.io/nhl/v1",
+  mlb: "https://api.balldontlie.io/mlb/v1",
 };
 
-// Franchise mappings for consistent team identity
+// Franchise mappings for consistent team identity across all sports
 const FRANCHISE_MAPPINGS: Record<string, Record<string, string>> = {
   nba: {
     "ATL": "Atlanta Hawks", "BOS": "Boston Celtics", "BKN": "Brooklyn Nets", "BRK": "Brooklyn Nets",
@@ -43,6 +45,35 @@ const FRANCHISE_MAPPINGS: Record<string, Record<string, string>> = {
     "PHI": "Philadelphia Eagles", "PIT": "Pittsburgh Steelers", "SF": "San Francisco 49ers",
     "SEA": "Seattle Seahawks", "TB": "Tampa Bay Buccaneers", "TEN": "Tennessee Titans",
     "WAS": "Washington Commanders", "WSH": "Washington Commanders",
+  },
+  nhl: {
+    "ANA": "Anaheim Ducks", "ARI": "Arizona Coyotes", "BOS": "Boston Bruins",
+    "BUF": "Buffalo Sabres", "CGY": "Calgary Flames", "CAR": "Carolina Hurricanes",
+    "CHI": "Chicago Blackhawks", "COL": "Colorado Avalanche", "CBJ": "Columbus Blue Jackets",
+    "DAL": "Dallas Stars", "DET": "Detroit Red Wings", "EDM": "Edmonton Oilers",
+    "FLA": "Florida Panthers", "LA": "Los Angeles Kings", "LAK": "Los Angeles Kings",
+    "MIN": "Minnesota Wild", "MTL": "Montreal Canadiens", "NSH": "Nashville Predators",
+    "NJ": "New Jersey Devils", "NJD": "New Jersey Devils", "NYI": "New York Islanders",
+    "NYR": "New York Rangers", "OTT": "Ottawa Senators", "PHI": "Philadelphia Flyers",
+    "PIT": "Pittsburgh Penguins", "SJ": "San Jose Sharks", "SJS": "San Jose Sharks",
+    "SEA": "Seattle Kraken", "STL": "St. Louis Blues", "TB": "Tampa Bay Lightning",
+    "TBL": "Tampa Bay Lightning", "TOR": "Toronto Maple Leafs", "UTA": "Utah Hockey Club",
+    "VAN": "Vancouver Canucks", "VGK": "Vegas Golden Knights", "WSH": "Washington Capitals",
+    "WAS": "Washington Capitals", "WPG": "Winnipeg Jets",
+  },
+  mlb: {
+    "ARI": "Arizona Diamondbacks", "ATL": "Atlanta Braves", "BAL": "Baltimore Orioles",
+    "BOS": "Boston Red Sox", "CHC": "Chicago Cubs", "CWS": "Chicago White Sox",
+    "CHW": "Chicago White Sox", "CIN": "Cincinnati Reds", "CLE": "Cleveland Guardians",
+    "COL": "Colorado Rockies", "DET": "Detroit Tigers", "HOU": "Houston Astros",
+    "KC": "Kansas City Royals", "LAA": "Los Angeles Angels", "LAD": "Los Angeles Dodgers",
+    "MIA": "Miami Marlins", "MIL": "Milwaukee Brewers", "MIN": "Minnesota Twins",
+    "NYM": "New York Mets", "NYY": "New York Yankees", "OAK": "Oakland Athletics",
+    "PHI": "Philadelphia Phillies", "PIT": "Pittsburgh Pirates", "SD": "San Diego Padres",
+    "SDP": "San Diego Padres", "SF": "San Francisco Giants", "SFG": "San Francisco Giants",
+    "SEA": "Seattle Mariners", "STL": "St. Louis Cardinals", "TB": "Tampa Bay Rays",
+    "TBR": "Tampa Bay Rays", "TEX": "Texas Rangers", "TOR": "Toronto Blue Jays",
+    "WAS": "Washington Nationals", "WSH": "Washington Nationals",
   },
 };
 
