@@ -24,8 +24,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Zap, ChevronLeft, ChevronRight as ChevronRightIcon } from "lucide-react";
+import { Zap, ChevronLeft, ChevronRight as ChevronRightIcon, Database, AlertTriangle } from "lucide-react";
 import type { SportId } from "@/types";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const ET_TIMEZONE = "America/New_York";
 
@@ -45,6 +51,7 @@ const sports: { id: SportId; name: string }[] = [
 type ViewMode = "all" | "sport";
 type SortOption = "edge" | "edges-first" | "time";
 type FilterMode = "picks" | "best-bets" | "all";
+type ConfidenceFilter = "all" | "h2h-only";
 
 export default function Index() {
   const [selectedDate, setSelectedDate] = useState(getTodayInET);
@@ -52,6 +59,7 @@ export default function Index() {
   const [viewMode, setViewMode] = useState<ViewMode>("all");
   const [sortBy, setSortBy] = useState<SortOption>("edges-first");
   const [filterMode, setFilterMode] = useState<FilterMode>("picks");
+  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("all");
   
   const [hideWeakData, setHideWeakData] = useState(true);
 
@@ -118,6 +126,18 @@ export default function Index() {
       games = games.filter((g) => (g.n_used ?? g.n_h2h) >= 5);
     }
 
+    // Confidence filter: only show H2H-based predictions (hide form-based)
+    if (confidenceFilter === "h2h-only") {
+      games = games.filter((g) => {
+        const segment = g.segment_used;
+        // Form-based segments to filter out
+        if (segment === 'hybrid_form' || segment === 'recency_weighted' || segment === 'insufficient') {
+          return false;
+        }
+        return true;
+      });
+    }
+
     // Filter based on mode
     if (filterMode === "best-bets") {
       // Best Bets: Only qualified picks with edge available on DK alternate lines
@@ -175,7 +195,7 @@ export default function Index() {
     }
 
     return games;
-  }, [displayGames, sortBy, filterMode, hideWeakData]);
+  }, [displayGames, sortBy, filterMode, hideWeakData, confidenceFilter]);
 
   // Sport counts
   const sportCounts = useMemo(
@@ -194,6 +214,21 @@ export default function Index() {
   // Count games with detected edges
   const edgesCount = useMemo(() => {
     return allGames.filter((g) => g.best_over_edge || g.best_under_edge).length;
+  }, [allGames]);
+
+  // Count H2H vs form-based games
+  const dataQualityCounts = useMemo(() => {
+    let h2hCount = 0;
+    let formCount = 0;
+    allGames.forEach((g) => {
+      const segment = g.segment_used;
+      if (segment === 'hybrid_form' || segment === 'recency_weighted' || segment === 'insufficient') {
+        formCount++;
+      } else {
+        h2hCount++;
+      }
+    });
+    return { h2h: h2hCount, form: formCount };
   }, [allGames]);
 
   return (
@@ -216,11 +251,41 @@ export default function Index() {
           <div className="flex items-center justify-between pt-1 sm:pt-4">
             <div>
               <h1 className="text-lg sm:text-2xl font-bold">Today's Picks</h1>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-xs sm:text-sm text-muted-foreground">
                   {picksCount} of {totalGames} games
                 </p>
                 <EdgeExplainer compact />
+                {/* Data Quality Summary */}
+                {totalGames > 0 && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className={cn(
+                          "hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium",
+                          dataQualityCounts.h2h / totalGames >= 0.7
+                            ? "bg-status-live/10 text-status-live"
+                            : dataQualityCounts.h2h / totalGames >= 0.4
+                              ? "bg-yellow-500/10 text-yellow-600"
+                              : "bg-muted/50 text-muted-foreground"
+                        )}>
+                          <Database className="h-3 w-3" />
+                          <span>{dataQualityCounts.h2h} H2H</span>
+                          {dataQualityCounts.form > 0 && (
+                            <span className="text-yellow-600">· {dataQualityCounts.form} Form</span>
+                          )}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="text-sm">
+                          <strong>{dataQualityCounts.h2h}</strong> games use direct head-to-head history.
+                          <br />
+                          <strong>{dataQualityCounts.form}</strong> use recent form (any opponent).
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
               </div>
             </div>
             {edgesCount > 0 && (
@@ -326,6 +391,46 @@ export default function Index() {
                   All
                 </button>
               </div>
+              
+              {/* H2H Only toggle */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setConfidenceFilter(confidenceFilter === "all" ? "h2h-only" : "all")}
+                      className={cn(
+                        "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-all touch-manipulation active:scale-95",
+                        confidenceFilter === "h2h-only"
+                          ? "bg-status-live/20 text-status-live shadow-sm border border-status-live/30"
+                          : "text-muted-foreground hover:text-foreground bg-muted/50"
+                      )}
+                    >
+                      <Database className="h-3 w-3" />
+                      H2H
+                      {confidenceFilter === "all" && dataQualityCounts.form > 0 && (
+                        <span className="flex items-center gap-0.5 text-yellow-600">
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          {dataQualityCounts.form}
+                        </span>
+                      )}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <div className="text-sm">
+                      {confidenceFilter === "h2h-only" ? (
+                        <span>Showing only H2H data. Click to show all.</span>
+                      ) : (
+                        <span>
+                          <span className="font-medium">{dataQualityCounts.h2h}</span> H2H games, {" "}
+                          <span className="font-medium text-yellow-600">{dataQualityCounts.form}</span> form-based.
+                          Click to hide form-based.
+                        </span>
+                      )}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
               <label className="flex items-center gap-1.5 cursor-pointer touch-manipulation">
                 <Switch
                   id="hide-weak"

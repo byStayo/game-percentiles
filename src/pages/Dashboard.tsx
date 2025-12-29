@@ -16,10 +16,26 @@ import {
   Flame,
   Zap,
   Clock,
-  ArrowUpRight
+  ArrowUpRight,
+  Database,
+  AlertTriangle
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format, subDays } from "date-fns";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+
+interface DataQualityBreakdown {
+  h2hStrong: number;     // 10+ H2H games
+  h2hModerate: number;   // 5-9 H2H games
+  formBased: number;     // hybrid_form or recency_weighted with <5 H2H
+  total: number;
+}
 
 interface DashboardMetrics {
   totalGamesToday: number;
@@ -43,6 +59,7 @@ interface DashboardMetrics {
     underStreak: number;
   };
   weeklyData: number[];
+  dataQuality: DataQualityBreakdown;
 }
 
 export default function Dashboard() {
@@ -160,6 +177,29 @@ export default function Dashboard() {
         ? edgesWithPercentile.reduce((sum: number, e: any) => sum + (e.dk_line_percentile || 0), 0) / edgesWithPercentile.length
         : 50;
 
+      // Calculate data quality breakdown
+      const dataQuality: DataQualityBreakdown = {
+        h2hStrong: 0,
+        h2hModerate: 0,
+        formBased: 0,
+        total: todayEdges?.length || 0,
+      };
+
+      todayEdges?.forEach((edge: any) => {
+        const segment = edge.segment_used;
+        const nUsed = edge.n_used ?? edge.n_h2h;
+        
+        if (segment === 'hybrid_form' || segment === 'recency_weighted' || segment === 'insufficient') {
+          dataQuality.formBased++;
+        } else if (nUsed >= 10) {
+          dataQuality.h2hStrong++;
+        } else if (nUsed >= 5) {
+          dataQuality.h2hModerate++;
+        } else {
+          dataQuality.formBased++;
+        }
+      });
+
       return {
         totalGamesToday: todayEdges?.length || 0,
         gamesThisWeek: weekGames?.length || 0,
@@ -173,6 +213,7 @@ export default function Dashboard() {
           underStreak: underHits > overHits ? underHits : 0,
         },
         weeklyData,
+        dataQuality,
       };
     },
   });
@@ -190,9 +231,61 @@ export default function Dashboard() {
           <div className="flex items-end justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-              <p className="text-muted-foreground mt-1">
-                Key metrics and insights across all sports
-              </p>
+              <div className="flex items-center gap-3 mt-1">
+                <p className="text-muted-foreground">
+                  Key metrics and insights across all sports
+                </p>
+                {/* Data Quality Summary Badge */}
+                {metrics?.dataQuality && metrics.dataQuality.total > 0 && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className={cn(
+                          "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium",
+                          (metrics.dataQuality.h2hStrong + metrics.dataQuality.h2hModerate) / metrics.dataQuality.total >= 0.7
+                            ? "bg-status-live/10 border-status-live/30 text-status-live"
+                            : (metrics.dataQuality.h2hStrong + metrics.dataQuality.h2hModerate) / metrics.dataQuality.total >= 0.4
+                              ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-600"
+                              : "bg-muted/50 border-border text-muted-foreground"
+                        )}>
+                          <Database className="h-3 w-3" />
+                          <span className="font-bold">{metrics.dataQuality.h2hStrong + metrics.dataQuality.h2hModerate}</span>
+                          <span>H2H</span>
+                          {metrics.dataQuality.formBased > 0 && (
+                            <>
+                              <span className="text-muted-foreground">·</span>
+                              <AlertTriangle className="h-3 w-3 text-yellow-500" />
+                              <span className="text-yellow-600">{metrics.dataQuality.formBased} Form</span>
+                            </>
+                          )}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs">
+                        <div className="space-y-2">
+                          <div className="font-semibold">Today's Data Quality</div>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex items-center justify-between gap-4">
+                              <span>Strong H2H (10+ games)</span>
+                              <span className="font-medium text-status-live">{metrics.dataQuality.h2hStrong}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4">
+                              <span>Moderate H2H (5-9 games)</span>
+                              <span className="font-medium text-status-under">{metrics.dataQuality.h2hModerate}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4">
+                              <span>Form-based predictions</span>
+                              <span className="font-medium text-yellow-500">{metrics.dataQuality.formBased}</span>
+                            </div>
+                          </div>
+                          <div className="pt-1 border-t border-border/50 text-xs text-muted-foreground">
+                            H2H = historical matchup data between these specific teams
+                          </div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
             </div>
             {lastUpdated && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
