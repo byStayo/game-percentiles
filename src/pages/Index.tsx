@@ -12,6 +12,7 @@ import { ErrorState } from "@/components/game/ErrorState";
 import { EdgeExplainer } from "@/components/game/EdgeExplainer";
 import { StickyFilters } from "@/components/ui/sticky-filters";
 import { SportBadge } from "@/components/ui/sport-icon";
+import { ZeroGamesDebugStrip } from "@/components/game/ZeroGamesDebugStrip";
 
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useTodayGames, useTodayDebug, TodayGame } from "@/hooks/useApi";
@@ -97,11 +98,11 @@ export default function Index() {
 
   // Get games for selected sport
   const sportGames = useMemo(() => {
-    const queryMap: Record<SportId, typeof nflQuery> = {
+    const queryMap: Record<"nfl" | "nba", typeof nflQuery> = {
       nfl: nflQuery,
       nba: nbaQuery,
     };
-    return queryMap[selectedSport].data?.games || [];
+    return queryMap[selectedSport as "nfl" | "nba"]?.data?.games || [];
   }, [selectedSport, nflQuery, nbaQuery]);
 
   // Games to display based on view mode
@@ -498,8 +499,6 @@ export default function Index() {
               onRetry={() => {
                 nflQuery.refetch();
                 nbaQuery.refetch();
-                nhlQuery.refetch();
-                mlbQuery.refetch();
               }}
             />
           ) : filteredAndSortedGames.length > 0 ? (
