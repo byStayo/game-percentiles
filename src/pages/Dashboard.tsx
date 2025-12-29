@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import { PageTransition } from "@/components/ui/page-transition";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Sparkline } from "@/components/ui/sparkline";
 import { 
   TrendingUp, 
@@ -18,7 +19,9 @@ import {
   Clock,
   ArrowUpRight,
   Database,
-  AlertTriangle
+  AlertTriangle,
+  ChevronDown,
+  Bug
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format, subDays } from "date-fns";
@@ -35,6 +38,17 @@ interface DataQualityBreakdown {
   h2hModerate: number;   // 5-9 H2H games
   formBased: number;     // hybrid_form or recency_weighted with <5 H2H
   total: number;
+}
+
+interface DebugEdgeInfo {
+  gameId: string;
+  teams: string;
+  sport: string;
+  segmentUsed: string | null;
+  nUsed: number | null;
+  nH2h: number;
+  dkLine: number | null;
+  percentile: number | null;
 }
 
 interface DashboardMetrics {
@@ -60,6 +74,7 @@ interface DashboardMetrics {
   };
   weeklyData: number[];
   dataQuality: DataQualityBreakdown;
+  debugEdges: DebugEdgeInfo[];
 }
 
 export default function Dashboard() {
@@ -177,13 +192,15 @@ export default function Dashboard() {
         ? edgesWithPercentile.reduce((sum: number, e: any) => sum + (e.dk_line_percentile || 0), 0) / edgesWithPercentile.length
         : 50;
 
-      // Calculate data quality breakdown
+      // Calculate data quality breakdown and debug info
       const dataQuality: DataQualityBreakdown = {
         h2hStrong: 0,
         h2hModerate: 0,
         formBased: 0,
         total: todayEdges?.length || 0,
       };
+
+      const debugEdges: DebugEdgeInfo[] = [];
 
       todayEdges?.forEach((edge: any) => {
         const segment = edge.segment_used;
@@ -201,6 +218,18 @@ export default function Dashboard() {
         } else {
           dataQuality.formBased++;
         }
+
+        // Collect debug info
+        debugEdges.push({
+          gameId: edge.game_id,
+          teams: `${edge.games?.away_team?.abbrev || '?'} @ ${edge.games?.home_team?.abbrev || '?'}`,
+          sport: edge.sport_id?.toUpperCase() || '?',
+          segmentUsed: segment,
+          nUsed: edge.n_used,
+          nH2h: edge.n_h2h,
+          dkLine: edge.dk_total_line,
+          percentile: edge.dk_line_percentile,
+        });
       });
 
       return {
@@ -217,6 +246,7 @@ export default function Dashboard() {
         },
         weeklyData,
         dataQuality,
+        debugEdges,
       };
     },
   });
@@ -446,6 +476,79 @@ export default function Dashboard() {
               href="/rivalries"
             />
           </div>
+
+          {/* Debug Panel */}
+          {metrics?.debugEdges && metrics.debugEdges.length > 0 && (
+            <Collapsible>
+              <Card className="border-dashed border-muted-foreground/30">
+                <CollapsibleTrigger className="w-full">
+                  <CardHeader className="flex flex-row items-center justify-between py-3 cursor-pointer hover:bg-muted/30 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <Bug className="h-4 w-4 text-muted-foreground" />
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Debug: Segment Details ({metrics.debugEdges.length} games)
+                      </CardTitle>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]_&]:rotate-180" />
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="pt-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-border/50">
+                            <th className="text-left py-2 px-2 font-medium text-muted-foreground">Game</th>
+                            <th className="text-left py-2 px-2 font-medium text-muted-foreground">Sport</th>
+                            <th className="text-left py-2 px-2 font-medium text-muted-foreground">Segment</th>
+                            <th className="text-right py-2 px-2 font-medium text-muted-foreground">n_used</th>
+                            <th className="text-right py-2 px-2 font-medium text-muted-foreground">n_h2h</th>
+                            <th className="text-right py-2 px-2 font-medium text-muted-foreground">DK Line</th>
+                            <th className="text-right py-2 px-2 font-medium text-muted-foreground">Pctl</th>
+                            <th className="text-left py-2 px-2 font-medium text-muted-foreground">Classification</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {metrics.debugEdges.map((edge) => {
+                            const nUsed = edge.nUsed ?? edge.nH2h;
+                            let classification = '';
+                            let classColor = '';
+                            
+                            if (edge.segmentUsed === 'hybrid_form' || edge.segmentUsed === 'insufficient') {
+                              classification = 'Form-based';
+                              classColor = 'text-yellow-500';
+                            } else if (nUsed >= 10) {
+                              classification = 'Strong H2H';
+                              classColor = 'text-status-live';
+                            } else if (nUsed >= 5) {
+                              classification = 'Moderate H2H';
+                              classColor = 'text-status-under';
+                            } else {
+                              classification = 'Form-based (low n)';
+                              classColor = 'text-yellow-500';
+                            }
+
+                            return (
+                              <tr key={edge.gameId} className="border-b border-border/30 hover:bg-muted/30">
+                                <td className="py-1.5 px-2 font-mono">{edge.teams}</td>
+                                <td className="py-1.5 px-2">{edge.sport}</td>
+                                <td className="py-1.5 px-2 font-mono text-muted-foreground">{edge.segmentUsed || '—'}</td>
+                                <td className="py-1.5 px-2 text-right font-mono">{edge.nUsed ?? '—'}</td>
+                                <td className="py-1.5 px-2 text-right font-mono">{edge.nH2h}</td>
+                                <td className="py-1.5 px-2 text-right font-mono">{edge.dkLine ?? '—'}</td>
+                                <td className="py-1.5 px-2 text-right font-mono">{edge.percentile != null ? `P${edge.percentile}` : '—'}</td>
+                                <td className={cn("py-1.5 px-2 font-medium", classColor)}>{classification}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+          )}
         </div>
       </PageTransition>
     </Layout>
