@@ -68,3 +68,9 @@ verify_jwt = false
 
 [functions.update-parlay-results]
 verify_jwt = false
+
+[functions.morning-refresh]
+verify_jwt = false
+
+[functions.balldontlie-backfill]
+verify_jwt = false
