@@ -284,6 +284,122 @@ function getCurrentNFLWeek(): number {
 // SYNC FUNCTIONS - Maximizing BallDontLie GOAT tier
 // =========================================================================
 
+// Backfill missing franchise IDs for games that have teams but no franchise mappings
+async function backfillFranchiseIds(
+  supabase: any,
+  sport: string,
+  dates: string[]
+): Promise<{ fixed: number; errors: number }> {
+  const counters = { fixed: 0, errors: 0 };
+  
+  // Find games for these dates with missing franchise IDs
+  const dateStart = dates[0];
+  const dateEnd = dates[dates.length - 1];
+  
+  const { data: gamesWithMissingFranchises } = await supabase
+    .from("games")
+    .select(`
+      id,
+      sport_id,
+      home_team_id,
+      away_team_id,
+      home_franchise_id,
+      away_franchise_id,
+      home_team:teams!games_home_team_id_fkey(id, abbrev, name),
+      away_team:teams!games_away_team_id_fkey(id, abbrev, name)
+    `)
+    .eq("sport_id", sport)
+    .gte("start_time_utc", `${dateStart}T00:00:00Z`)
+    .lte("start_time_utc", `${dateEnd}T23:59:59Z`)
+    .or("home_franchise_id.is.null,away_franchise_id.is.null");
+
+  if (!gamesWithMissingFranchises || gamesWithMissingFranchises.length === 0) {
+    return counters;
+  }
+
+  console.log(`[BDL-SYNC] Found ${gamesWithMissingFranchises.length} ${sport} games with missing franchise IDs`);
+
+  for (const game of gamesWithMissingFranchises) {
+    const updates: { home_franchise_id?: string; away_franchise_id?: string } = {};
+    
+    // Fix home franchise if missing
+    if (!game.home_franchise_id && game.home_team?.abbrev) {
+      const mapping = FRANCHISE_MAPPINGS[sport];
+      const canonicalName = mapping?.[game.home_team.abbrev];
+      
+      if (canonicalName) {
+        const { data: franchise } = await supabase
+          .from("franchises")
+          .select("id")
+          .eq("sport_id", sport)
+          .eq("canonical_name", canonicalName)
+          .maybeSingle();
+        
+        if (franchise) {
+          updates.home_franchise_id = franchise.id;
+        }
+      }
+    }
+    
+    // Fix away franchise if missing
+    if (!game.away_franchise_id && game.away_team?.abbrev) {
+      const mapping = FRANCHISE_MAPPINGS[sport];
+      const canonicalName = mapping?.[game.away_team.abbrev];
+      
+      if (canonicalName) {
+        const { data: franchise } = await supabase
+          .from("franchises")
+          .select("id")
+          .eq("sport_id", sport)
+          .eq("canonical_name", canonicalName)
+          .maybeSingle();
+        
+        if (franchise) {
+          updates.away_franchise_id = franchise.id;
+        }
+      }
+    }
+    
+    // Apply updates if any
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase
+        .from("games")
+        .update(updates)
+        .eq("id", game.id);
+      
+      if (error) {
+        counters.errors++;
+      } else {
+        counters.fixed++;
+        
+        // Also update matchup_games if it exists
+        if (updates.home_franchise_id || updates.away_franchise_id) {
+          const newHomeFranchise = updates.home_franchise_id || game.home_franchise_id;
+          const newAwayFranchise = updates.away_franchise_id || game.away_franchise_id;
+          
+          if (newHomeFranchise && newAwayFranchise) {
+            const [franchiseLowId, franchiseHighId] = [newHomeFranchise, newAwayFranchise].sort();
+            
+            await supabase
+              .from("matchup_games")
+              .update({
+                franchise_low_id: franchiseLowId,
+                franchise_high_id: franchiseHighId,
+              })
+              .eq("game_id", game.id);
+          }
+        }
+      }
+    }
+  }
+  
+  if (counters.fixed > 0) {
+    console.log(`[BDL-SYNC] Fixed ${counters.fixed} ${sport} games with missing franchise IDs`);
+  }
+  
+  return counters;
+}
+
 async function syncGames(
   supabase: any,
   apiKey: string,
@@ -662,6 +778,7 @@ Deno.serve(async (req) => {
     odds: { fetched: 0, matched: 0, errors: 0 },
     injuries: { fetched: 0, upserted: 0, errors: 0 },
     standings: { fetched: 0, upserted: 0, errors: 0 },
+    franchises: { fixed: 0, errors: 0 },
   };
 
   let jobRunId: number | null = null;
@@ -748,6 +865,11 @@ Deno.serve(async (req) => {
         counters.games.upserted += result.upserted;
         counters.games.errors += result.errors;
         bdlToDbMap = result.bdlToDbMap;
+        
+        // 1b. Backfill any missing franchise IDs (fixes edge cases)
+        const franchiseResult = await backfillFranchiseIds(supabase, sport, dates);
+        counters.franchises.fixed += franchiseResult.fixed;
+        counters.franchises.errors += franchiseResult.errors;
       }
 
       // 2. Sync odds (uses game mapping)
