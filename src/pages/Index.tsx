@@ -10,7 +10,6 @@ import { GameCardSkeleton } from "@/components/game/GameCardSkeleton";
 import { EmptyState } from "@/components/game/EmptyState";
 import { ErrorState } from "@/components/game/ErrorState";
 import { EdgeExplainer } from "@/components/game/EdgeExplainer";
-import { StickyFilters } from "@/components/ui/sticky-filters";
 import { SportBadge } from "@/components/ui/sport-icon";
 import { ZeroGamesDebugStrip } from "@/components/game/ZeroGamesDebugStrip";
 import { CoverageDashboard } from "@/components/game/CoverageDashboard";
@@ -26,7 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Zap, ChevronLeft, ChevronRight as ChevronRightIcon, Database, AlertTriangle } from "lucide-react";
+import { Zap, Database, AlertTriangle } from "lucide-react";
 import type { SportId } from "@/types";
 import {
   Tooltip,
@@ -290,26 +289,12 @@ export default function Index() {
             )}
           </div>
 
-          {/* Date picker with navigation hints */}
-          <div className="flex items-center justify-center gap-2 -mx-4 sm:mx-0">
-            <button 
-              onClick={goToPreviousDay}
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors touch-manipulation active:scale-95 md:hidden"
-              aria-label="Previous day"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
+          {/* Date picker */}
+          <div className="flex justify-center">
             <DatePickerInline
               date={selectedDate}
               onDateChange={setSelectedDate}
             />
-            <button 
-              onClick={goToNextDay}
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors touch-manipulation active:scale-95 md:hidden"
-              aria-label="Next day"
-            >
-              <ChevronRightIcon className="h-5 w-5" />
-            </button>
           </div>
 
           {/* Coverage Dashboard */}
@@ -318,9 +303,8 @@ export default function Index() {
             isFetching={debugQuery.isFetching} 
           />
 
-          {/* Controls with sticky behavior */}
-          <StickyFilters>
-            <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-card border border-border/50">
+          {/* Controls */}
+          <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-card border border-border/50">
               {/* View mode */}
               <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-muted/50">
                 <button
@@ -428,17 +412,16 @@ export default function Index() {
                 </Tooltip>
               </TooltipProvider>
 
-              <label className="flex items-center gap-1.5 cursor-pointer touch-manipulation">
-                <Switch
-                  id="hide-weak"
-                  checked={hideWeakData}
-                  onCheckedChange={setHideWeakData}
-                  className="scale-75"
-                />
-                <span className="text-xs">5+</span>
-              </label>
-            </div>
-          </StickyFilters>
+            <label className="flex items-center gap-1.5 cursor-pointer touch-manipulation">
+              <Switch
+                id="hide-weak"
+                checked={hideWeakData}
+                onCheckedChange={setHideWeakData}
+                className="scale-75"
+              />
+              <span className="text-xs">5+</span>
+            </label>
+          </div>
 
           {/* "Why 0 games" debug strip */}
           {!isLoading && !hasError && (
