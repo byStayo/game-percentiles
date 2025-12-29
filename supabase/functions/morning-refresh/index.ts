@@ -143,18 +143,29 @@ Deno.serve(async (req) => {
     }
 
     // ================================================================
-    // STEP 4: Compute percentiles for today (priority)
+    // STEP 4: Run data health check to fix any missing franchise IDs
     // ================================================================
-    console.log(`[MORNING] Step 4: Computing percentiles for today`)
+    console.log(`[MORNING] Step 4: Running data health check`)
+    results['data_health_check'] = await callEdgeFunction('data-health-check', {
+      days_ahead: daysAhead,
+      days_back: 1,
+      sports: ['nba', 'nfl', 'nhl', 'mlb'],
+    })
+    await sleep(500)
+
+    // ================================================================
+    // STEP 5: Compute percentiles for today (priority)
+    // ================================================================
+    console.log(`[MORNING] Step 5: Computing percentiles for today`)
     results['compute_today'] = await callEdgeFunction('compute-percentiles', {
       date: today,
       use_recency_weighted: true,
     })
 
     // ================================================================
-    // STEP 5: Compute percentiles for upcoming days
+    // STEP 6: Compute percentiles for upcoming days
     // ================================================================
-    console.log(`[MORNING] Step 5: Computing percentiles for upcoming days`)
+    console.log(`[MORNING] Step 6: Computing percentiles for upcoming days`)
     
     for (let i = 1; i < Math.min(daysAhead, 3); i++) { // Compute next 2 days
       const date = getDateOffset(i)
@@ -167,15 +178,15 @@ Deno.serve(async (req) => {
     }
 
     // ================================================================
-    // STEP 6: Daily backfill to get yesterday's final scores
+    // STEP 7: Daily backfill to get yesterday's final scores
     // ================================================================
-    console.log(`[MORNING] Step 6: Running daily backfill for final scores`)
+    console.log(`[MORNING] Step 7: Running daily backfill for final scores`)
     results['daily_backfill'] = await callEdgeFunction('daily-backfill', {})
 
     // ================================================================
-    // STEP 7: Update parlay results with any finalized games
+    // STEP 8: Update parlay results with any finalized games
     // ================================================================
-    console.log(`[MORNING] Step 7: Updating parlay results`)
+    console.log(`[MORNING] Step 8: Updating parlay results`)
     results['update_parlays'] = await callEdgeFunction('update-parlay-results', {})
 
     // Calculate summary
