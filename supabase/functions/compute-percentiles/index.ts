@@ -348,21 +348,22 @@ Deno.serve(async (req) => {
   }
 
   try {
-    let requestBody: { date?: string; use_recency_weighted?: boolean } = {}
+    let requestBody: { date?: string; use_recency_weighted?: boolean; sport_id?: string; sports?: string[] } = {}
     try {
       requestBody = await req.json()
     } catch {
       // Empty body is OK
     }
-    
-    const { date, use_recency_weighted = true } = requestBody
+
+    const { date, use_recency_weighted = true, sport_id, sports } = requestBody
     const targetDate = date || getTodayET()
+    const sportFilter = sports?.length ? sports : sport_id ? [sport_id] : null
 
     console.log(`[COMPUTE] Computing percentiles for ${targetDate} with segment ladder (recency_weighted: ${use_recency_weighted})`)
 
     const { data: jobRun } = await supabase
       .from('job_runs')
-      .insert({ job_name: 'compute', details: { date: targetDate, mode: 'segment_ladder', use_recency_weighted } })
+      .insert({ job_name: 'compute', details: { date: targetDate, mode: 'segment_ladder', use_recency_weighted, sport_filter: sportFilter } })
       .select()
       .single()
 
@@ -372,11 +373,17 @@ Deno.serve(async (req) => {
     const startOfDayET = new Date(`${targetDate}T00:00:00-05:00`)
     const endOfDayET = new Date(`${targetDate}T23:59:59-05:00`)
 
-    const { data: games, error: gamesError } = await supabase
+    let gamesQuery = supabase
       .from('games')
       .select('*, home_team:teams!games_home_team_id_fkey(id, abbrev), away_team:teams!games_away_team_id_fkey(id, abbrev)')
       .gte('start_time_utc', startOfDayET.toISOString())
       .lte('start_time_utc', endOfDayET.toISOString())
+
+    if (sportFilter && sportFilter.length > 0) {
+      gamesQuery = gamesQuery.in('sport_id', sportFilter)
+    }
+
+    const { data: games, error: gamesError } = await gamesQuery
 
     if (gamesError) throw gamesError
 
