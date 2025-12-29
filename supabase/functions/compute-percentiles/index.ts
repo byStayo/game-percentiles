@@ -93,39 +93,62 @@ function computeWeightedPercentiles(games: WeightedGame[]): { p05: number; p95: 
 async function computeRecencyWeighted(
   supabase: any,
   sportId: string,
-  franchiseLowId: string | null,
-  franchiseHighId: string | null,
+  franchiseAId: string | null,
+  franchiseBId: string | null,
   teamLowId: string,
   teamHighId: string
 ): Promise<SegmentResult | null> {
   const currentYear = new Date().getFullYear()
-  const usesFranchise = franchiseLowId && franchiseHighId
+  const usesFranchise = franchiseAId && franchiseBId
 
-  // Get games from last 5 years with year info
-  let query = supabase
-    .from('matchup_games')
-    .select('total, season_year')
-    .eq('sport_id', sportId)
-    .gte('season_year', currentYear - 5)
+  let allGames: any[] = []
 
   if (usesFranchise) {
-    query = query
-      .eq('franchise_low_id', franchiseLowId)
-      .eq('franchise_high_id', franchiseHighId)
+    // Query BOTH orderings since matchup_games might have either
+    const [{ data: games1 }, { data: games2 }] = await Promise.all([
+      supabase
+        .from('matchup_games')
+        .select('total, season_year')
+        .eq('sport_id', sportId)
+        .gte('season_year', currentYear - 5)
+        .eq('franchise_low_id', franchiseAId)
+        .eq('franchise_high_id', franchiseBId),
+      supabase
+        .from('matchup_games')
+        .select('total, season_year')
+        .eq('sport_id', sportId)
+        .gte('season_year', currentYear - 5)
+        .eq('franchise_low_id', franchiseBId)
+        .eq('franchise_high_id', franchiseAId),
+    ])
+    allGames = [...(games1 || []), ...(games2 || [])]
   } else {
-    query = query
-      .eq('team_low_id', teamLowId)
-      .eq('team_high_id', teamHighId)
+    // Query BOTH orderings for team IDs too
+    const [{ data: games1 }, { data: games2 }] = await Promise.all([
+      supabase
+        .from('matchup_games')
+        .select('total, season_year')
+        .eq('sport_id', sportId)
+        .gte('season_year', currentYear - 5)
+        .eq('team_low_id', teamLowId)
+        .eq('team_high_id', teamHighId),
+      supabase
+        .from('matchup_games')
+        .select('total, season_year')
+        .eq('sport_id', sportId)
+        .gte('season_year', currentYear - 5)
+        .eq('team_low_id', teamHighId)
+        .eq('team_high_id', teamLowId),
+    ])
+    allGames = [...(games1 || []), ...(games2 || [])]
   }
 
-  const { data: games } = await query
-
-  if (!games || games.length < WEIGHTED_MIN_GAMES) {
+  if (allGames.length < WEIGHTED_MIN_GAMES) {
     return null
   }
 
   // Apply recency weights
-  const weightedGames: WeightedGame[] = games.map((g: any) => {
+  const weightedGames: WeightedGame[] = allGames.map((g: any) => {
     const yearDiff = currentYear - (g.season_year || currentYear)
     const weight = RECENCY_WEIGHTS[Math.min(yearDiff, 4) as keyof typeof RECENCY_WEIGHTS]
     return {
@@ -144,11 +167,11 @@ async function computeRecencyWeighted(
     return acc
   }, {} as Record<number, number>)
   
-  console.log(`[COMPUTE] Recency weighted: ${games.length} games, distribution: ${JSON.stringify(weightsByYear)}`)
+  console.log(`[COMPUTE] Recency weighted: ${allGames.length} games, distribution: ${JSON.stringify(weightsByYear)}`)
 
   return {
     segment_used: 'recency_weighted',
-    n_used: games.length,
+    n_used: allGames.length,
     p05,
     p95,
     median,
@@ -159,40 +182,67 @@ async function computeRecencyWeighted(
 async function selectBestSegment(
   supabase: any,
   sportId: string,
-  franchiseLowId: string | null,
-  franchiseHighId: string | null,
+  franchiseAId: string | null,
+  franchiseBId: string | null,
   teamLowId: string,
   teamHighId: string
 ): Promise<SegmentResult | null> {
   const currentYear = new Date().getFullYear()
-
-  // If we have franchise IDs, use them; otherwise fall back to team IDs
-  const usesFranchise = franchiseLowId && franchiseHighId
+  const usesFranchise = franchiseAId && franchiseBId
 
   for (const segment of SEGMENT_LADDER) {
-    let query = supabase
-      .from('matchup_games')
-      .select('total, season_year')
-      .eq('sport_id', sportId)
+    let allGames: any[] = []
 
     if (usesFranchise) {
-      query = query
-        .eq('franchise_low_id', franchiseLowId)
-        .eq('franchise_high_id', franchiseHighId)
+      // Query BOTH orderings since matchup_games might have either
+      let query1 = supabase
+        .from('matchup_games')
+        .select('total, season_year')
+        .eq('sport_id', sportId)
+        .eq('franchise_low_id', franchiseAId)
+        .eq('franchise_high_id', franchiseBId)
+
+      let query2 = supabase
+        .from('matchup_games')
+        .select('total, season_year')
+        .eq('sport_id', sportId)
+        .eq('franchise_low_id', franchiseBId)
+        .eq('franchise_high_id', franchiseAId)
+
+      if (segment.yearsBack !== null) {
+        query1 = query1.gte('season_year', currentYear - segment.yearsBack)
+        query2 = query2.gte('season_year', currentYear - segment.yearsBack)
+      }
+
+      const [{ data: games1 }, { data: games2 }] = await Promise.all([query1, query2])
+      allGames = [...(games1 || []), ...(games2 || [])]
     } else {
-      query = query
+      // Query BOTH orderings for team IDs too
+      let query1 = supabase
+        .from('matchup_games')
+        .select('total, season_year')
+        .eq('sport_id', sportId)
         .eq('team_low_id', teamLowId)
         .eq('team_high_id', teamHighId)
+
+      let query2 = supabase
+        .from('matchup_games')
+        .select('total, season_year')
+        .eq('sport_id', sportId)
+        .eq('team_low_id', teamHighId)
+        .eq('team_high_id', teamLowId)
+
+      if (segment.yearsBack !== null) {
+        query1 = query1.gte('season_year', currentYear - segment.yearsBack)
+        query2 = query2.gte('season_year', currentYear - segment.yearsBack)
+      }
+
+      const [{ data: games1 }, { data: games2 }] = await Promise.all([query1, query2])
+      allGames = [...(games1 || []), ...(games2 || [])]
     }
 
-    if (segment.yearsBack !== null) {
-      query = query.gte('season_year', currentYear - segment.yearsBack)
-    }
-
-    const { data: games } = await query
-
-    if (games && games.length >= MIN_SAMPLE) {
-      const totals = games.map((g: any) => Number(g.total)).sort((a: number, b: number) => a - b)
+    if (allGames.length >= MIN_SAMPLE) {
+      const totals = allGames.map((g: any) => Number(g.total)).sort((a: number, b: number) => a - b)
       const n = totals.length
 
       const p05Index = Math.max(0, Math.ceil(0.05 * n) - 1)
