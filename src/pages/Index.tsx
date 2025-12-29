@@ -13,6 +13,7 @@ import { EdgeExplainer } from "@/components/game/EdgeExplainer";
 import { StickyFilters } from "@/components/ui/sticky-filters";
 import { SportBadge } from "@/components/ui/sport-icon";
 import { ZeroGamesDebugStrip } from "@/components/game/ZeroGamesDebugStrip";
+import { CoverageDashboard } from "@/components/game/CoverageDashboard";
 
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useTodayGames, useTodayDebug, TodayGame } from "@/hooks/useApi";
@@ -310,6 +311,12 @@ export default function Index() {
               <ChevronRightIcon className="h-5 w-5" />
             </button>
           </div>
+
+          {/* Coverage Dashboard */}
+          <CoverageDashboard 
+            debug={debugQuery.data?.debug} 
+            isFetching={debugQuery.isFetching} 
+          />
 
           {/* Controls with sticky behavior */}
           <StickyFilters>
