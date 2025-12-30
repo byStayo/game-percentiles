@@ -409,15 +409,15 @@ Deno.serve(async (req) => {
   }
 
   try {
-    let requestBody: { date?: string; use_recency_weighted?: boolean; sport_id?: string; sports?: string[] } = {}
+    let requestBody: { date?: string; target_date?: string; use_recency_weighted?: boolean; sport_id?: string; sports?: string[] } = {}
     try {
       requestBody = await req.json()
     } catch {
       // Empty body is OK
     }
 
-    const { date, use_recency_weighted = true, sport_id, sports } = requestBody
-    const targetDate = date || getTodayET()
+    const { date, target_date, use_recency_weighted = true, sport_id, sports } = requestBody
+    const targetDate = target_date || date || getTodayET()
     const sportFilter = sports?.length ? sports : sport_id ? [sport_id] : null
 
     console.log(`[COMPUTE] Computing percentiles for ${targetDate} with segment ladder (recency_weighted: ${use_recency_weighted})`)
