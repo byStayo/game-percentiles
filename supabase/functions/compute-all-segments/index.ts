@@ -256,11 +256,14 @@ Deno.serve(async (req) => {
 
       const nGames = segmentGames.length
 
-      // Compute games breakdown by year
+      // Compute games breakdown by calendar year (from played_at_utc, not season_year)
       const byYear: Record<number, number> = {}
       segmentGames.forEach((g: any) => {
-        const year = g.season_year || currentYear
-        byYear[year] = (byYear[year] || 0) + 1
+        // Use actual calendar year from played_at_utc, not season_year
+        const playedYear = g.played_at_utc 
+          ? new Date(g.played_at_utc).getFullYear()
+          : g.season_year || currentYear
+        byYear[playedYear] = (byYear[playedYear] || 0) + 1
       })
 
       if (nGames === 0) {
