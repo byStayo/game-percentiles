@@ -382,6 +382,13 @@ async function insertMatchupGames(
   return { inserted, skipped };
 }
 
+// Helper to get cutoff date for year-based filtering (uses played_at_utc, not season_year)
+function getYearCutoffDate(yearsBack: number): string {
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - yearsBack);
+  return cutoff.toISOString();
+}
+
 // Compute matchup stats after hydration
 async function recomputeMatchupStats(
   supabase: any,
@@ -391,7 +398,6 @@ async function recomputeMatchupStats(
   franchiseLowId: string | null,
   franchiseHighId: string | null
 ): Promise<{ n_games: number; segments_updated: string[] }> {
-  const currentYear = new Date().getFullYear();
   const segments = [
     { key: "h2h_1y", yearsBack: 1 },
     { key: "h2h_3y", yearsBack: 3 },
@@ -415,8 +421,10 @@ async function recomputeMatchupStats(
       query = query.eq("team_low_id", teamLowId).eq("team_high_id", teamHighId);
     }
 
+    // Use played_at_utc date cutoff instead of season_year
     if (segment.yearsBack !== null) {
-      query = query.gte("season_year", currentYear - segment.yearsBack);
+      const cutoffDate = getYearCutoffDate(segment.yearsBack);
+      query = query.gte("played_at_utc", cutoffDate);
     }
 
     const { data: games } = await query;

@@ -15,12 +15,12 @@ const SEGMENT_YEARS: Record<string, number | null> = {
   h2h_all: null, // no filter
 }
 
-// Decade ranges
-const DECADE_RANGES: Record<string, { start: number; end: number }> = {
-  decade_2020s: { start: 2020, end: 2029 },
-  decade_2010s: { start: 2010, end: 2019 },
-  decade_2000s: { start: 2000, end: 2009 },
-  decade_1990s: { start: 1990, end: 1999 },
+// Decade date ranges - use actual dates for played_at_utc filtering
+const DECADE_DATE_RANGES: Record<string, { start: string; end: string }> = {
+  decade_2020s: { start: '2020-01-01T00:00:00Z', end: '2029-12-31T23:59:59Z' },
+  decade_2010s: { start: '2010-01-01T00:00:00Z', end: '2019-12-31T23:59:59Z' },
+  decade_2000s: { start: '2000-01-01T00:00:00Z', end: '2009-12-31T23:59:59Z' },
+  decade_1990s: { start: '1990-01-01T00:00:00Z', end: '1999-12-31T23:59:59Z' },
 }
 
 Deno.serve(async (req) => {
@@ -104,15 +104,15 @@ Deno.serve(async (req) => {
     
     // Calculate date filter based on segment
     const yearsBack = SEGMENT_YEARS[segment] ?? null
-    const decadeRange = DECADE_RANGES[segment] ?? null
+    const decadeDateRange = DECADE_DATE_RANGES[segment] ?? null
     
     let cutoffDate: string | null = null
-    let decadeFilter: { start: number; end: number } | null = null
+    let decadeFilter: { start: string; end: string } | null = null
     
     if (yearsBack) {
       cutoffDate = new Date(Date.now() - yearsBack * 365 * 24 * 60 * 60 * 1000).toISOString()
-    } else if (decadeRange) {
-      decadeFilter = decadeRange
+    } else if (decadeDateRange) {
+      decadeFilter = decadeDateRange
     }
 
     // Build query for historical games with optional date filter
@@ -149,10 +149,11 @@ Deno.serve(async (req) => {
       historyQuery = historyQuery.gte('played_at_utc', cutoffDate)
     }
     
+    // Use played_at_utc for decade filtering instead of season_year
     if (decadeFilter) {
       historyQuery = historyQuery
-        .gte('season_year', decadeFilter.start)
-        .lte('season_year', decadeFilter.end)
+        .gte('played_at_utc', decadeFilter.start)
+        .lte('played_at_utc', decadeFilter.end)
     }
 
     const { data: historicalGames } = await historyQuery
