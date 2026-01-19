@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "prediction-markets-mcp": {
+      "command": "npx",
+      "args": ["-y", "prediction-markets-mcp"],
+      "env": {}
+    }
+  }
+}
