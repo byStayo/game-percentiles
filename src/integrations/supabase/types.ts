@@ -14,6 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
+      betting_config: {
+        Row: {
+          created_at: string | null
+          enabled: boolean | null
+          enabled_sports: string[] | null
+          id: string
+          max_daily_loss_cents: number | null
+          max_limit_price: number | null
+          max_open_positions: number | null
+          max_position_size_cents: number | null
+          min_edge_confidence: number | null
+          min_limit_price: number | null
+          moderate_edge_threshold: number | null
+          moderate_position_pct: number | null
+          name: string
+          strong_edge_threshold: number | null
+          strong_position_pct: number | null
+          updated_at: string | null
+          weak_edge_threshold: number | null
+          weak_position_pct: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          enabled?: boolean | null
+          enabled_sports?: string[] | null
+          id?: string
+          max_daily_loss_cents?: number | null
+          max_limit_price?: number | null
+          max_open_positions?: number | null
+          max_position_size_cents?: number | null
+          min_edge_confidence?: number | null
+          min_limit_price?: number | null
+          moderate_edge_threshold?: number | null
+          moderate_position_pct?: number | null
+          name: string
+          strong_edge_threshold?: number | null
+          strong_position_pct?: number | null
+          updated_at?: string | null
+          weak_edge_threshold?: number | null
+          weak_position_pct?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          enabled?: boolean | null
+          enabled_sports?: string[] | null
+          id?: string
+          max_daily_loss_cents?: number | null
+          max_limit_price?: number | null
+          max_open_positions?: number | null
+          max_position_size_cents?: number | null
+          min_edge_confidence?: number | null
+          min_limit_price?: number | null
+          moderate_edge_threshold?: number | null
+          moderate_position_pct?: number | null
+          name?: string
+          strong_edge_threshold?: number | null
+          strong_position_pct?: number | null
+          updated_at?: string | null
+          weak_edge_threshold?: number | null
+          weak_position_pct?: number | null
+        }
+        Relationships: []
+      }
       daily_edges: {
         Row: {
           alternate_lines: Json | null
@@ -113,6 +176,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      daily_pnl: {
+        Row: {
+          avg_edge_percentile: number | null
+          created_at: string | null
+          date_local: string
+          fees_cents: number | null
+          gross_pnl_cents: number | null
+          id: string
+          net_pnl_cents: number | null
+          orders_filled: number | null
+          orders_lost: number | null
+          orders_placed: number | null
+          orders_won: number | null
+          updated_at: string | null
+          win_rate: number | null
+        }
+        Insert: {
+          avg_edge_percentile?: number | null
+          created_at?: string | null
+          date_local: string
+          fees_cents?: number | null
+          gross_pnl_cents?: number | null
+          id?: string
+          net_pnl_cents?: number | null
+          orders_filled?: number | null
+          orders_lost?: number | null
+          orders_placed?: number | null
+          orders_won?: number | null
+          updated_at?: string | null
+          win_rate?: number | null
+        }
+        Update: {
+          avg_edge_percentile?: number | null
+          created_at?: string | null
+          date_local?: string
+          fees_cents?: number | null
+          gross_pnl_cents?: number | null
+          id?: string
+          net_pnl_cents?: number | null
+          orders_filled?: number | null
+          orders_lost?: number | null
+          orders_placed?: number | null
+          orders_won?: number | null
+          updated_at?: string | null
+          win_rate?: number | null
+        }
+        Relationships: []
       }
       franchises: {
         Row: {
@@ -329,6 +440,86 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      kalshi_orders: {
+        Row: {
+          count: number
+          created_at: string | null
+          edge_percentile: number | null
+          edge_strength: string | null
+          error: string | null
+          fill_price: number | null
+          filled_count: number | null
+          game_id: string | null
+          id: string
+          is_demo: boolean | null
+          order_id: string | null
+          order_type: string | null
+          pnl_cents: number | null
+          price: number | null
+          result: string | null
+          settled_at: string | null
+          side: string
+          signal_type: string | null
+          status: string | null
+          success: boolean
+          ticker: string
+        }
+        Insert: {
+          count: number
+          created_at?: string | null
+          edge_percentile?: number | null
+          edge_strength?: string | null
+          error?: string | null
+          fill_price?: number | null
+          filled_count?: number | null
+          game_id?: string | null
+          id?: string
+          is_demo?: boolean | null
+          order_id?: string | null
+          order_type?: string | null
+          pnl_cents?: number | null
+          price?: number | null
+          result?: string | null
+          settled_at?: string | null
+          side: string
+          signal_type?: string | null
+          status?: string | null
+          success?: boolean
+          ticker: string
+        }
+        Update: {
+          count?: number
+          created_at?: string | null
+          edge_percentile?: number | null
+          edge_strength?: string | null
+          error?: string | null
+          fill_price?: number | null
+          filled_count?: number | null
+          game_id?: string | null
+          id?: string
+          is_demo?: boolean | null
+          order_id?: string | null
+          order_type?: string | null
+          pnl_cents?: number | null
+          price?: number | null
+          result?: string | null
+          settled_at?: string | null
+          side?: string
+          signal_type?: string | null
+          status?: string | null
+          success?: boolean
+          ticker?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kalshi_orders_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       leagues: {
         Row: {
