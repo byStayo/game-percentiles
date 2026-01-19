@@ -96,7 +96,7 @@ async function signRequest(
     data
   );
 
-  return base64Encode(new Uint8Array(signature));
+  return base64Encode(signature);
 }
 
 async function kalshiFetch(
