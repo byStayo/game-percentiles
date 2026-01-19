@@ -29,6 +29,7 @@ import BetSimulator from "./pages/BetSimulator";
 import BestBets from "./pages/BestBets";
 import AccuracyTracking from "./pages/AccuracyTracking";
 import FranchiseManagement from "./pages/FranchiseManagement";
+import KalshiDashboard from "./pages/KalshiDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -66,6 +67,7 @@ const App = () => (
             <Route path="/simulator" element={<BetSimulator />} />
             <Route path="/accuracy" element={<AccuracyTracking />} />
             <Route path="/franchises" element={<FranchiseManagement />} />
+            <Route path="/kalshi" element={<KalshiDashboard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
