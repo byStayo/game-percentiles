@@ -633,27 +633,55 @@ async function syncOdds(
   if (!baseUrl) return { fetched: 0, matched: 0, errors: 0 };
 
   const counters = { fetched: 0, matched: 0, errors: 0 };
-  const season = getCurrentSeason(sport);
-  const week = sport === "nfl" ? getCurrentNFLWeek() : null;
-
-  let url = `${baseUrl}/odds?season=${season}&per_page=100`;
-  if (week) url += `&week=${week}`;
-
   const odds: BDLOdds[] = [];
-  let cursor: number | null = null;
 
-  while (true) {
-    const pageUrl = cursor ? `${url}&cursor=${cursor}` : url;
-    const response = await fetchWithRetry(pageUrl, apiKey);
-    if (!response) break;
+  // For NBA, we need to fetch odds by game_id since the API requires it
+  // For NFL, we can use season + week which is more efficient
+  if (sport === "nfl") {
+    const season = getCurrentSeason(sport);
+    const week = getCurrentNFLWeek();
+    let url = `${baseUrl}/odds?season=${season}&week=${week}&per_page=100`;
+    let cursor: number | null = null;
 
-    const data = await response.json();
-    odds.push(...(data.data || []));
+    while (true) {
+      const pageUrl = cursor ? `${url}&cursor=${cursor}` : url;
+      const response = await fetchWithRetry(pageUrl, apiKey);
+      if (!response) break;
 
-    const nextCursor = data.meta?.next_cursor;
-    if (!nextCursor) break;
-    cursor = nextCursor;
-    await new Promise(r => setTimeout(r, 50));
+      const data = await response.json();
+      odds.push(...(data.data || []));
+
+      const nextCursor = data.meta?.next_cursor;
+      if (!nextCursor) break;
+      cursor = nextCursor;
+      await new Promise(r => setTimeout(r, 50));
+    }
+  } else {
+    // For NBA, fetch odds for each game_id in bdlToDbMap
+    const bdlGameIds = Array.from(bdlToDbMap.keys());
+    console.log(`[BDL-SYNC] Fetching odds for ${bdlGameIds.length} ${sport} games by game_id`);
+    
+    // Fetch in parallel batches of 10
+    const batchSize = 10;
+    for (let i = 0; i < bdlGameIds.length; i += batchSize) {
+      const batch = bdlGameIds.slice(i, i + batchSize);
+      const results = await Promise.all(
+        batch.map(async (gameId) => {
+          const url = `${baseUrl}/odds?game_id=${gameId}`;
+          const response = await fetchWithRetry(url, apiKey);
+          if (!response) return [];
+          const data = await response.json();
+          return data.data || [];
+        })
+      );
+      for (const gameOdds of results) {
+        odds.push(...gameOdds);
+      }
+      // Small delay between batches
+      if (i + batchSize < bdlGameIds.length) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+    }
   }
 
   counters.fetched = odds.length;
