@@ -724,6 +724,39 @@ async function syncOdds(
 
     if (!error) {
       counters.matched++;
+
+      // CRITICAL: Also update daily_edges with the DK line
+      // First get existing edge to calculate percentile
+      const { data: existingEdge } = await supabase
+        .from("daily_edges")
+        .select("p05, p95")
+        .eq("game_id", dbGameId)
+        .maybeSingle();
+
+      // Calculate dk_line_percentile if we have historical percentiles
+      let dkLinePercentile: number | null = null;
+      if (existingEdge?.p05 !== null && existingEdge?.p95 !== null && existingEdge.p95 !== existingEdge.p05) {
+        const rawPercentile = ((totalLine - existingEdge.p05) / (existingEdge.p95 - existingEdge.p05)) * 100;
+        dkLinePercentile = Math.round(Math.max(-10, Math.min(110, rawPercentile)) * 10) / 10;
+      }
+
+      // Upsert daily_edges with odds data
+      const edgeUpdate = {
+        dk_offered: true,
+        dk_total_line: totalLine,
+        dk_line_percentile: dkLinePercentile,
+        alternate_lines: [{
+          point: totalLine,
+          over_price: odd.total_over_odds,
+          under_price: odd.total_under_odds,
+        }],
+        updated_at: new Date().toISOString(),
+      };
+
+      await supabase
+        .from("daily_edges")
+        .update(edgeUpdate)
+        .eq("game_id", dbGameId);
     } else {
       counters.errors++;
     }

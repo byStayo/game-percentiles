@@ -619,14 +619,28 @@ Deno.serve(async (req) => {
         // Find or update daily_edge
         const { data: existingEdge } = await supabase
           .from('daily_edges')
-          .select('id')
+          .select('id, dk_total_line')
           .eq('date_local', targetDate)
           .eq('game_id', game.id)
           .maybeSingle()
 
-        const franchiseMatchupId = franchiseLowId && franchiseHighId 
-          ? `${franchiseLowId}|${franchiseHighId}` 
+        const franchiseMatchupId = franchiseLowId && franchiseHighId
+          ? `${franchiseLowId}|${franchiseHighId}`
           : null
+
+        // CRITICAL FIX: Calculate dk_line_percentile
+        // This shows where the DK line falls in the historical distribution (0-100)
+        // 0 = at p05 (extreme under), 100 = at p95 (extreme over), 50 = median
+        let dkLinePercentile: number | null = null
+        const dkLine = existingEdge?.dk_total_line
+
+        if (dkLine !== null && dkLine !== undefined && p05 !== null && p95 !== null && p95 !== p05) {
+          // Calculate where DK line falls in the p05-p95 range
+          const rawPercentile = ((dkLine - p05) / (p95 - p05)) * 100
+          // Clamp to 0-100 but allow slight overflow to detect "beyond extremes"
+          dkLinePercentile = Math.round(Math.max(-10, Math.min(110, rawPercentile)) * 10) / 10
+          console.log(`[COMPUTE] Game ${game.id}: DK=${dkLine}, p05=${p05}, p95=${p95}, percentile=${dkLinePercentile}`)
+        }
 
         const edgeData = {
           sport_id: game.sport_id,
@@ -637,6 +651,7 @@ Deno.serve(async (req) => {
           segment_used: segmentUsed,
           n_used: nUsed,
           franchise_matchup_id: franchiseMatchupId,
+          dk_line_percentile: dkLinePercentile,
           updated_at: new Date().toISOString(),
         }
 

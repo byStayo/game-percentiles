@@ -208,12 +208,27 @@ async function fetchBDLOdds(
     if (!error) {
       counters.matched++
 
-      // Update daily_edges with odds info
+      // Get existing edge data to calculate percentile
+      const { data: existingEdge } = await supabase
+        .from('daily_edges')
+        .select('p05, p95')
+        .eq('game_id', dbGameId)
+        .maybeSingle()
+
+      // Calculate dk_line_percentile if we have the historical percentiles
+      let dkLinePercentile: number | null = null
+      if (existingEdge?.p05 !== null && existingEdge?.p95 !== null && existingEdge.p95 !== existingEdge.p05) {
+        const rawPercentile = ((totalLine - existingEdge.p05) / (existingEdge.p95 - existingEdge.p05)) * 100
+        dkLinePercentile = Math.round(Math.max(-10, Math.min(110, rawPercentile)) * 10) / 10
+      }
+
+      // Update daily_edges with odds info AND percentile
       await supabase
         .from('daily_edges')
         .update({
           dk_offered: true,
           dk_total_line: totalLine,
+          dk_line_percentile: dkLinePercentile,
           alternate_lines: alternateLines,
           updated_at: new Date().toISOString(),
         })
@@ -329,11 +344,26 @@ async function fetchTheOddsAPIData(
     if (!error) {
       counters.matched++
 
+      // Get existing edge data to calculate percentile
+      const { data: existingEdge } = await supabase
+        .from('daily_edges')
+        .select('p05, p95')
+        .eq('game_id', matchedGame.id)
+        .maybeSingle()
+
+      // Calculate dk_line_percentile if we have the historical percentiles
+      let dkLinePercentile: number | null = null
+      if (existingEdge?.p05 !== null && existingEdge?.p95 !== null && existingEdge.p95 !== existingEdge.p05) {
+        const rawPercentile = ((totalLine - existingEdge.p05) / (existingEdge.p95 - existingEdge.p05)) * 100
+        dkLinePercentile = Math.round(Math.max(-10, Math.min(110, rawPercentile)) * 10) / 10
+      }
+
       await supabase
         .from('daily_edges')
         .update({
           dk_offered: true,
           dk_total_line: totalLine,
+          dk_line_percentile: dkLinePercentile,
           alternate_lines: alternateLines,
           updated_at: new Date().toISOString(),
         })
