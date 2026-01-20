@@ -373,8 +373,8 @@ function PnlChart({ data }: { data: DailyPnl[] }) {
 
 function ConfigPanel({ config, isLoading }: { config: BettingConfig | undefined; isLoading: boolean }) {
   const queryClient = useQueryClient();
-  const [isEditing, setIsEditing] = useState(false);
-  const [localConfig, setLocalConfig] = useState<Partial<BettingConfig>>({});
+  const [editedConfig, setEditedConfig] = useState<Partial<BettingConfig>>({});
+  const [hasChanges, setHasChanges] = useState(false);
   
   const updateMutation = useMutation({
     mutationFn: async (updates: Partial<BettingConfig>) => {
@@ -386,11 +386,12 @@ function ConfigPanel({ config, isLoading }: { config: BettingConfig | undefined;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['betting-config'] });
-      toast.success('Configuration updated');
-      setIsEditing(false);
+      toast.success('Configuration saved');
+      setEditedConfig({});
+      setHasChanges(false);
     },
     onError: (error) => {
-      toast.error('Failed to update config: ' + error.message);
+      toast.error('Failed to save config: ' + error.message);
     },
   });
   
@@ -411,8 +412,89 @@ function ConfigPanel({ config, isLoading }: { config: BettingConfig | undefined;
     updateMutation.mutate({ enabled: !config.enabled });
   };
   
+  const getValue = <K extends keyof BettingConfig>(key: K): BettingConfig[K] => {
+    return (editedConfig[key] !== undefined ? editedConfig[key] : config[key]) as BettingConfig[K];
+  };
+  
+  const handleChange = <K extends keyof BettingConfig>(key: K, value: BettingConfig[K]) => {
+    setEditedConfig(prev => ({ ...prev, [key]: value }));
+    setHasChanges(true);
+  };
+  
+  const handleSave = () => {
+    if (Object.keys(editedConfig).length > 0) {
+      updateMutation.mutate(editedConfig);
+    }
+  };
+  
+  const handleReset = () => {
+    setEditedConfig({});
+    setHasChanges(false);
+  };
+  
+  const EditableNumber = ({ 
+    label, 
+    configKey, 
+    suffix = '',
+    min = 0,
+    max = 100,
+    step = 1,
+    transform = (v: number) => v,
+    reverseTransform = (v: number) => v
+  }: { 
+    label: string; 
+    configKey: keyof BettingConfig; 
+    suffix?: string;
+    min?: number;
+    max?: number;
+    step?: number;
+    transform?: (v: number) => number;
+    reverseTransform?: (v: number) => number;
+  }) => {
+    const rawValue = getValue(configKey);
+    const displayValue = transform(typeof rawValue === 'number' ? rawValue : 0);
+    
+    return (
+      <div className="flex items-center justify-between gap-4">
+        <Label className="text-sm whitespace-nowrap">{label}</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            value={displayValue}
+            onChange={(e) => handleChange(configKey, reverseTransform(parseFloat(e.target.value) || 0) as any)}
+            min={min}
+            max={max}
+            step={step}
+            className="w-24 h-8 text-sm font-mono text-right"
+          />
+          {suffix && <span className="text-sm text-muted-foreground w-4">{suffix}</span>}
+        </div>
+      </div>
+    );
+  };
+  
   return (
     <div className="space-y-6">
+      {/* Save/Reset Bar */}
+      {hasChanges && (
+        <div className="flex items-center justify-between p-3 rounded-lg border border-primary/50 bg-primary/5 animate-fade-in">
+          <p className="text-sm text-primary font-medium">You have unsaved changes</p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleReset} disabled={updateMutation.isPending}>
+              Reset
+            </Button>
+            <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+              )}
+              Save Changes
+            </Button>
+          </div>
+        </div>
+      )}
+      
       {/* Master Enable/Disable */}
       <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
         <div className="flex items-center gap-3">
@@ -443,18 +525,30 @@ function ConfigPanel({ config, isLoading }: { config: BettingConfig | undefined;
             <CardDescription className="text-xs">Percentile triggers for signals</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Strong (≤ X%)</Label>
-              <span className="text-sm font-mono">{config.strong_edge_threshold}%</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Moderate (≤ X%)</Label>
-              <span className="text-sm font-mono">{config.moderate_edge_threshold}%</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Weak (≤ X%)</Label>
-              <span className="text-sm font-mono">{config.weak_edge_threshold}%</span>
-            </div>
+            <EditableNumber 
+              label="Strong (≤ X%)" 
+              configKey="strong_edge_threshold" 
+              suffix="%" 
+              min={1} 
+              max={20} 
+              step={1}
+            />
+            <EditableNumber 
+              label="Moderate (≤ X%)" 
+              configKey="moderate_edge_threshold" 
+              suffix="%" 
+              min={1} 
+              max={30} 
+              step={1}
+            />
+            <EditableNumber 
+              label="Weak (≤ X%)" 
+              configKey="weak_edge_threshold" 
+              suffix="%" 
+              min={1} 
+              max={40} 
+              step={1}
+            />
           </CardContent>
         </Card>
         
@@ -464,18 +558,30 @@ function ConfigPanel({ config, isLoading }: { config: BettingConfig | undefined;
             <CardDescription className="text-xs">% of max position per strength</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Strong</Label>
-              <span className="text-sm font-mono">{config.strong_position_pct}%</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Moderate</Label>
-              <span className="text-sm font-mono">{config.moderate_position_pct}%</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Weak</Label>
-              <span className="text-sm font-mono">{config.weak_position_pct}%</span>
-            </div>
+            <EditableNumber 
+              label="Strong" 
+              configKey="strong_position_pct" 
+              suffix="%" 
+              min={10} 
+              max={100} 
+              step={5}
+            />
+            <EditableNumber 
+              label="Moderate" 
+              configKey="moderate_position_pct" 
+              suffix="%" 
+              min={10} 
+              max={100} 
+              step={5}
+            />
+            <EditableNumber 
+              label="Weak" 
+              configKey="weak_position_pct" 
+              suffix="%" 
+              min={10} 
+              max={100} 
+              step={5}
+            />
           </CardContent>
         </Card>
       </div>
@@ -487,21 +593,53 @@ function ConfigPanel({ config, isLoading }: { config: BettingConfig | undefined;
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <Label className="text-xs text-muted-foreground">Max Position</Label>
-              <p className="font-mono">${((config.max_position_size_cents || 0) / 100).toFixed(2)}</p>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Max Position ($)</Label>
+              <Input
+                type="number"
+                value={getValue('max_position_size_cents') ? (getValue('max_position_size_cents') as number) / 100 : 0}
+                onChange={(e) => handleChange('max_position_size_cents', Math.round(parseFloat(e.target.value || '0') * 100))}
+                min={1}
+                max={10000}
+                step={1}
+                className="h-8 text-sm font-mono"
+              />
             </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Max Daily Loss</Label>
-              <p className="font-mono">${((config.max_daily_loss_cents || 0) / 100).toFixed(2)}</p>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Max Daily Loss ($)</Label>
+              <Input
+                type="number"
+                value={getValue('max_daily_loss_cents') ? (getValue('max_daily_loss_cents') as number) / 100 : 0}
+                onChange={(e) => handleChange('max_daily_loss_cents', Math.round(parseFloat(e.target.value || '0') * 100))}
+                min={1}
+                max={10000}
+                step={1}
+                className="h-8 text-sm font-mono"
+              />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Max Open Positions</Label>
-              <p className="font-mono">{config.max_open_positions}</p>
+              <Input
+                type="number"
+                value={getValue('max_open_positions') || 0}
+                onChange={(e) => handleChange('max_open_positions', parseInt(e.target.value || '0'))}
+                min={1}
+                max={100}
+                step={1}
+                className="h-8 text-sm font-mono"
+              />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Min Games Required</Label>
-              <p className="font-mono">{config.min_edge_confidence}</p>
+              <Input
+                type="number"
+                value={getValue('min_edge_confidence') || 0}
+                onChange={(e) => handleChange('min_edge_confidence', parseInt(e.target.value || '0'))}
+                min={1}
+                max={50}
+                step={1}
+                className="h-8 text-sm font-mono"
+              />
             </div>
           </div>
         </CardContent>
@@ -514,22 +652,38 @@ function ConfigPanel({ config, isLoading }: { config: BettingConfig | undefined;
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4">
-            <div>
-              <Label className="text-xs text-muted-foreground">Min</Label>
-              <p className="font-mono">{config.min_limit_price}¢</p>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Min (¢)</Label>
+              <Input
+                type="number"
+                value={getValue('min_limit_price') || 0}
+                onChange={(e) => handleChange('min_limit_price', parseInt(e.target.value || '0'))}
+                min={1}
+                max={99}
+                step={1}
+                className="w-20 h-8 text-sm font-mono"
+              />
             </div>
             <div className="flex-1 h-2 bg-muted rounded-full relative">
               <div 
                 className="absolute h-full bg-primary rounded-full"
                 style={{ 
-                  left: `${config.min_limit_price}%`, 
-                  width: `${(config.max_limit_price || 70) - (config.min_limit_price || 30)}%` 
+                  left: `${getValue('min_limit_price') || 30}%`, 
+                  width: `${((getValue('max_limit_price') as number) || 70) - ((getValue('min_limit_price') as number) || 30)}%` 
                 }}
               />
             </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Max</Label>
-              <p className="font-mono">{config.max_limit_price}¢</p>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Max (¢)</Label>
+              <Input
+                type="number"
+                value={getValue('max_limit_price') || 0}
+                onChange={(e) => handleChange('max_limit_price', parseInt(e.target.value || '0'))}
+                min={1}
+                max={99}
+                step={1}
+                className="w-20 h-8 text-sm font-mono"
+              />
             </div>
           </div>
         </CardContent>
@@ -539,14 +693,33 @@ function ConfigPanel({ config, isLoading }: { config: BettingConfig | undefined;
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium">Enabled Sports</CardTitle>
+          <CardDescription className="text-xs">Click to toggle sports</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            {(config.enabled_sports || []).map((sport) => (
-              <Badge key={sport} variant="secondary" className="uppercase">
-                {sport}
-              </Badge>
-            ))}
+            {['nba', 'nfl', 'mlb', 'nhl'].map((sport) => {
+              const enabledSports = (getValue('enabled_sports') || []) as string[];
+              const isEnabled = enabledSports.includes(sport);
+              
+              return (
+                <Badge 
+                  key={sport} 
+                  variant={isEnabled ? "default" : "outline"}
+                  className={cn(
+                    "uppercase cursor-pointer transition-colors",
+                    isEnabled ? "bg-primary" : "hover:bg-muted"
+                  )}
+                  onClick={() => {
+                    const newSports = isEnabled 
+                      ? enabledSports.filter(s => s !== sport)
+                      : [...enabledSports, sport];
+                    handleChange('enabled_sports', newSports);
+                  }}
+                >
+                  {sport}
+                </Badge>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
