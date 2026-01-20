@@ -92,3 +92,12 @@ verify_jwt = false
 
 [functions.data-health-check]
 verify_jwt = false
+
+[functions.kalshi-integration]
+verify_jwt = false
+
+[functions.auto-bet]
+verify_jwt = false
+
+[functions.omen-integration]
+verify_jwt = false
