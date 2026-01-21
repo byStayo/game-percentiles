@@ -139,11 +139,11 @@ serve(async (req) => {
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
         )
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error:', error)
-    const message = error instanceof Error ? error.message : 'Unknown error'
+    const message = error?.message || error?.toString() || JSON.stringify(error) || 'Unknown error'
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: message, details: error }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }
@@ -481,10 +481,7 @@ async function checkBalance(wallet: any, provider: any, eth: any) {
 async function listCreatedMarkets(supabase: any) {
   const { data: markets, error } = await supabase
     .from('omen_markets')
-    .select(`
-      *,
-      games(home_team, away_team, game_date, final_total)
-    `)
+    .select('*')
     .order('created_at', { ascending: false })
     .limit(50)
 
@@ -494,7 +491,7 @@ async function listCreatedMarkets(supabase: any) {
     JSON.stringify({
       success: true,
       markets_count: markets?.length || 0,
-      markets: markets?.map((m: any) => ({
+      markets: (markets || []).map((m: any) => ({
         ...m,
         omen_url: `https://omen.eth.limo/#/${m.fpmm_address}`,
       })),
