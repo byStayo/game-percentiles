@@ -3,7 +3,16 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { ethers } from "https://esm.sh/ethers@6.9.0"
+
+// Lazy load ethers only when needed for blockchain operations
+let ethers: any = null
+async function getEthers() {
+  if (!ethers) {
+    const module = await import("https://esm.sh/ethers@6.9.0")
+    ethers = module
+  }
+  return ethers
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -97,27 +106,32 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get wallet configuration
-    const privateKey = Deno.env.get('OMEN_PRIVATE_KEY')
-    if (!privateKey && !dry_run) {
-      throw new Error('OMEN_PRIVATE_KEY not configured')
-    }
-
-    const provider = new ethers.JsonRpcProvider(GNOSIS_RPC)
-    const wallet = privateKey ? new ethers.Wallet(privateKey, provider) : null
-
     switch (action) {
       case 'get-signals':
         return await getSignals(supabase)
 
-      case 'create-markets':
-        return await createMarketsForSignals(supabase, wallet, provider, dry_run)
-
-      case 'check-balance':
-        return await checkBalance(wallet, provider)
-
       case 'list-markets':
         return await listCreatedMarkets(supabase)
+
+      case 'create-markets':
+      case 'check-balance': {
+        // Only load ethers for blockchain operations
+        const eth = await getEthers()
+
+        const privateKey = Deno.env.get('OMEN_PRIVATE_KEY')
+        if (!privateKey && !dry_run && action === 'create-markets') {
+          throw new Error('OMEN_PRIVATE_KEY not configured')
+        }
+
+        const provider = new eth.JsonRpcProvider(GNOSIS_RPC)
+        const wallet = privateKey ? new eth.Wallet(privateKey, provider) : null
+
+        if (action === 'create-markets') {
+          return await createMarketsForSignals(supabase, wallet, provider, dry_run, eth)
+        } else {
+          return await checkBalance(wallet, provider, eth)
+        }
+      }
 
       default:
         return new Response(
@@ -201,9 +215,10 @@ async function getSignals(supabase: any) {
 
 async function createMarketsForSignals(
   supabase: any,
-  wallet: ethers.Wallet | null,
-  provider: ethers.JsonRpcProvider,
-  dryRun: boolean
+  wallet: any,
+  provider: any,
+  dryRun: boolean,
+  eth: any
 ) {
   // Get signals
   const signalsResponse = await getSignals(supabase)
@@ -248,7 +263,7 @@ async function createMarketsForSignals(
         }
 
         // Create the market on-chain
-        const marketResult = await createMarketOnChain(wallet!, provider, marketParams)
+        const marketResult = await createMarketOnChain(wallet!, provider, marketParams, eth)
 
         // Store in database
         await supabase.from('omen_markets').insert({
@@ -324,9 +339,10 @@ function getSportName(sportId: string): string {
 }
 
 async function createMarketOnChain(
-  wallet: ethers.Wallet,
-  provider: ethers.JsonRpcProvider,
-  params: MarketParams
+  wallet: any,
+  provider: any,
+  params: MarketParams,
+  eth: any
 ): Promise<{
   questionId: string
   conditionId: string
@@ -334,10 +350,10 @@ async function createMarketOnChain(
   txHash: string
 }> {
   // Contract instances
-  const realitio = new ethers.Contract(CONTRACTS.realitio, REALITIO_ABI, wallet)
-  const conditionalTokens = new ethers.Contract(CONTRACTS.conditionalTokens, CONDITIONAL_TOKENS_ABI, wallet)
-  const fpmmFactory = new ethers.Contract(CONTRACTS.fpmmFactory, FPMM_FACTORY_ABI, wallet)
-  const wxdai = new ethers.Contract(CONTRACTS.wxdai, ERC20_ABI, wallet)
+  const realitio = new eth.Contract(CONTRACTS.realitio, REALITIO_ABI, wallet)
+  const conditionalTokens = new eth.Contract(CONTRACTS.conditionalTokens, CONDITIONAL_TOKENS_ABI, wallet)
+  const fpmmFactory = new eth.Contract(CONTRACTS.fpmmFactory, FPMM_FACTORY_ABI, wallet)
+  const wxdai = new eth.Contract(CONTRACTS.wxdai, ERC20_ABI, wallet)
 
   // Step 1: Create Realitio question
   const openingTimestamp = Math.floor(params.resolutionDate.getTime() / 1000)
@@ -355,7 +371,7 @@ async function createMarketOnChain(
     timeout,
     openingTimestamp,
     nonce,
-    ethers.parseEther("0.01"), // Min bond 0.01 xDAI
+    eth.parseEther("0.01"), // Min bond 0.01 xDAI
     { value: 0 }
   )
   const questionReceipt = await questionTx.wait()
@@ -392,7 +408,7 @@ async function createMarketOnChain(
   console.log('Condition ID:', conditionId)
 
   // Step 3: Approve WXDAI spending
-  const liquidityWei = ethers.parseEther(params.initialLiquidityXdai.toString())
+  const liquidityWei = eth.parseEther(params.initialLiquidityXdai.toString())
 
   console.log('Approving WXDAI...')
   const approveTx = await wxdai.approve(CONTRACTS.fpmmFactory, liquidityWei)
@@ -434,15 +450,15 @@ async function createMarketOnChain(
   }
 }
 
-async function checkBalance(wallet: ethers.Wallet | null, provider: ethers.JsonRpcProvider) {
+async function checkBalance(wallet: any, provider: any, eth: any) {
   if (!wallet) {
     return new Response(
-      JSON.stringify({ error: 'Wallet not configured' }),
+      JSON.stringify({ error: 'Wallet not configured. Add OMEN_PRIVATE_KEY to secrets.' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     )
   }
 
-  const wxdai = new ethers.Contract(CONTRACTS.wxdai, ERC20_ABI, provider)
+  const wxdai = new eth.Contract(CONTRACTS.wxdai, ERC20_ABI, provider)
 
   const xdaiBalance = await provider.getBalance(wallet.address)
   const wxdaiBalance = await wxdai.balanceOf(wallet.address)
@@ -451,8 +467,8 @@ async function checkBalance(wallet: ethers.Wallet | null, provider: ethers.JsonR
     JSON.stringify({
       success: true,
       address: wallet.address,
-      xdai_balance: ethers.formatEther(xdaiBalance),
-      wxdai_balance: ethers.formatEther(wxdaiBalance),
+      xdai_balance: eth.formatEther(xdaiBalance),
+      wxdai_balance: eth.formatEther(wxdaiBalance),
       chain: 'Gnosis Chain',
       chain_id: CHAIN_ID,
     }),
