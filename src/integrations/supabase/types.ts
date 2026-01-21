@@ -29,6 +29,10 @@ export type Database = {
           moderate_edge_threshold: number | null
           moderate_position_pct: number | null
           name: string
+          omen_enabled: boolean | null
+          omen_fee_bps: number | null
+          omen_initial_liquidity_xdai: number | null
+          omen_min_edge_strength: string | null
           strong_edge_threshold: number | null
           strong_position_pct: number | null
           updated_at: string | null
@@ -49,6 +53,10 @@ export type Database = {
           moderate_edge_threshold?: number | null
           moderate_position_pct?: number | null
           name: string
+          omen_enabled?: boolean | null
+          omen_fee_bps?: number | null
+          omen_initial_liquidity_xdai?: number | null
+          omen_min_edge_strength?: string | null
           strong_edge_threshold?: number | null
           strong_position_pct?: number | null
           updated_at?: string | null
@@ -69,6 +77,10 @@ export type Database = {
           moderate_edge_threshold?: number | null
           moderate_position_pct?: number | null
           name?: string
+          omen_enabled?: boolean | null
+          omen_fee_bps?: number | null
+          omen_initial_liquidity_xdai?: number | null
+          omen_min_edge_strength?: string | null
           strong_edge_threshold?: number | null
           strong_position_pct?: number | null
           updated_at?: string | null
@@ -873,6 +885,195 @@ export type Database = {
             columns: ["game_id"]
             isOneToOne: false
             referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      omen_markets: {
+        Row: {
+          category: string | null
+          collateral_token: string
+          condition_id: string
+          created_at: string | null
+          dk_line: number | null
+          edge_percentile: number | null
+          fee_bps: number | null
+          fpmm_address: string
+          game_id: string | null
+          id: string
+          initial_liquidity: number | null
+          our_position: string | null
+          pnl_xdai: number | null
+          position_size: number | null
+          question: string
+          question_id: string
+          resolution_date: string | null
+          resolution_outcome: string | null
+          resolved_at: string | null
+          signal_type: string | null
+          status: string | null
+          tx_hash: string | null
+        }
+        Insert: {
+          category?: string | null
+          collateral_token: string
+          condition_id: string
+          created_at?: string | null
+          dk_line?: number | null
+          edge_percentile?: number | null
+          fee_bps?: number | null
+          fpmm_address: string
+          game_id?: string | null
+          id?: string
+          initial_liquidity?: number | null
+          our_position?: string | null
+          pnl_xdai?: number | null
+          position_size?: number | null
+          question: string
+          question_id: string
+          resolution_date?: string | null
+          resolution_outcome?: string | null
+          resolved_at?: string | null
+          signal_type?: string | null
+          status?: string | null
+          tx_hash?: string | null
+        }
+        Update: {
+          category?: string | null
+          collateral_token?: string
+          condition_id?: string
+          created_at?: string | null
+          dk_line?: number | null
+          edge_percentile?: number | null
+          fee_bps?: number | null
+          fpmm_address?: string
+          game_id?: string | null
+          id?: string
+          initial_liquidity?: number | null
+          our_position?: string | null
+          pnl_xdai?: number | null
+          position_size?: number | null
+          question?: string
+          question_id?: string
+          resolution_date?: string | null
+          resolution_outcome?: string | null
+          resolved_at?: string | null
+          signal_type?: string | null
+          status?: string | null
+          tx_hash?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omen_markets_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      omen_positions: {
+        Row: {
+          avg_price: number | null
+          created_at: string | null
+          current_price: number | null
+          current_value: number | null
+          fpmm_address: string
+          id: string
+          market_id: string | null
+          outcome: string
+          shares: number
+          total_cost: number | null
+          unrealized_pnl: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          avg_price?: number | null
+          created_at?: string | null
+          current_price?: number | null
+          current_value?: number | null
+          fpmm_address: string
+          id?: string
+          market_id?: string | null
+          outcome: string
+          shares: number
+          total_cost?: number | null
+          unrealized_pnl?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          avg_price?: number | null
+          created_at?: string | null
+          current_price?: number | null
+          current_value?: number | null
+          fpmm_address?: string
+          id?: string
+          market_id?: string | null
+          outcome?: string
+          shares?: number
+          total_cost?: number | null
+          unrealized_pnl?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omen_positions_market_id_fkey"
+            columns: ["market_id"]
+            isOneToOne: false
+            referencedRelation: "omen_markets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      omen_transactions: {
+        Row: {
+          amount_xdai: number | null
+          block_number: number | null
+          created_at: string | null
+          error: string | null
+          fpmm_address: string | null
+          gas_price_gwei: number | null
+          gas_used: number | null
+          id: string
+          market_id: string | null
+          status: string | null
+          tx_hash: string
+          tx_type: string
+        }
+        Insert: {
+          amount_xdai?: number | null
+          block_number?: number | null
+          created_at?: string | null
+          error?: string | null
+          fpmm_address?: string | null
+          gas_price_gwei?: number | null
+          gas_used?: number | null
+          id?: string
+          market_id?: string | null
+          status?: string | null
+          tx_hash: string
+          tx_type: string
+        }
+        Update: {
+          amount_xdai?: number | null
+          block_number?: number | null
+          created_at?: string | null
+          error?: string | null
+          fpmm_address?: string | null
+          gas_price_gwei?: number | null
+          gas_used?: number | null
+          id?: string
+          market_id?: string | null
+          status?: string | null
+          tx_hash?: string
+          tx_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omen_transactions_market_id_fkey"
+            columns: ["market_id"]
+            isOneToOne: false
+            referencedRelation: "omen_markets"
             referencedColumns: ["id"]
           },
         ]
