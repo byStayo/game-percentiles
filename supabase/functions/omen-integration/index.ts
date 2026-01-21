@@ -107,6 +107,12 @@ serve(async (req) => {
     )
 
     switch (action) {
+      case 'ping':
+        return new Response(
+          JSON.stringify({ success: true, message: 'pong', timestamp: new Date().toISOString() }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+
       case 'get-signals':
         return await getSignals(supabase)
 
