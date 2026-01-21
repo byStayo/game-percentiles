@@ -152,6 +152,7 @@ serve(async (req) => {
 async function getSignals(supabase: any) {
   // Get today's games with strong edge signals
   const today = new Date().toISOString().split('T')[0]
+  console.log('Getting signals for date:', today)
 
   const { data: edges, error } = await supabase
     .from('daily_edges')
@@ -175,6 +176,7 @@ async function getSignals(supabase: any) {
     .or('dk_line_percentile.lte.25,dk_line_percentile.gte.75')
     .order('dk_line_percentile', { ascending: true })
 
+  console.log('Query result - edges:', edges?.length || 0, 'error:', error?.message || 'none')
   if (error) throw error
 
   const signals: EdgeSignal[] = (edges || []).map((edge: any) => {
